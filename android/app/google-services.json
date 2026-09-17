@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "472725834005",
+    "project_id": "ludo-premium-50-e427e",
+    "storage_bucket": "ludo-premium-50-e427e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:472725834005:android:d6dde95567e0b44a8e411c",
+        "android_client_info": {
+          "package_name": "com.ludo.premium.vludo_premium"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWLEeS-TrsVabQT9rltt5dXN0-omR9qBc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
