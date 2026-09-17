@@ -1,3 +1,4 @@
 defaultConfig {
     applicationId "com.example.ludo_premium"
-    minSdkVersion 19  // ya 21 hoga
+    minSdkVersion 23
+    targetSdkVersion 34
