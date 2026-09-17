@@ -1,4 +1,4 @@
 defaultConfig {
     applicationId "com.example.ludo_premium"
     minSdkVersion 23
-    targetSdkVersion 34
+    targetSdkVersion flutter.targetSdkVersion
