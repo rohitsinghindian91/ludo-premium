@@ -1,4 +1,39 @@
-defaultConfig {
-    applicationId "com.example.ludo_premium"
-    minSdkVersion 23
-    targetSdkVersion flutter.targetSdkVersion
+plugins {
+    id "com.android.application"
+    id 'com.google.gms.google-services'
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+android {
+    namespace = "com.ludo.premium.vludo_premium"
+    compileSdk = 34
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        applicationId = "com.ludo.premium.vludo_premium"
+        minSdk = 23
+        targetSdk = 34
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
