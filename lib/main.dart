@@ -98,4 +98,51 @@ class _HomePageState extends State<HomePage> {
   void buy() async { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"isPremium":true, "premiumExpiry":Timestamp.fromDate(DateTime.now().add(const Duration(days:30)))}); load(); }
   void logout() async { var sp=await SharedPreferences.getInstance(); await sp.clear(); if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder:(_)=>const LoginPage()), (r)=>false); }
   @override Widget build(BuildContext context){
-    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(backgroundColor:Colors.amber, title:Text("${widget.mobile} | ₹$wallet", style:const TextStyle(color:Colors.black, fontSize
+    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(backgroundColor:Colors.amber, title:Text("${widget.mobile} | ₹$wallet", style:const TextStyle(color:Colors.black, fontSize:15, fontWeight:FontWeight.bold)), actions:[IconButton(onPressed:logout, icon:const Icon(Icons.logout))]),
+      body:Center(child:Padding(padding:const EdgeInsets.all(18), child:Column(mainAxisAlignment:MainAxisAlignment.center, children:[
+        Container(width:double.infinity, padding:const EdgeInsets.all(12), decoration:BoxDecoration(color:isPrem?Colors.amber:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Text(isPrem?"PREMIUM TILL $expiry":"FREE USER", textAlign:TextAlign.center, style:TextStyle(color:isPrem?Colors.black:Colors.white, fontWeight:FontWeight.bold))),
+        const SizedBox(height:10),
+        Container(width:double.infinity, padding:const EdgeInsets.all(14), decoration:BoxDecoration(color:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Column(children:[Text("MY REFERRAL: $myCode", style:const TextStyle(color:Colors.amber, fontWeight:FontWeight.bold)), if(upi.isNotEmpty) Text("UPI: $upi", style:const TextStyle(color:Colors.white60, fontSize:12))])),
+        const SizedBox(height:20),
+        SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const LudoBoard())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY LUDO", style:TextStyle(fontSize:20, fontWeight:FontWeight.bold)))),
+        const SizedBox(height:12),
+        SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>WalletScreen(mobile:widget.mobile))).then((_)=>load()); }, child:const Text("WALLET / UPI SETTING"))),
+        const SizedBox(height:12),
+        if(!isPrem) SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed:buy, style:ElevatedButton.styleFrom(backgroundColor:Colors.purple), child:const Text("BUY PREMIUM ₹500 - 1 MONTH", style:TextStyle(color:Colors.white)))),
+      ]))),
+    );
+  }
+}
+
+class WalletScreen extends StatefulWidget { final String mobile; const WalletScreen({super.key, required this.mobile}); @override State<WalletScreen> createState()=>_WalletScreenState(); }
+class _WalletScreenState extends State<WalletScreen> {
+  final upiCtrl=TextEditingController(); int wallet=0; bool loading=true;
+  @override void initState(){ super.initState(); get(); }
+  void get() async { var d=await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get(); if(d.exists){ setState((){ wallet=d.data()!["wallet"]??0; upiCtrl.text=d.data()!["upi"]??""; loading=false; }); } else { setState((){ loading=false; }); } }
+  void save() async { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi":upiCtrl.text.trim()}); if(!mounted) return; Navigator.pop(context); }
+  @override Widget build(BuildContext context){
+    return Scaffold(appBar:AppBar(title:const Text("Wallet"), backgroundColor:Colors.amber), backgroundColor: const Color(0xFF0F172A),
+      body:loading?const Center(child:CircularProgressIndicator()):Padding(padding:const EdgeInsets.all(20), child:Column(children:[
+        Text("Wallet: ₹$wallet", style:const TextStyle(color:Colors.amber, fontSize:22)), const SizedBox(height:20),
+        TextField(controller:upiCtrl, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"UPI ID", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
+        const SizedBox(height:20), SizedBox(width:double.infinity, height:50, child:ElevatedButton(onPressed:save, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber), child:const Text("SAVE UPI - SAME RAHEGA", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
+      ])),
+    );
+  }
+}
+
+class LudoBoard extends StatefulWidget { const LudoBoard({super.key}); @override State<LudoBoard> createState()=>_LudoBoardState(); }
+class _LudoBoardState extends State<LudoBoard> {
+  int dice=1; int pos=0; final rand=Random();
+  void roll(){ setState((){ dice=rand.nextInt(6)+1; pos=(pos+dice)%36; }); }
+  @override Widget build(BuildContext context){
+    return Scaffold(appBar:AppBar(title:const Text("Ludo"), backgroundColor:Colors.amber), backgroundColor: const Color(0xFF0F172A),
+      body:Column(children:[
+        const SizedBox(height:20),
+        Center(child:Container(width:330, height:330, decoration:BoxDecoration(color:Colors.white, border:Border.all(width:4, color:Colors.amber), borderRadius:BorderRadius.circular(12)), child:GridView.builder(gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:6), itemCount:36, itemBuilder:(c,i){ bool here=i==pos; return Container(margin:const EdgeInsets.all(2), decoration:BoxDecoration(color:here?Colors.green:Colors.white, borderRadius:BorderRadius.circular(6)), child:here?const Icon(Icons.person):null); }))),
+        const SizedBox(height:20), Text("$dice", style:const TextStyle(fontSize:70, color:Colors.white, fontWeight:FontWeight.bold)),
+        ElevatedButton(onPressed:roll, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber), child:const Text("ROLL DICE", style:TextStyle(color:Colors.black))),
+      ]),
+    );
+  }
+}
