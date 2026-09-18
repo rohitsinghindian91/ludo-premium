@@ -1,15 +1,11 @@
 name: ludo_premium
-description: Ludo Premium - Direct UPI
+description: A new Flutter project.
 publish_to: 'none'
-version: 1.0.0+20
-
+version: 1.0.0+1
 environment:
   sdk: ">=3.0.0 <4.0.0"
-
 dependencies:
   flutter:
     sdk: flutter
-  url_launcher: ^6.2.2
-
 flutter:
   uses-material-design: true
