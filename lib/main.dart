@@ -108,34 +108,4 @@ class MainLudo extends StatelessWidget {
       "premiumStart": Timestamp.now(),
       "premiumExpiry": Timestamp.fromDate(expiry),
     });
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Premium Activated for 30 Days!")));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    var uid = FirebaseAuth.instance.currentUser!.uid;
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F5D32),
-      appBar: AppBar(title: const Text("Ludo Premium - 30 Days"), backgroundColor: Colors.black, actions: [IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout))]),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection("users").doc(uid).snapshots(),
-        builder: (c, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          var data = snap.data!.data() as Map<String, dynamic>? ?? {};
-          bool isPremium = false;
-          String expiryText = "No Premium";
-          if (data['premiumExpiry'] != null) {
-            DateTime exp = (data['premiumExpiry'] as Timestamp).toDate();
-            if (DateTime.now().isBefore(exp)) {
-              isPremium = true;
-              expiryText = "${exp.day}/${exp.month}/${exp.year} tak Valid";
-            }
-          }
-          return Center(
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isPremium ? Colors.green : Colors.red, borderRadius: BorderRadius.circular(10)), child: Text(isPremium ? "PREMIUM ACTIVE - 30 Days" : "FREE USER", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-              const SizedBox(height: 10),
-              Text(expiryText, style: const TextStyle(color: Colors.white70)),
-              const SizedBox(height: 20),
-              Text("Wallet: ₹${data['wallet'] ?? 0}", style: const TextStyle(color: Colors.yellow, fontSize: 26, fontWeight: FontWeight.bold)),
-              const SizedBox
+    ScaffoldMessenger.of(context
