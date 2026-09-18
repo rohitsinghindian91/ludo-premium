@@ -93,14 +93,26 @@ class _HomePageState extends State<HomePage> {
     if(data["isPremium"]==true && data["premiumExpiry"]!=null){
       DateTime exp=(data["premiumExpiry"] as Timestamp).toDate();
       if(exp.isAfter(DateTime.now())){ setState((){ isPrem=true; expiry="${exp.day}/${exp.month}/${exp.year}"; }); }
+      else { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"isPremium":false}); setState((){ isPrem=false; }); }
     }
   }
-  void buy() async { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"isPremium":true, "premiumExpiry":Timestamp.fromDate(DateTime.now().add(const Duration(days:30)))}); if(!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Premium Active ✅"))); load(); }
+  void buy() async { 
+    var d = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
+    int currentWallet = d.data()?["wallet"] ?? 0;
+    if(currentWallet < 500){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Wallet me ₹500 nahi hai, referral se kamao")));
+      return;
+    }
+    await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"wallet": currentWallet - 500, "isPremium": true, "premiumExpiry": Timestamp.fromDate(DateTime.now().add(const Duration(days:30)))});
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("₹500 kata, Premium Active ✅")));
+    load();
+  }
+  void resetPremium() async { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"isPremium": false}); load(); }
   void logout() async { var sp=await SharedPreferences.getInstance(); await sp.clear(); if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder:(_)=>const LoginPage()), (r)=>false); }
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(backgroundColor:Colors.amber, title:Text("${widget.mobile} | ₹$wallet", style:const TextStyle(color:Colors.black, fontSize:14, fontWeight:FontWeight.bold)), actions:[IconButton(onPressed:logout, icon:const Icon(Icons.logout))]),
       body:SingleChildScrollView(child:Padding(padding:const EdgeInsets.all(18), child:Column(children:[
-        Container(width:double.infinity, padding:const EdgeInsets.all(12), decoration:BoxDecoration(color:isPrem?Colors.amber:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Text(isPrem?"PREMIUM TILL $expiry":"FREE USER", textAlign:TextAlign.center, style:TextStyle(color:isPrem?Colors.black:Colors.white, fontWeight:FontWeight.bold))),
+        GestureDetector(onLongPress: resetPremium, child: Container(width:double.infinity, padding:const EdgeInsets.all(12), decoration:BoxDecoration(color:isPrem?Colors.amber:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Text(isPrem?"PREMIUM TILL $expiry (long press to reset)":"FREE USER", textAlign:TextAlign.center, style:TextStyle(color:isPrem?Colors.black:Colors.white, fontWeight:FontWeight.bold)))),
         const SizedBox(height:12),
         Container(width:double.infinity, padding:const EdgeInsets.all(14), decoration:BoxDecoration(color:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Column(crossAxisAlignment:CrossAxisAlignment.start, children:[
           Text("MY REFERRAL: $myCode", style:const TextStyle(color:Colors.amber, fontWeight:FontWeight.bold)),
@@ -138,17 +150,22 @@ class _WalletScreenState extends State<WalletScreen> {
 class LudoBoard extends StatefulWidget { const LudoBoard({super.key}); @override State<LudoBoard> createState()=>_LudoBoardState(); }
 class _LudoBoardState extends State<LudoBoard> {
   int dice=1; int pos=0; final rand=Random();
-  void roll(){ setState((){ dice=rand.nextInt(6)+1; pos=(pos+dice)%36; }); }
+  void roll(){ setState((){ dice=rand.nextInt(6)+1; pos=(pos+dice)%52; }); }
   @override Widget build(BuildContext context){
     return Scaffold(appBar:AppBar(title:const Text("LUDO PREMIUM"), backgroundColor:Colors.amber), backgroundColor: const Color(0xFF0F172A),
       body:SingleChildScrollView(child: Column(children:[
         const SizedBox(height:15),
-        Center(child: Container(width: MediaQuery.of(context).size.width-20, height: MediaQuery.of(context).size.width-20, padding: const EdgeInsets.all(6), decoration:BoxDecoration(color:Colors.white, border:Border.all(width:4, color:Colors.amber), borderRadius:BorderRadius.circular(15)), 
-          child: GridView.builder(physics: const NeverScrollableScrollPhysics(), gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:6, crossAxisSpacing:3, mainAxisSpacing:3), itemCount:36, itemBuilder:(c,i){ bool here=i==pos; return Container(decoration:BoxDecoration(color:here?Colors.green: const Color(0xFFE0E0E0), borderRadius:BorderRadius.circular(8)), child: Center(child: here ? const Text("😎") : Text("$i", style:const TextStyle(fontSize:10)))); }))),
-        const SizedBox(height:25), 
-        Text("$dice", style:const TextStyle(fontSize:60, color:Colors.white, fontWeight:FontWeight.bold)),
-        const SizedBox(height:15), 
-        SizedBox(width:200, height:55, child: ElevatedButton(onPressed:roll, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("ROLL DICE", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
+        Center(child: Container(width: 350, height: 350, decoration:BoxDecoration(color:Colors.white, border:Border.all(width:4, color:Colors.amber), borderRadius:BorderRadius.circular(15)), 
+          child: Stack(children:[
+            Positioned(left:0, top:0, child: Container(width:140, height:140, color:Colors.red.shade400, child: Center(child: Container(width:90, height:90, decoration:BoxDecoration(color:Colors.white, borderRadius:BorderRadius.circular(10)), child: Center(child: Icon(Icons.person, color: Colors.red)))))),
+            Positioned(right:0, top:0, child: Container(width:140, height:140, color:Colors.green.shade400)),
+            Positioned(left:0, bottom:0, child: Container(width:140, height:140, color:Colors.blue.shade400)),
+            Positioned(right:0, bottom:0, child: Container(width:140, height:140, color:Colors.yellow.shade600)),
+            Center(child: Container(width:70, height:70, decoration: BoxDecoration(color: Colors.amber, border: Border.all(width:2)), child: Center(child: Text("$pos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20))))),
+          ]),
+        )),
+        const SizedBox(height:25), Text("DICE: $dice", style:const TextStyle(fontSize:60, color:Colors.white, fontWeight:FontWeight.bold)),
+        const SizedBox(height:15), SizedBox(width:200, height:55, child: ElevatedButton(onPressed:roll, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("ROLL DICE 🎲", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold, fontSize:18)))),
       ])),
     );
   }
