@@ -101,7 +101,7 @@ class _HomePageState extends State<HomePage> {
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(backgroundColor:Colors.amber, title:Text("${widget.mobile} | ₹$wallet", style:const TextStyle(color:Colors.black, fontSize:14, fontWeight:FontWeight.bold)), actions:[IconButton(onPressed:logout, icon:const Icon(Icons.logout))]),
       body:SingleChildScrollView(child:Padding(padding:const EdgeInsets.all(18), child:Column(children:[
-        Container(width:double.infinity, padding:const EdgeInsets.all(12), decoration:BoxDecoration(color:isPrem?Colors.amber:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Text(isPrem?"PREMIUM TILL $expiry":"FREE USER", textAlign:TextAlign.center, style:TextStyle(color:isPrem?Colors.black:Colors.white, fontWeight:FontWeight.bold))),
+        Container(width:double.infinity, padding:const EdgeInsets.all(12), decoration:BoxDecoration(color:isPrem?Colors.amber:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Text(isPrem?"PREMIUM TILL $expiry":"FREE USER - PREMIUM LO", textAlign:TextAlign.center, style:TextStyle(color:isPrem?Colors.black:Colors.white, fontWeight:FontWeight.bold))),
         const SizedBox(height:12),
         Container(width:double.infinity, padding:const EdgeInsets.all(14), decoration:BoxDecoration(color:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Column(crossAxisAlignment:CrossAxisAlignment.start, children:[
           Text("MY REFERRAL: $myCode", style:const TextStyle(color:Colors.amber, fontWeight:FontWeight.bold)),
@@ -109,11 +109,20 @@ class _HomePageState extends State<HomePage> {
           Text(upi.isEmpty ? "UPI: Not Set - Wallet me jao" : "UPI: $upi", style:TextStyle(color: upi.isEmpty ? Colors.redAccent : Colors.white60, fontSize:13)),
         ])),
         const SizedBox(height:25),
-        SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const LudoBoard())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY LUDO", style:TextStyle(fontSize:20, fontWeight:FontWeight.bold, color:Colors.white)))),
+        // YAHAN FIX KIYA - FREE KO LUDO NAHI DIKHEGA
+        isPrem 
+        ? SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const LudoBoard())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY LUDO 🎲", style:TextStyle(fontSize:20, fontWeight:FontWeight.bold, color:Colors.white))))
+        : Container(width:double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent)), child: const Column(children: [
+            Icon(Icons.lock, color: Colors.redAccent, size: 40),
+            SizedBox(height: 8),
+            Text("LUDO LOCKED 🔒", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+            SizedBox(height: 4),
+            Text("Khelne ke liye pehle Premium lo", style: TextStyle(color: Colors.white60, fontSize: 13)),
+          ])),
         const SizedBox(height:15),
         SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>WalletScreen(mobile:widget.mobile))).then((_)=>load()); }, child:const Text("WALLET / UPI SETTING"))),
         const SizedBox(height:15),
-        SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed: isPrem ? null : buy, style:ElevatedButton.styleFrom(backgroundColor: isPrem ? Colors.grey : Colors.purple), child:Text(isPrem ? "PREMIUM ACTIVE" : "BUY PREMIUM ₹500 - 1 MONTH", style:const TextStyle(color:Colors.white)))),
+        SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed: isPrem ? null : buy, style:ElevatedButton.styleFrom(backgroundColor: isPrem ? Colors.grey : Colors.purple), child:Text(isPrem ? "PREMIUM ACTIVE ✅" : "BUY PREMIUM ₹500 - 1 MONTH", style:const TextStyle(color:Colors.white)))),
       ]))),
     );
   }
@@ -186,7 +195,7 @@ class PremiumPayScreen extends StatelessWidget {
         const SizedBox(height: 15),
         SizedBox(width: double.infinity, height: 55, child: ElevatedButton(onPressed: () => iHavePaid(context), style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("I HAVE PAID ₹500", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)))),
         const SizedBox(height: 20),
-        const Text("Note: Pay karne ke baad 'I HAVE PAID' dabao. Firebase > premium_requests me request ayegi. Tum waha se check karke user ko premium dena. Ab free me kabhi nahi lagega.", style: TextStyle(color: Colors.white38, fontSize: 12), textAlign: TextAlign.center),
+        const Text("Note: Pay karne ke baad 'I HAVE PAID' dabao. Firebase > premium_requests me request ayegi.", style: TextStyle(color: Colors.white38, fontSize: 12), textAlign: TextAlign.center),
       ])),
     );
   }
