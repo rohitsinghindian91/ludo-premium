@@ -1,18 +1,24 @@
 name: ludo_premium
-description: Ludo Premium with Firebase
+description: Ludo Premium App
 publish_to: 'none'
-version: 1.0.0+24
+version: 1.0.0+1
+
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  firebase_core: ^2.24.0
-  firebase_auth: ^4.12.0
-  cloud_firestore: ^4.15.0
-  url_launcher: ^6.2.2
+  cupertino_icons: ^1.0.5
+  firebase_core: ^2.24.2
+  cloud_firestore: ^4.15.8
   shared_preferences: ^2.2.2
+  url_launcher: ^6.2.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
