@@ -17,13 +17,7 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (c, s) {
-        if (s.hasData) {
-          return const MainLudo();
-        } else {
-          return const LoginPage();
-        }
-      },
+      builder: (c, s) => s.hasData ? const MainLudo() : const LoginPage(),
     );
   }
 }
@@ -45,18 +39,9 @@ class _LoginPageState extends State<LoginPage> {
     await FirebaseAuth.instance.verifyPhoneNumber(
       phoneNumber: "+91${ph.text}",
       verificationCompleted: (a) {},
-      verificationFailed: (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? "Failed")));
-      },
-      codeSent: (id, t) {
-        setState(() {
-          vid = id;
-          sent = true;
-        });
-      },
-      codeAutoRetrievalTimeout: (id) {
-        vid = id;
-      },
+      verificationFailed: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? "Failed"))),
+      codeSent: (id, t) => setState(() { vid = id; sent = true; }),
+      codeAutoRetrievalTimeout: (id) => vid = id,
     );
   }
 
@@ -72,7 +57,6 @@ class _LoginPageState extends State<LoginPage> {
         "wallet": ref.text.isNotEmpty ? 100 : 0,
         "created": DateTime.now()
       }, SetOptions(merge: true));
-
       if (ref.text.isNotEmpty) {
         var q = await FirebaseFirestore.instance.collection("users").where("myReferralCode", isEqualTo: ref.text).get();
         for (var d in q.docs) {
@@ -89,17 +73,14 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F5D32),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
+        child: Padding(padding: const EdgeInsets.all(20),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.casino, size: 80, color: Colors.white),
             const Text("LUDO PREMIUM", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
-            TextField(controller: ph, keyboardType: TextInputType.phone, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Mobile Number")),
-            const SizedBox(height: 10),
-            if (sent) TextField(controller: otp, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Enter OTP")),
-            const SizedBox(height: 10),
-            TextField(controller: ref, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Referral Code Optional")),
+            TextField(controller: ph, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Mobile Number")),
+            if (sent) TextField(controller: otp, decoration: const InputDecoration(labelText: "Enter OTP")),
+            TextField(controller: ref, decoration: const InputDecoration(labelText: "Referral Code Optional (100rs Bonus)")),
             const SizedBox(height: 20),
             ElevatedButton(onPressed: sent ? verifyOTP : sendOTP, child: Text(sent ? "VERIFY" : "SEND OTP"))
           ]),
@@ -113,7 +94,7 @@ class MainLudo extends StatelessWidget {
   const MainLudo({super.key});
 
   Future<void> payPremium(BuildContext context) async {
-    final uri = Uri.parse("upi://pay?pa=Kumar131@fam&pn=Ludo&am=500&cu=INR");
+    final uri = Uri.parse("upi://pay?pa=Kumar131@fam&pn=Ludo&am=500&cu=INR&tn=Premium");
     await launchUrl(uri, mode: LaunchMode.externalApplication);
     var uid = FirebaseAuth.instance.currentUser!.uid;
     DateTime expiry = DateTime.now().add(const Duration(days: 30));
@@ -123,28 +104,65 @@ class MainLudo extends StatelessWidget {
     }, SetOptions(merge: true));
   }
 
+  Future<void> withdrawMoney(BuildContext context, int wallet, String phone) async {
+    TextEditingController upiController = TextEditingController();
+    showDialog(context: context, builder: (c) => AlertDialog(
+      title: const Text("Withdraw 100rs"),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text("Paisa kaha lena hai? UPI ID likho"),
+        TextField(controller: upiController, decoration: const InputDecoration(hintText: "jaise: 98xxxx@paytm")),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c), child: const Text("Cancel")),
+        ElevatedButton(onPressed: () async {
+          if (upiController.text.length < 5) return;
+          var uid = FirebaseAuth.instance.currentUser!.uid;
+          await FirebaseFirestore.instance.collection("withdraw_requests").add({
+            "uid": uid,
+            "phone": phone,
+            "upi": upiController.text.trim(),
+            "amount": 100,
+            "status": "pending",
+            "created": Timestamp.now()
+          });
+          await FirebaseFirestore.instance.collection("users").doc(uid).update({"wallet": FieldValue.increment(-100)});
+          Navigator.pop(c);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request bhej diya ${upiController.text} pe! 24h me payment hoga")));
+        }, child: const Text("REQUEST"))
+      ],
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     var uid = FirebaseAuth.instance.currentUser!.uid;
     return Scaffold(
+      backgroundColor: const Color(0xFF0F5D32),
       appBar: AppBar(title: const Text("Ludo Premium"), actions: [IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout))]),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection("users").doc(uid).snapshots(),
         builder: (c, snap) {
-          if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
           Map<String, dynamic> data = {};
-          if (snap.data!.data() != null) {
-            data = Map<String, dynamic>.from(snap.data!.data() as Map);
-          }
+          if (snap.data!.data() != null) data = Map<String, dynamic>.from(snap.data!.data() as Map);
+          int wallet = (data['wallet'] ?? 0) as int;
+          String phone = data['phone'] ?? "";
           return Center(
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text("Wallet: Rs ${data['wallet'] ?? 0}", style: const TextStyle(fontSize: 26)),
+              Text("Wallet: ₹$wallet", style: const TextStyle(color: Colors.yellow, fontSize: 28, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
-              SelectableText("Your Code: ${data['myReferralCode'] ?? ''}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              SelectableText("Tera Code: ${data['myReferralCode'] ?? ''}", style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              if (wallet >= 100)
+                ElevatedButton(
+                  onPressed: () => withdrawMoney(context, wallet, phone),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, minimumSize: const Size(250, 50)),
+                  child: const Text("WITHDRAW ₹100 - UPI pe lo", style: TextStyle(fontWeight: FontWeight.bold))
+                ),
+              if (wallet < 100)
+                const Text("100rs hote hi Withdraw kar sakte ho", style: TextStyle(color: Colors.white54)),
               const SizedBox(height: 30),
-              ElevatedButton(onPressed: () => payPremium(context), child: const Text("UNLOCK 30 DAYS - 500 Rs"))
+              ElevatedButton(onPressed: () => payPremium(context), child: const Text("UNLOCK 30 DAYS ₹500"))
             ]),
           );
         },
