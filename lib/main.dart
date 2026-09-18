@@ -1,4 +1,1 @@
-import 'package:flutter/material.dart';
-void main() {
-  runApp(const MaterialApp(home: Scaffold(body: Center(child: Text("Test OK")))));
-}
+import 'package:firebase_core/firebase_core.dart';
