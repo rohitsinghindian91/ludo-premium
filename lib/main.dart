@@ -17,7 +17,13 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (c, s) => s.hasData ? const MainLudo() : const LoginPage(),
+      builder: (c, s) {
+        if (s.hasData) {
+          return const MainLudo();
+        } else {
+          return const LoginPage();
+        }
+      },
     );
   }
 }
@@ -35,26 +41,34 @@ class _LoginPageState extends State<LoginPage> {
   String vid = "";
   bool sent = false;
 
-  void send() async {
+  void sendOTP() async {
     await FirebaseAuth.instance.verifyPhoneNumber(
       phoneNumber: "+91${ph.text}",
       verificationCompleted: (a) {},
-      verificationFailed: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? "Failed"))),
-      codeSent: (id, t) { setState(() { vid = id; sent = true; }); },
-      codeAutoRetrievalTimeout: (id) => vid = id,
+      verificationFailed: (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? "Failed")));
+      },
+      codeSent: (id, t) {
+        setState(() {
+          vid = id;
+          sent = true;
+        });
+      },
+      codeAutoRetrievalTimeout: (id) {
+        vid = id;
+      },
     );
   }
 
-  void verify() async {
+  void verifyOTP() async {
     try {
-      var cr = PhoneAuthProvider.credential(verificationId: vid, smsCode: otp.text);
-      var u = await FirebaseAuth.instance.signInWithCredential(cr);
+      var cred = PhoneAuthProvider.credential(verificationId: vid, smsCode: otp.text);
+      var result = await FirebaseAuth.instance.signInWithCredential(cred);
       String myCode = "LUDO${Random().nextInt(9000) + 1000}";
-      await FirebaseFirestore.instance.collection("users").doc(u.user!.uid).set({
+      await FirebaseFirestore.instance.collection("users").doc(result.user!.uid).set({
         "phone": ph.text,
         "myReferralCode": myCode,
         "usedReferral": ref.text,
-        "premium": false,
         "wallet": ref.text.isNotEmpty ? 100 : 0,
         "created": DateTime.now()
       }, SetOptions(merge: true));
@@ -81,12 +95,13 @@ class _LoginPageState extends State<LoginPage> {
             const Icon(Icons.casino, size: 80, color: Colors.white),
             const Text("LUDO PREMIUM", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
-            TextField(controller: ph, keyboardType: TextInputType.phone, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Mobile Number", labelStyle: TextStyle(color: Colors.white70), enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white)))),
-            if (sent) Padding(padding: const EdgeInsets.only(top: 10), child: TextField(controller: otp, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Enter OTP", labelStyle: TextStyle(color: Colors.white70)))),
+            TextField(controller: ph, keyboardType: TextInputType.phone, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Mobile Number")),
             const SizedBox(height: 10),
-            TextField(controller: ref, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Referral Code (Optional) = 100rs Bonus", labelStyle: TextStyle(color: Colors.yellow))),
+            if (sent) TextField(controller: otp, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Enter OTP")),
+            const SizedBox(height: 10),
+            TextField(controller: ref, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Referral Code Optional")),
             const SizedBox(height: 20),
-            ElevatedButton(onPressed: sent ? verify : send, style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)), child: Text(sent ? "VERIFY & LOGIN" : "SEND OTP"))
+            ElevatedButton(onPressed: sent ? verifyOTP : sendOTP, child: Text(sent ? "VERIFY" : "SEND OTP"))
           ]),
         ),
       ),
@@ -97,15 +112,43 @@ class _LoginPageState extends State<LoginPage> {
 class MainLudo extends StatelessWidget {
   const MainLudo({super.key});
 
-  void pay(BuildContext context) async {
-    String upi = "Kumar131@fam";
-    final uri = Uri.parse("upi://pay?pa=$upi&pn=Ludo Premium&am=500&cu=INR&tn=30 Days Premium");
+  Future<void> payPremium(BuildContext context) async {
+    final uri = Uri.parse("upi://pay?pa=Kumar131@fam&pn=Ludo&am=500&cu=INR");
     await launchUrl(uri, mode: LaunchMode.externalApplication);
     var uid = FirebaseAuth.instance.currentUser!.uid;
     DateTime expiry = DateTime.now().add(const Duration(days: 30));
-    await FirebaseFirestore.instance.collection("users").doc(uid).update({
+    await FirebaseFirestore.instance.collection("users").doc(uid).set({
       "premium": true,
-      "premiumStart": Timestamp.now(),
-      "premiumExpiry": Timestamp.fromDate(expiry),
-    });
-    ScaffoldMessenger.of(context
+      "premiumExpiry": Timestamp.fromDate(expiry)
+    }, SetOptions(merge: true));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    var uid = FirebaseAuth.instance.currentUser!.uid;
+    return Scaffold(
+      appBar: AppBar(title: const Text("Ludo Premium"), actions: [IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout))]),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection("users").doc(uid).snapshots(),
+        builder: (c, snap) {
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          Map<String, dynamic> data = {};
+          if (snap.data!.data() != null) {
+            data = Map<String, dynamic>.from(snap.data!.data() as Map);
+          }
+          return Center(
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text("Wallet: Rs ${data['wallet'] ?? 0}", style: const TextStyle(fontSize: 26)),
+              const SizedBox(height: 10),
+              SelectableText("Your Code: ${data['myReferralCode'] ?? ''}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 30),
+              ElevatedButton(onPressed: () => payPremium(context), child: const Text("UNLOCK 30 DAYS - 500 Rs"))
+            ]),
+          );
+        },
+      ),
+    );
+  }
+}
