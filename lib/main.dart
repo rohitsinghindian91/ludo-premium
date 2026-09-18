@@ -1,25 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'firebase_options.dart';
 import 'dart:math';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  runApp(const MaterialApp(debugShowCheckedModeBanner: false, home: AuthGate()));
-}
-
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (c, s) => s.hasData ? const MainLudo() : const LoginPage(),
-    );
-  }
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  runApp(const MaterialApp(debugShowCheckedModeBanner: false, home: LoginPage()));
 }
 
 class LoginPage extends StatefulWidget {
@@ -29,144 +17,80 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final ph = TextEditingController();
-  final otp = TextEditingController();
-  final ref = TextEditingController();
-  String vid = "";
-  bool sent = false;
+  final mobile = TextEditingController();
+  final password = TextEditingController();
+  final referral = TextEditingController();
+  bool loading = false;
 
-  void sendOTP() async {
-    await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: "+91${ph.text}",
-      verificationCompleted: (a) {},
-      verificationFailed: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? "Failed"))),
-      codeSent: (id, t) => setState(() { vid = id; sent = true; }),
-      codeAutoRetrievalTimeout: (id) => vid = id,
-    );
-  }
+  Future<void> doLogin() async {
+    String m = mobile.text.trim();
+    String p = password.text.trim();
+    
+    if(m.length != 10){ ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("10 digit mobile dalo"))); return; }
+    if(p.length < 4){ ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password 4 digit ka dalo"))); return; }
 
-  void verifyOTP() async {
-    try {
-      var cred = PhoneAuthProvider.credential(verificationId: vid, smsCode: otp.text);
-      var result = await FirebaseAuth.instance.signInWithCredential(cred);
-      String myCode = "LUDO${Random().nextInt(9000) + 1000}";
-      await FirebaseFirestore.instance.collection("users").doc(result.user!.uid).set({
-        "phone": ph.text,
-        "myReferralCode": myCode,
-        "usedReferral": ref.text,
-        "wallet": ref.text.isNotEmpty ? 100 : 0,
-        "created": DateTime.now()
-      }, SetOptions(merge: true));
-      if (ref.text.isNotEmpty) {
-        var q = await FirebaseFirestore.instance.collection("users").where("myReferralCode", isEqualTo: ref.text).get();
-        for (var d in q.docs) {
-          await FirebaseFirestore.instance.collection("users").doc(d.id).update({"wallet": FieldValue.increment(100)});
+    setState(()=> loading = true);
+    try{
+      var doc = await FirebaseFirestore.instance.collection('users').doc(m).get();
+      if(doc.exists){
+        if(doc['password'] == p){
+          // Login Success
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> MainLudo(mobile: m)));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Galat Password!")));
         }
+      } else {
+        // New User - Password hi uska account bana dega
+        await FirebaseFirestore.instance.collection('users').doc(m).set({
+          'mobile': m,
+          'password': p, // Yahi password save ho gaya
+          'referral': referral.text,
+          'coins': 50,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> MainLudo(mobile: m)));
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("OTP Galat")));
+    }catch(e){
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
+    setState(()=> loading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F5D32),
-      body: Center(
-        child: Padding(padding: const EdgeInsets.all(20),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.casino, size: 80, color: Colors.white),
-            const Text("LUDO PREMIUM", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            TextField(controller: ph, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: "Mobile Number")),
-            if (sent) TextField(controller: otp, decoration: const InputDecoration(labelText: "Enter OTP")),
-            TextField(controller: ref, decoration: const InputDecoration(labelText: "Referral Code Optional (100rs Bonus)")),
-            const SizedBox(height: 20),
-            ElevatedButton(onPressed: sent ? verifyOTP : sendOTP, child: Text(sent ? "VERIFY" : "SEND OTP"))
-          ]),
-        ),
-      ),
+      backgroundColor: const Color(0xFF0F172A),
+      body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24),
+        child: Column(children: [
+          const Text("LUDO PREMIUM", style: TextStyle(color: Colors.amber, fontSize: 28, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 30),
+          TextField(controller: mobile, keyboardType: TextInputType.phone, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Mobile Number", filled: true, fillColor: const Color(0xFF1E293B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
+          const SizedBox(height: 12),
+          TextField(controller: password, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Password (Naya bana lo)", filled: true, fillColor: const Color(0xFF1E293B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
+          const SizedBox(height: 12),
+          TextField(controller: referral, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Referral Code (Optional)", filled: true, fillColor: const Color(0xFF1E293B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
+          const SizedBox(height: 20),
+          loading ? const CircularProgressIndicator() : ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green, minimumSize: const Size(double.infinity, 50)), onPressed: doLogin, child: const Text("LOGIN / REGISTER", style: TextStyle(fontSize: 18, color: Colors.white))),
+          const SizedBox(height: 10),
+          const Text("Pehli baar jo password daloge wahi ban jayega", style: TextStyle(color: Colors.white54, fontSize: 12))
+        ]),
+      )),
     );
   }
 }
 
 class MainLudo extends StatelessWidget {
-  const MainLudo({super.key});
-
-  Future<void> payPremium(BuildContext context) async {
-    final uri = Uri.parse("upi://pay?pa=Kumar131@fam&pn=Ludo&am=500&cu=INR&tn=Premium");
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-    var uid = FirebaseAuth.instance.currentUser!.uid;
-    DateTime expiry = DateTime.now().add(const Duration(days: 30));
-    await FirebaseFirestore.instance.collection("users").doc(uid).set({
-      "premium": true,
-      "premiumExpiry": Timestamp.fromDate(expiry)
-    }, SetOptions(merge: true));
-  }
-
-  Future<void> withdrawMoney(BuildContext context, int wallet, String phone) async {
-    TextEditingController upiController = TextEditingController();
-    showDialog(context: context, builder: (c) => AlertDialog(
-      title: const Text("Withdraw 100rs"),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text("Paisa kaha lena hai? UPI ID likho"),
-        TextField(controller: upiController, decoration: const InputDecoration(hintText: "jaise: 98xxxx@paytm")),
-      ]),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(c), child: const Text("Cancel")),
-        ElevatedButton(onPressed: () async {
-          if (upiController.text.length < 5) return;
-          var uid = FirebaseAuth.instance.currentUser!.uid;
-          await FirebaseFirestore.instance.collection("withdraw_requests").add({
-            "uid": uid,
-            "phone": phone,
-            "upi": upiController.text.trim(),
-            "amount": 100,
-            "status": "pending",
-            "created": Timestamp.now()
-          });
-          await FirebaseFirestore.instance.collection("users").doc(uid).update({"wallet": FieldValue.increment(-100)});
-          Navigator.pop(c);
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request bhej diya ${upiController.text} pe! 24h me payment hoga")));
-        }, child: const Text("REQUEST"))
-      ],
-    ));
-  }
-
+  final String mobile;
+  const MainLudo({super.key, required this.mobile});
   @override
   Widget build(BuildContext context) {
-    var uid = FirebaseAuth.instance.currentUser!.uid;
     return Scaffold(
-      backgroundColor: const Color(0xFF0F5D32),
-      appBar: AppBar(title: const Text("Ludo Premium"), actions: [IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout))]),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection("users").doc(uid).snapshots(),
-        builder: (c, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          Map<String, dynamic> data = {};
-          if (snap.data!.data() != null) data = Map<String, dynamic>.from(snap.data!.data() as Map);
-          int wallet = (data['wallet'] ?? 0) as int;
-          String phone = data['phone'] ?? "";
-          return Center(
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text("Wallet: ₹$wallet", style: const TextStyle(color: Colors.yellow, fontSize: 28, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              SelectableText("Tera Code: ${data['myReferralCode'] ?? ''}", style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
-              if (wallet >= 100)
-                ElevatedButton(
-                  onPressed: () => withdrawMoney(context, wallet, phone),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, minimumSize: const Size(250, 50)),
-                  child: const Text("WITHDRAW ₹100 - UPI pe lo", style: TextStyle(fontWeight: FontWeight.bold))
-                ),
-              if (wallet < 100)
-                const Text("100rs hote hi Withdraw kar sakte ho", style: TextStyle(color: Colors.white54)),
-              const SizedBox(height: 30),
-              ElevatedButton(onPressed: () => payPremium(context), child: const Text("UNLOCK 30 DAYS ₹500"))
-            ]),
-          );
-        },
-      ),
+      appBar: AppBar(title: Text("Welcome $mobile"), backgroundColor: Colors.amber),
+      body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Text("Game Start Hoga Yaha Se", style: TextStyle(fontSize: 20)),
+        const SizedBox(height: 20),
+        ElevatedButton(onPressed: (){}, child: const Text("PLAY LUDO"))
+      ])),
     );
   }
 }
