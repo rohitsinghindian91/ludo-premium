@@ -43,7 +43,7 @@ class _LoginPageState extends State<LoginPage> {
       const SizedBox(height:10),
       TextField(controller:passCtrl, obscureText:true, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Password", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
       const SizedBox(height:10),
-      TextField(controller:referCtrl, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Referral Code (Optional)", hintText:"Kisi ka mobile", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
+      TextField(controller:referCtrl, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Referral Code (Optional)", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
       const SizedBox(height:20),
       SizedBox(width:double.infinity, height:50, child:ElevatedButton(onPressed:goOtp, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("GET OTP DIRECT - 1234", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
     ]))));
@@ -95,20 +95,24 @@ class _HomePageState extends State<HomePage> {
       if(exp.isAfter(DateTime.now())){ setState((){ isPrem=true; expiry="${exp.day}/${exp.month}/${exp.year}"; }); }
     }
   }
-  void buy() async { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"isPremium":true, "premiumExpiry":Timestamp.fromDate(DateTime.now().add(const Duration(days:30)))}); load(); }
+  void buy() async { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"isPremium":true, "premiumExpiry":Timestamp.fromDate(DateTime.now().add(const Duration(days:30)))}); if(!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Premium Active ✅"))); load(); }
   void logout() async { var sp=await SharedPreferences.getInstance(); await sp.clear(); if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder:(_)=>const LoginPage()), (r)=>false); }
   @override Widget build(BuildContext context){
-    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(backgroundColor:Colors.amber, title:Text("${widget.mobile} | ₹$wallet", style:const TextStyle(color:Colors.black, fontSize:15, fontWeight:FontWeight.bold)), actions:[IconButton(onPressed:logout, icon:const Icon(Icons.logout))]),
-      body:Center(child:Padding(padding:const EdgeInsets.all(18), child:Column(mainAxisAlignment:MainAxisAlignment.center, children:[
+    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(backgroundColor:Colors.amber, title:Text("${widget.mobile} | ₹$wallet", style:const TextStyle(color:Colors.black, fontSize:14, fontWeight:FontWeight.bold)), actions:[IconButton(onPressed:logout, icon:const Icon(Icons.logout))]),
+      body:SingleChildScrollView(child:Padding(padding:const EdgeInsets.all(18), child:Column(children:[
         Container(width:double.infinity, padding:const EdgeInsets.all(12), decoration:BoxDecoration(color:isPrem?Colors.amber:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Text(isPrem?"PREMIUM TILL $expiry":"FREE USER", textAlign:TextAlign.center, style:TextStyle(color:isPrem?Colors.black:Colors.white, fontWeight:FontWeight.bold))),
-        const SizedBox(height:10),
-        Container(width:double.infinity, padding:const EdgeInsets.all(14), decoration:BoxDecoration(color:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Column(children:[Text("MY REFERRAL: $myCode", style:const TextStyle(color:Colors.amber, fontWeight:FontWeight.bold)), if(upi.isNotEmpty) Text("UPI: $upi", style:const TextStyle(color:Colors.white60, fontSize:12))])),
-        const SizedBox(height:20),
-        SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const LudoBoard())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY LUDO", style:TextStyle(fontSize:20, fontWeight:FontWeight.bold)))),
         const SizedBox(height:12),
+        Container(width:double.infinity, padding:const EdgeInsets.all(14), decoration:BoxDecoration(color:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Column(crossAxisAlignment:CrossAxisAlignment.start, children:[
+          Text("MY REFERRAL: $myCode", style:const TextStyle(color:Colors.amber, fontWeight:FontWeight.bold)),
+          const SizedBox(height:6),
+          Text(upi.isEmpty ? "UPI: Not Set - Wallet me jao" : "UPI: $upi", style:TextStyle(color: upi.isEmpty ? Colors.redAccent : Colors.white60, fontSize:13)),
+        ])),
+        const SizedBox(height:25),
+        SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const LudoBoard())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY LUDO", style:TextStyle(fontSize:20, fontWeight:FontWeight.bold, color:Colors.white)))),
+        const SizedBox(height:15),
         SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>WalletScreen(mobile:widget.mobile))).then((_)=>load()); }, child:const Text("WALLET / UPI SETTING"))),
-        const SizedBox(height:12),
-        if(!isPrem) SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed:buy, style:ElevatedButton.styleFrom(backgroundColor:Colors.purple), child:const Text("BUY PREMIUM ₹500 - 1 MONTH", style:TextStyle(color:Colors.white)))),
+        const SizedBox(height:15),
+        SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed: isPrem ? null : buy, style:ElevatedButton.styleFrom(backgroundColor: isPrem ? Colors.grey : Colors.purple), child:Text(isPrem ? "PREMIUM ACTIVE" : "BUY PREMIUM ₹500 - 1 MONTH", style:const TextStyle(color:Colors.white)))),
       ]))),
     );
   }
@@ -136,13 +140,16 @@ class _LudoBoardState extends State<LudoBoard> {
   int dice=1; int pos=0; final rand=Random();
   void roll(){ setState((){ dice=rand.nextInt(6)+1; pos=(pos+dice)%36; }); }
   @override Widget build(BuildContext context){
-    return Scaffold(appBar:AppBar(title:const Text("Ludo"), backgroundColor:Colors.amber), backgroundColor: const Color(0xFF0F172A),
-      body:Column(children:[
-        const SizedBox(height:20),
-        Center(child:Container(width:330, height:330, decoration:BoxDecoration(color:Colors.white, border:Border.all(width:4, color:Colors.amber), borderRadius:BorderRadius.circular(12)), child:GridView.builder(gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:6), itemCount:36, itemBuilder:(c,i){ bool here=i==pos; return Container(margin:const EdgeInsets.all(2), decoration:BoxDecoration(color:here?Colors.green:Colors.white, borderRadius:BorderRadius.circular(6)), child:here?const Icon(Icons.person):null); }))),
-        const SizedBox(height:20), Text("$dice", style:const TextStyle(fontSize:70, color:Colors.white, fontWeight:FontWeight.bold)),
-        ElevatedButton(onPressed:roll, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber), child:const Text("ROLL DICE", style:TextStyle(color:Colors.black))),
-      ]),
+    return Scaffold(appBar:AppBar(title:const Text("LUDO PREMIUM"), backgroundColor:Colors.amber), backgroundColor: const Color(0xFF0F172A),
+      body:SingleChildScrollView(child: Column(children:[
+        const SizedBox(height:15),
+        Center(child: Container(width: MediaQuery.of(context).size.width-20, height: MediaQuery.of(context).size.width-20, padding: const EdgeInsets.all(6), decoration:BoxDecoration(color:Colors.white, border:Border.all(width:4, color:Colors.amber), borderRadius:BorderRadius.circular(15)), 
+          child: GridView.builder(physics: const NeverScrollableScrollPhysics(), gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:6, crossAxisSpacing:3, mainAxisSpacing:3), itemCount:36, itemBuilder:(c,i){ bool here=i==pos; return Container(decoration:BoxDecoration(color:here?Colors.green: const Color(0xFFE0E0E0), borderRadius:BorderRadius.circular(8)), child: Center(child: here ? const Text("😎") : Text("$i", style:const TextStyle(fontSize:10)))); }))),
+        const SizedBox(height:25), 
+        Text("$dice", style:const TextStyle(fontSize:60, color:Colors.white, fontWeight:FontWeight.bold)),
+        const SizedBox(height:15), 
+        SizedBox(width:200, height:55, child: ElevatedButton(onPressed:roll, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("ROLL DICE", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
+      ])),
     );
   }
 }
