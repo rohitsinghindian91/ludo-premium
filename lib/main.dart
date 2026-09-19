@@ -219,7 +219,7 @@ class _LudoBoardState extends State<LudoBoard> {
               const Text("For any help contact - +447397293594 WHATSAPP", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
               const SizedBox(height: 5),
               const Text("NOTE: Payment Screenshot Whatsapp Per Bhejo Payment ke baad 10 min me ID unlock hogi", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11), textAlign: TextAlign.center),
-                        ])),
+                        ]),
       ),
     );
   }
