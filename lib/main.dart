@@ -118,7 +118,7 @@ class _HomePageState extends State<HomePage> {
             SizedBox(height: 8),
             Text("LUDO LOCKED 🔒", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
             SizedBox(height: 4),
-            Text("Khelne ke liye pehle Premium lo", style: TextStyle(color: Colors.white60, fontSize: 13)),
+            Text("Khelne ke liye pehle Premium lo Payment Krke +447397293594 Whatsapp Pr Screenshot Do", style: TextStyle(color: Colors.white60, fontSize: 13)),
           ])),
         const SizedBox(height:15),
         SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>WalletScreen(mobile:widget.mobile))).then((_)=>load()); }, child:const Text("WALLET / UPI SETTING"))),
