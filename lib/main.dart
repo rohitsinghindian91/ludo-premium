@@ -213,8 +213,15 @@ class _LudoBoardState extends State<LudoBoard> {
         Center(child: Container(width: 350, height: 350, padding: const EdgeInsets.all(5), decoration:BoxDecoration(color:Colors.white, border:Border.all(width:4, color:Colors.amber), borderRadius:BorderRadius.circular(15)), 
           child: GridView.builder(physics: const NeverScrollableScrollPhysics(), gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:6, crossAxisSpacing:3, mainAxisSpacing:3), itemCount:36, itemBuilder:(c,i){ bool here=i==pos; return Container(decoration:BoxDecoration(color:here?Colors.green: const Color(0xFFE0E0E0), borderRadius:BorderRadius.circular(8)), child: Center(child: here ? const Text("😎", style: TextStyle(fontSize:20)) : Text("$i", style:const TextStyle(fontSize:10)))); }))),
         const SizedBox(height:25), Text("$dice", style:const TextStyle(fontSize:60, color:Colors.white, fontWeight:FontWeight.bold)),
-        const SizedBox(height:15), SizedBox(width:200, height:55, child: ElevatedButton(onPressed:roll, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("ROLL DICE 🎲", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold, fontSize:18)))),
-      ])),
-    );
-  }
-}
+                      const SizedBox(height:15), 
+              SizedBox(width:200, height:55, child: ElevatedButton(onPressed: roll, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child :const Text("ROLL DICE 🎲", style: TextStyle(color:Colors.black, fontWeight:FontWeight.bold, fontSize:18)))),
+                            const SizedBox(height:15), 
+              SizedBox(width:200, height:55, child: ElevatedButton(onPressed: roll, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child :const Text("ROLL DICE 🎲", style: TextStyle(color:Colors.black, fontWeight:FontWeight.bold, fontSize:18)))),
+              const SizedBox(height: 20),
+              const Text("For any help contact - +447397293594 WHATSAPP", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 5),
+              const Text("NOTE: UPI Payment ke baad 10 min me ID unlock hogi", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11), textAlign: TextAlign.center),
+            ])),
+          );
+        }
+      }
