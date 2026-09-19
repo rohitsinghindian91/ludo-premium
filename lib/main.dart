@@ -32,9 +32,19 @@ class _LoginPageState extends State<LoginPage> {
   final mobileCtrl = TextEditingController();
   final passCtrl = TextEditingController();
   final referCtrl = TextEditingController();
-  void goOtp(){
-    if(mobileCtrl.text.trim().length!=10){ ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("10 digit mobile dalo"))); return; }
-    Navigator.push(context, MaterialPageRoute(builder:(_)=>OtpPage(mobile:mobileCtrl.text.trim(), password:passCtrl.text.trim(), referral:referCtrl.text.trim())));
+    void goOtp() async {
+    if(mobileCtrl.text.trim().length!=10){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("10 digit mobile dalo")));
+      return;
+    }
+    var doc = await FirebaseFirestore.instance.collection("users").doc(mobileCtrl.text.trim()).get();
+    if(doc.exists){
+      if(doc['password'] != passCtrl.text.trim()){
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password galat hai")));
+        return;
+      }
+    }
+    Navigator.push(context, MaterialPageRoute(builder: (_)=>OtpPage(mobile:mobileCtrl.text.trim(), password:passCtrl.text.trim(), referral:referCtrl.text.trim())));
   }
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: const Color(0xFF0F172A), body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children:[
