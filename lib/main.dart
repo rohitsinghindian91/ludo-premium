@@ -112,7 +112,7 @@ class _HomePageState extends State<HomePage> {
         const SizedBox(height:25),
         // YAHAN FIX KIYA - FREE KO LUDO NAHI DIKHEGA
         isPrem 
-        ? SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const LudoBoard())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY LUDO 🎲", style:TextStyle(fontSize:20, fontWeight:FontWeight.bold, color:Colors.white))))
+        ? SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const BeautifulLudoGame())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY LUDO 🎲", style:TextStyle(fontSize:20, fontWeight:FontWeight.bold, color:Colors.white))))
         : Container(width:double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent)), child: const Column(children: [
             Icon(Icons.lock, color: Colors.redAccent, size: 40),
             SizedBox(height: 8),
