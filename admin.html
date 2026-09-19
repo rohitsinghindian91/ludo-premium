@@ -1,35 +1,24 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ludo Admin</title>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<style>body{background:#111;color:#fff;font-family:Arial;padding:10px} table{width:100%;border-collapse:collapse} th,td{border:1px solid #333;padding:8px;font-size:14px} button{padding:6px 10px;border:none;border-radius:5px;cursor:pointer} .on{background:green;color:white} .off{background:red;color:white}</style>
-</head>
-<body>
-<h2>🎲 Ludo Premium - Admin</h2>
-<p id="count">Loading...</p>
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin</title><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><style>body{background:#111;color:#fff;font-family:Arial;padding:10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:8px;font-size:12px}button{padding:6px 10px;border:none;border-radius:5px} .on{background:green;color:white} .off{background:red;color:white}</style></head><body>
+<h2>🎲 Premium Requests</h2>
 <table id="tbl"></table>
 <script>
-const firebaseConfig={apiKey:"AIzaSyCwLEeS-TrsVabQT9rltt5dXN0-omR9qBc",authDomain:"ludo-premium-50-e427e.firebaseapp.com",projectId:"ludo-premium-50-e427e",storageBucket:"ludo-premium-50-e427e.firebasestorage.app",messagingSenderId:"472725834005",appId:"1:472725834005:android:d6dde95567e0b44a8e411c"};
-firebase.initializeApp(firebaseConfig);
-const db=firebase.firestore();
-
-function approve(id){ db.collection("users").doc(id).update({is_premium:true}); }
-function block(id){ db.collection("users").doc(id).update({is_premium:false}); }
-
-db.collection("users").onSnapshot(s=>{
-  document.getElementById('count').innerText = "Total Users: " + s.size;
-  let h='<tr><th>Mobile</th><th>Refer</th><th>Status</th><th>Action</th></tr>';
-  s.forEach(doc=>{
-    let u=doc.data();
-    let id=doc.id;
-    let status = u.is_premium ? "TRUE ✅" : "FALSE ❌";
-    h+=`<tr><td>${u.mobile||id}</td><td>${u.refer_code||'-'}</td><td>${status}</td><td><button class="on" onclick="approve('${id}')">ON</button> <button class="off" onclick="block('${id}')">OFF</button></td></tr>`;
+const cfg={apiKey:"AIzaSyCwLEeS-TrsVabQT9rltt5dXN0-omR9qBc",authDomain:"ludo-premium-50-e427e.firebaseapp.com",projectId:"ludo-premium-50-e427e"};
+firebase.initializeApp(cfg); const db=firebase.firestore();
+function approve(docId,mobile){
+  db.collection("premium_requests").doc(docId).update({status:"approved"});
+  db.collection("users").doc(mobile).update({is_premium:true}).catch(()=>{db.collection("users").doc(mobile).set({is_premium:true,mobile:mobile},{merge:true})});
+  alert(mobile+" Approved!");
+}
+function reject(docId,mobile){
+  db.collection("premium_requests").doc(docId).update({status:"rejected"});
+  db.collection("users").doc(mobile).update({is_premium:false});
+}
+db.collection("premium_requests").orderBy("time","desc").onSnapshot(s=>{
+  let h='<tr><th>Mobile</th><th>Amount</th><th>UPI</th><th>Status</th><th>Action</th></tr>';
+  s.forEach(d=>{
+    let u=d.data(); let id=d.id;
+    h+=`<tr><td>${u.mobile||id}</td><td>${u.amount||0}</td><td>${u.payToUpi||'-'}</td><td>${u.status}</td><td><button class="on" onclick="approve('${id}','${u.mobile}')">APPROVE</button> <button class="off" onclick="reject('${id}','${u.mobile}')">REJECT</button></td></tr>`;
   });
   document.getElementById('tbl').innerHTML=h;
 });
-</script>
-</body>
-</html>
+</script></body></html>
