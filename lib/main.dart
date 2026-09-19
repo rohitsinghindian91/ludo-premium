@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'dart:math';
 import 'package:url_launcher/url_launcher.dart';
+import 'beautiful_ludo.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
