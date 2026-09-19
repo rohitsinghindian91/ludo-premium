@@ -1,24 +1,96 @@
-<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin</title><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><style>body{background:#111;color:#fff;font-family:Arial;padding:10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:8px;font-size:12px}button{padding:6px 10px;border:none;border-radius:5px} .on{background:green;color:white} .off{background:red;color:white}</style></head><body>
-<h2>🎲 Premium Requests</h2>
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ludo Super Admin</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+body{background:#0f0f0f;color:#fff;font-family:Arial;padding:10px}
+h2{color:#00ff88}
+table{width:100%;border-collapse:collapse;background:#1a1a1a}
+th,td{border:1px solid #333;padding:8px;font-size:13px;text-align:left}
+th{background:#222;color:#00ff88}
+.true{color:#00ff88;font-weight:bold}
+.false{color:#ff4444;font-weight:bold}
+button{padding:5px 10px;border:none;border-radius:4px;cursor:pointer;font-size:12px;margin:2px}
+.on{background:#00c853;color:white}
+.off{background:#d50000;color:white}
+.expire{background:#2962ff;color:white}
+input{padding:4px;border-radius:4px;border:none}
+</style>
+</head>
+<body>
+<h2>🎲 Ludo Premium - Full Control</h2>
+<p id="count">Loading...</p>
 <table id="tbl"></table>
+
 <script>
 const cfg={apiKey:"AIzaSyCwLEeS-TrsVabQT9rltt5dXN0-omR9qBc",authDomain:"ludo-premium-50-e427e.firebaseapp.com",projectId:"ludo-premium-50-e427e"};
-firebase.initializeApp(cfg); const db=firebase.firestore();
-function approve(docId,mobile){
-  db.collection("premium_requests").doc(docId).update({status:"approved"});
-  db.collection("users").doc(mobile).update({is_premium:true}).catch(()=>{db.collection("users").doc(mobile).set({is_premium:true,mobile:mobile},{merge:true})});
-  alert(mobile+" Approved!");
-}
-function reject(docId,mobile){
-  db.collection("premium_requests").doc(docId).update({status:"rejected"});
-  db.collection("users").doc(mobile).update({is_premium:false});
-}
-db.collection("premium_requests").orderBy("time","desc").onSnapshot(s=>{
-  let h='<tr><th>Mobile</th><th>Amount</th><th>UPI</th><th>Status</th><th>Action</th></tr>';
-  s.forEach(d=>{
-    let u=d.data(); let id=d.id;
-    h+=`<tr><td>${u.mobile||id}</td><td>${u.amount||0}</td><td>${u.payToUpi||'-'}</td><td>${u.status}</td><td><button class="on" onclick="approve('${id}','${u.mobile}')">APPROVE</button> <button class="off" onclick="reject('${id}','${u.mobile}')">REJECT</button></td></tr>`;
+firebase.initializeApp(cfg);
+const db=firebase.firestore();
+
+let premiumMap = {};
+
+function loadAll(){
+  db.collection("premium_requests").onSnapshot(s=>{
+    premiumMap = {};
+    s.forEach(d=>{ premiumMap[d.data().mobile] = d.data(); });
+    loadUsers();
   });
-  document.getElementById('tbl').innerHTML=h;
-});
-</script></body></html>
+}
+
+function loadUsers(){
+  db.collection("users").onSnapshot(s=>{
+    document.getElementById('count').innerText = "Total Users: " + s.size;
+    let h=`<tr><th>Mobile</th><th>Refer Code</th><th>UPI ID</th><th>Premium</th><th>Expire Date</th><th>Action</th></tr>`;
+    s.forEach(doc=>{
+      let u=doc.data(); let id=doc.id;
+      let mobile = u.mobile || id;
+      let refer = u.refer_code || u.referCode || '-';
+      let prem = premiumMap[mobile];
+      let upi = prem? prem.payToUpi : (u.upi || u.payToUpi || '-');
+      let isPrem = u.is_premium? true : false;
+      let expire = u.expire_date || u.premium_expire || '-';
+
+      h+=`<tr>
+        <td><b>${mobile}</b></td>
+        <td>${refer}</td>
+        <td>${upi}</td>
+        <td class="${isPrem}">${isPrem? 'TRUE ✅' : 'FALSE ❌'}</td>
+        <td>${expire}<br><input type="date" id="date-${id}"></td>
+        <td>
+          <button class="on" onclick="makeTrue('${id}','${mobile}')">TRUE</button>
+          <button class="off" onclick="makeFalse('${id}','${mobile}')">FALSE</button><br>
+          <button class="expire" onclick="setExpire('${id}')">Set Expire</button>
+        </td>
+      </tr>`;
+    });
+    document.getElementById('tbl').innerHTML=h;
+  });
+}
+
+function makeTrue(docId, mobile){
+  db.collection("users").doc(docId).set({is_premium:true, mobile:mobile}, {merge:true});
+  if(premiumMap[mobile]){
+    let reqId = Object.keys(premiumMap).find(k=>premiumMap[k].mobile==mobile);
+    // find doc id of premium request
+    db.collection("premium_requests").where("mobile","==",mobile).get().then(snap=>{
+      snap.forEach(d=>d.ref.update({status:"approved"}));
+    });
+  }
+}
+function makeFalse(docId, mobile){
+  db.collection("users").doc(docId).set({is_premium:false}, {merge:true});
+}
+function setExpire(docId){
+  let d = document.getElementById('date-'+docId).value;
+  if(!d) return alert("Date select karo pehle");
+  db.collection("users").doc(docId).set({expire_date:d, premium_expire:d}, {merge:true});
+  alert("Expire Date Set: "+d);
+}
+
+loadAll();
+</script>
+</body>
+</html>
