@@ -53,10 +53,9 @@ android {
 
     buildTypes {
         release {
-            // HACKER PROOF + SECURE
-            minifyEnabled = true
-            shrinkResources = true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // FIXED - R8 band kiya ab build hoga
+            minifyEnabled = false
+            shrinkResources = false
             signingConfig = signingConfigs.debug
         }
     }
