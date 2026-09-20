@@ -2,6 +2,7 @@ name: Build Secure APK
 on:
   push:
     branches: [ main ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,7 +16,7 @@ jobs:
         with:
           flutter-version: '3.27.4'
       - run: flutter pub get
-      - run: flutter build apk --release --obfuscate --split-debug-info=./symbols
+      - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
           name: ludo-secure-apk
