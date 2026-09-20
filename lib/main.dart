@@ -21,8 +21,11 @@ class _SplashState extends State<Splash> {
     var m = sp.getString("mobile");
     await Future.delayed(const Duration(milliseconds:500));
     if(!mounted) return;
-    if(m!=null){ Navigator.pushReplacement(context, MaterialPageRoute(builder:(_)=>HomePage(mobile:m))); }
-    else { Navigator.pushReplacement(context, MaterialPageRoute(builder:(_)=>const LoginPage())); }
+    if(m != null) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> HomePage(mobile: m)));
+    } else {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> const LoginPage()));
+    }
   }
   @override Widget build(BuildContext context)=> const Scaffold(backgroundColor: Color(0xFF0F172A), body: Center(child: CircularProgressIndicator(color: Colors.amber)));
 }
@@ -32,7 +35,7 @@ class _LoginPageState extends State<LoginPage> {
   final mobileCtrl = TextEditingController();
   final passCtrl = TextEditingController();
   final referCtrl = TextEditingController();
-    void goOtp() async {
+  void goOtp() async {
     if(mobileCtrl.text.trim().length!=10){
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("10 digit mobile dalo")));
       return;
@@ -44,7 +47,7 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
     }
-    Navigator.push(context, MaterialPageRoute(builder: (_)=>OtpPage(mobile:mobileCtrl.text.trim(), password:passCtrl.text.trim(), referral:referCtrl.text.trim())));
+    Navigator.push(context, MaterialPageRoute(builder: (_)=> OtpPage(mobile: mobileCtrl.text.trim(), password: passCtrl.text.trim(), referral: referCtrl.text.trim())));
   }
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: const Color(0xFF0F172A), body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children:[
@@ -79,7 +82,8 @@ class _OtpPageState extends State<OtpPage> {
         await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({"mobile":widget.mobile,"password":widget.password,"wallet":bonus,"upi":"","isPremium":false,"referralCode":widget.mobile,"referredBy":refBy,"premiumExpiry":Timestamp.now()});
       }
       var sp = await SharedPreferences.getInstance(); await sp.setString("mobile", widget.mobile);
-      if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder:(_)=>HomePage(mobile:widget.mobile)), (r)=>false);
+      if(!mounted) return;
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_)=> HomePage(mobile: widget.mobile)), (r)=>false);
     }catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString()))); }
     setState((){ load=false; });
   }
@@ -90,7 +94,7 @@ class _OtpPageState extends State<OtpPage> {
         TextField(controller:otpCtrl, keyboardType:TextInputType.number, maxLength:4, textAlign:TextAlign.center, style:const TextStyle(color:Colors.white, fontSize:32, letterSpacing:8), decoration:InputDecoration(filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
         const SizedBox(height:20),
         load?const CircularProgressIndicator(color:Colors.amber):SizedBox(width:double.infinity, height:50, child:ElevatedButton(onPressed:verify, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber), child:const Text("VERIFY 1234", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
-    ]))));
+      ]))));
   }
 }
 
@@ -107,7 +111,7 @@ class _HomePageState extends State<HomePage> {
       if(exp.isAfter(DateTime.now())){ setState((){ isPrem=true; expiry="${exp.day}/${exp.month}/${exp.year}"; }); }
     }
   }
-  void buy() { Navigator.push(context, MaterialPageRoute(builder:(_)=>PremiumPayScreen(mobile:widget.mobile, onPaid: load))); }
+  void buy(){ Navigator.push(context, MaterialPageRoute(builder: (_)=> PremiumPayScreen(mobile: widget.mobile, onPaid: (){ load(); }))).then((_)=>load()); }
   void logout() async { var sp=await SharedPreferences.getInstance(); await sp.clear(); if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder:(_)=>const LoginPage()), (r)=>false); }
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(backgroundColor:Colors.amber, title:Text("${widget.mobile} | ₹$wallet", style:const TextStyle(color:Colors.black, fontSize:14, fontWeight:FontWeight.bold)), actions:[IconButton(onPressed:logout, icon:const Icon(Icons.logout))]),
@@ -120,20 +124,23 @@ class _HomePageState extends State<HomePage> {
           Text(upi.isEmpty ? "UPI: Not Set - Wallet me jao" : "UPI: $upi", style:TextStyle(color: upi.isEmpty ? Colors.redAccent : Colors.white60, fontSize:13)),
         ])),
         const SizedBox(height:25),
-        // YAHAN FIX KIYA - FREE KO LUDO NAHI DIKHEGA
-        isPrem 
-        ? SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const BeautifulLudoGame())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY LUDO 🎲", style:TextStyle(fontSize:20, fontWeight:FontWeight.bold, color:Colors.white))))
+        isPrem
+        ? SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const BeautifulLudoGame())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY FINAL 4 GOTI LUDO 🎲", style:TextStyle(fontSize:18, fontWeight:FontWeight.bold, color:Colors.white))))
         : Container(width:double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent)), child: const Column(children: [
-            Icon(Icons.lock, color: Colors.redAccent, size: 40),
-            SizedBox(height: 8),
-            Text("LUDO LOCKED 🔒", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
-            SizedBox(height: 4),
-            Text("Khelne ke liye pehle Premium lo Payment Krke +447397293594 Whatsapp Pr Screenshot Do", style: TextStyle(color: Colors.white60, fontSize: 13)),
-          ])),
+          Icon(Icons.lock, color: Colors.redAccent, size: 40),
+          SizedBox(height: 8),
+          Text("LUDO LOCKED 🔒", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+          SizedBox(height: 4),
+          Text("Khelne ke liye pehle Premium lo Payment Krke +447397293594 Whatsapp Pr Screenshot Do", style: TextStyle(color: Colors.white60, fontSize: 13), textAlign: TextAlign.center),
+        ])),
         const SizedBox(height:15),
         SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>WalletScreen(mobile:widget.mobile))).then((_)=>load()); }, child:const Text("WALLET / UPI SETTING"))),
         const SizedBox(height:15),
         SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed: isPrem ? null : buy, style:ElevatedButton.styleFrom(backgroundColor: isPrem ? Colors.grey : Colors.purple), child:Text(isPrem ? "PREMIUM ACTIVE ✅" : "BUY PREMIUM ₹500 - 1 MONTH", style:const TextStyle(color:Colors.white)))),
+        const SizedBox(height: 20),
+        const Text("For any help contact - +447397293594 WHATSAPP", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 5),
+        const Text("NOTE: Payment Screenshot Whatsapp Per Bhejo Payment ke baad 10 min me ID unlock hogi", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11), textAlign: TextAlign.center),
       ]))),
     );
   }
@@ -157,34 +164,22 @@ class _WalletScreenState extends State<WalletScreen> {
 }
 
 class PremiumPayScreen extends StatelessWidget {
-  final String mobile;
-  final VoidCallback onPaid;
+  final String mobile; final VoidCallback onPaid;
   const PremiumPayScreen({super.key, required this.mobile, required this.onPaid});
   final String myUpiId = "kumar131@fam";
   final String myName = "LUDO PREMIUM OWNER";
-
   Future<void> payViaUpi(BuildContext context) async {
     final String upiUrl = "upi://pay?pa=$myUpiId&pn=$myName&am=500&cu=INR&tn=Premium 1 Month for $mobile";
     final Uri uri = Uri.parse(upiUrl);
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch(e) {
+    try { await launchUrl(uri, mode: LaunchMode.externalApplication); } catch(e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("UPI App nahi khula, manually pay karo: $myUpiId pe ₹500")));
     }
   }
-
   Future<void> iHavePaid(BuildContext context) async {
-    await FirebaseFirestore.instance.collection("premium_requests").doc(mobile).set({
-      "mobile": mobile,
-      "amount": 500,
-      "payToUpi": myUpiId,
-      "status": "pending",
-      "time": Timestamp.now()
-    });
+    await FirebaseFirestore.instance.collection("premium_requests").doc(mobile).set({ "mobile": mobile, "amount": 500, "payToUpi": myUpiId, "status": "pending", "time": Timestamp.now(), });
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Payment Request bhej di ✅ Admin check karke Premium active karega")));
     Navigator.pop(context);
   }
-
   @override Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
@@ -208,29 +203,6 @@ class PremiumPayScreen extends StatelessWidget {
         const SizedBox(height: 20),
         const Text("Note: Pay karne ke baad 'I HAVE PAID' dabao. Firebase > premium_requests me request ayegi.", style: TextStyle(color: Colors.white38, fontSize: 12), textAlign: TextAlign.center),
       ])),
-    );
-  }
-}
-
-class LudoBoard extends StatefulWidget { const LudoBoard({super.key}); @override State<LudoBoard> createState()=>_LudoBoardState(); }
-class _LudoBoardState extends State<LudoBoard> {
-  int dice=1; int pos=0; final rand=Random();
-  void roll(){ setState((){ dice=rand.nextInt(6)+1; pos=(pos+dice)%36; }); }
-  @override Widget build(BuildContext context){
-    return Scaffold(appBar:AppBar(title:const Text("LUDO PREMIUM"), backgroundColor:Colors.amber), backgroundColor: const Color(0xFF0F172A),
-      body:SingleChildScrollView(child: Column(children:[
-        const SizedBox(height:15),
-        Center(child: Container(width: 350, height: 350, padding: const EdgeInsets.all(5), decoration:BoxDecoration(color:Colors.white, border:Border.all(width:4, color:Colors.amber), borderRadius:BorderRadius.circular(15)), 
-          child: GridView.builder(physics: const NeverScrollableScrollPhysics(), gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:6, crossAxisSpacing:3, mainAxisSpacing:3), itemCount:36, itemBuilder:(c,i){ bool here=i==pos; return Container(decoration:BoxDecoration(color:here?Colors.green: const Color(0xFFE0E0E0), borderRadius:BorderRadius.circular(8)), child: Center(child: here ? const Text("😎", style: TextStyle(fontSize:20)) : Text("$i", style:const TextStyle(fontSize:10)))); }))),
-        const SizedBox(height:25), Text("$dice", style:const TextStyle(fontSize:60, color:Colors.white, fontWeight:FontWeight.bold)),
-                      const SizedBox(height:15), 
-                                          SizedBox(width:200, height:55, child: ElevatedButton(onPressed: roll, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("ROLL DICE 🎲", style: TextStyle(color:Colors.black, fontWeight:FontWeight.bold, fontSize:18)))),
-              const SizedBox(height: 20),
-              const Text("For any help contact - +447397293594 WHATSAPP", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 5),
-              const Text("NOTE: Payment Screenshot Whatsapp Per Bhejo Payment ke baad 10 min me ID unlock hogi", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11), textAlign: TextAlign.center),
-                        ]),
-      ),
     );
   }
 }
