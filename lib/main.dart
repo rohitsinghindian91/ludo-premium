@@ -1,9 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
-import 'dart:io';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
@@ -70,8 +70,8 @@ class _OtpPageState extends State<OtpPage> {
       }
       var sp = await SharedPreferences.getInstance(); await sp.setString("mobile", widget.mobile);
       if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_)=> HomePage(mobile: widget.mobile)), (r)=>false);
-    }catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString()))); }
-    setState((){ load=false; });
+    }catch(e){ if(mounted &&!kReleaseMode) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString()))); }
+    if(mounted) setState((){ load=false; });
   }
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(title:Text("OTP ${widget.mobile}"), backgroundColor:Colors.amber),
@@ -90,10 +90,12 @@ class _HomePageState extends State<HomePage> {
   void load() async {
     var d = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
     if(!d.exists) return; var data=d.data()!;
+    if(!mounted) return;
     setState((){ wallet=data["wallet"]??0; upi=data["upi"]??""; myCode=data["referralCode"]??widget.mobile; });
     if(data["isPremium"]==true && data["premiumExpiry"]!=null){
       DateTime exp=(data["premiumExpiry"] as Timestamp).toDate();
       if(exp.isAfter(DateTime.now())){
+        if(!mounted) return;
         setState((){ isPrem=true; expiry="${exp.day}/${exp.month}/${exp.year}"; });
         if(data["premiumDistributed"]==false){
           await distributePremiumCommission(widget.mobile);
@@ -117,9 +119,9 @@ class _HomePageState extends State<HomePage> {
           await FirebaseFirestore.instance.collection("earnings").add({"to": currentRef, "from": buyerMobile, "type": "premium_level_${levelIndex+1}", "amount": commissions[levelIndex], "time": FieldValue.serverTimestamp()});
           levelIndex++;
         }
-        currentRef = data["referredBy"];
+        currentRef = data["referredBy"] as String?;
       }
-    }catch(e){ debugPrint("Commission error $e"); }
+    }catch(e){ if(kDebugMode) debugPrint("Commission error"); }
   }
   void buy(){ Navigator.push(context, MaterialPageRoute(builder: (_)=> PremiumPayScreen(mobile: widget.mobile, onPaid: (){ load(); }))).then((_)=>load()); }
   void logout() async { var sp=await SharedPreferences.getInstance(); await sp.clear(); if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder:(_)=>const LoginPage()), (r)=>false); }
@@ -151,7 +153,7 @@ class WalletScreen extends StatefulWidget { final String mobile; const WalletScr
 class _WalletScreenState extends State<WalletScreen> {
   final upiCtrl=TextEditingController(); int wallet=0; bool loading=true;
   @override void initState(){ super.initState(); get(); }
-  void get() async { var d=await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get(); if(d.exists){ setState((){ wallet=d.data()!["wallet"]??0; upiCtrl.text=d.data()!["upi"]??""; loading=false; }); } else { setState((){ loading=false; }); } }
+  void get() async { var d=await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get(); if(d.exists){ if(mounted) setState((){ wallet=d.data()!["wallet"]??0; upiCtrl.text=d.data()!["upi"]??""; loading=false; }); } else { if(mounted) setState((){ loading=false; }); } }
   void save() async { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi":upiCtrl.text.trim()}); if(!mounted) return; Navigator.pop(context); }
   @override Widget build(BuildContext context){
     return Scaffold(appBar:AppBar(title:const Text("Wallet"), backgroundColor:Colors.amber), backgroundColor: const Color(0xFF0F172A),
@@ -171,31 +173,27 @@ class PremiumPayScreen extends StatefulWidget {
 }
 class _PremiumPayScreenState extends State<PremiumPayScreen> {
   final String myUpiId = "kumar131@fam";
-  final String myWhatsapp = "447397293594";
   bool loading = false;
   Future<void> payViaUpi() async {
     final String upiUrl = "upi://pay?pa=$myUpiId&pn=LUDO OWNER&am=500&cu=INR&tn=Premium ${widget.mobile}";
-    try { await launchUrl(Uri.parse(upiUrl), mode: LaunchMode.externalApplication); } catch(e){}
+    try { await launchUrl(Uri.parse(upiUrl), mode: LaunchMode.externalApplication); } catch(e){ if(kDebugMode) debugPrint("UPI Error"); }
   }
   Future<void> pickAndSendDirectWhatsapp() async {
     final picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if(image == null) return;
+    if(!mounted) return;
     setState(()=> loading = true);
-    await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({
-      "mobile": widget.mobile,
-      "amount": 500,
-      "status": "CHECK PLEASE SS",
-      "time": Timestamp.now(),
-    });
-    await Share.shareXFiles(
-      [XFile(image.path)],
-      text: "CHECK PLEASE SS\nMobile: ${widget.mobile}\nAmount: ₹500\nUPI: $myUpiId",
-    );
-    String whatsappUrl = "https://wa.me/$myWhatsapp?text=${Uri.encodeComponent("CHECK PLEASE SS\nMobile: ${widget.mobile}")}";
-    try{ await launchUrl(Uri.parse(whatsappUrl), mode: LaunchMode.externalApplication); }catch(e){}
-    setState(()=> loading = false);
-    if(mounted) Navigator.pop(context);
+    try{
+      await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({
+        "mobile": widget.mobile,
+        "amount": 500,
+        "status": "CHECK PLEASE SS",
+        "time": Timestamp.now(),
+      });
+      await Share.shareXFiles([XFile(image.path)], text: "CHECK PLEASE SS\nMobile: ${widget.mobile}\nAmount: ₹500");
+    }catch(e){ if(mounted &&!kReleaseMode) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+    if(mounted) setState(()=> loading = false);
   }
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar: AppBar(title: const Text("Buy Premium"), backgroundColor: Colors.amber),
@@ -207,9 +205,7 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
         SizedBox(width: double.infinity, height: 55, child: ElevatedButton(onPressed: payViaUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("STEP 1: PAY ₹500 VIA UPI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
         const SizedBox(height: 15),
         loading? const CircularProgressIndicator(color: Colors.amber) :
-        SizedBox(width: double.infinity, height: 55, child: ElevatedButton.icon(onPressed: pickAndSendDirectWhatsapp, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), icon: const Icon(Icons.camera_alt, color: Colors.black), label: const Text("STEP 2: SCREENSHOT SIDHA WHATSAPP PE BHEJ", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)))),
-        const SizedBox(height: 15),
-        const Text("CHECK PLEASE SS ke saath screenshot direct WhatsApp pe jayega", style: TextStyle(color: Colors.white38, fontSize: 11), textAlign: TextAlign.center),
+        SizedBox(width: double.infinity, height: 55, child: ElevatedButton.icon(onPressed: pickAndSendDirectWhatsapp, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), icon: const Icon(Icons.camera_alt, color: Colors.black), label: const Text("STEP 2: SCREENSHOT SIDHA WHATSAPP", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)))),
       ])),
     );
   }
@@ -222,17 +218,20 @@ class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderSt
   List<DocumentSnapshot> earnings=[];
   bool loading=true;
   @override void initState(){ super.initState(); tabCtrl=TabController(length: 4, vsync: this); fetchTeam(); }
+  @override void dispose(){ tabCtrl.dispose(); super.dispose(); }
   Future<void> fetchTeam() async {
-    setState(()=>loading=true);
-    var l1 = await FirebaseFirestore.instance.collection("users").where("referredBy", isEqualTo: widget.mobile).get();
-    level1 = l1.docs;
-    List<DocumentSnapshot> l2temp=[]; for(var doc in l1.docs){ var q = await FirebaseFirestore.instance.collection("users").where("referredBy", isEqualTo: doc.id).get(); l2temp.addAll(q.docs); }
-    level2 = l2temp;
-    List<DocumentSnapshot> l3temp=[]; for(var doc in l2temp){ var q = await FirebaseFirestore.instance.collection("users").where("referredBy", isEqualTo: doc.id).get(); l3temp.addAll(q.docs); }
-    level3 = l3temp;
-    var earn = await FirebaseFirestore.instance.collection("earnings").where("to", isEqualTo: widget.mobile).orderBy("time", descending: true).get();
-    earnings = earn.docs;
-    setState(()=>loading=false);
+    if(!mounted) return; setState(()=>loading=true);
+    try{
+      var l1 = await FirebaseFirestore.instance.collection("users").where("referredBy", isEqualTo: widget.mobile).get();
+      level1 = l1.docs;
+      List<DocumentSnapshot> l2temp=[]; for(var doc in l1.docs){ var q = await FirebaseFirestore.instance.collection("users").where("referredBy", isEqualTo: doc.id).get(); l2temp.addAll(q.docs); }
+      level2 = l2temp;
+      List<DocumentSnapshot> l3temp=[]; for(var doc in l2temp){ var q = await FirebaseFirestore.instance.collection("users").where("referredBy", isEqualTo: doc.id).get(); l3temp.addAll(q.docs); }
+      level3 = l3temp;
+      var earn = await FirebaseFirestore.instance.collection("earnings").where("to", isEqualTo: widget.mobile).get();
+      earnings = earn.docs;
+    }catch(e){ if(kDebugMode) debugPrint("error"); }
+    if(mounted) setState(()=>loading=false);
   }
   Widget userTile(DocumentSnapshot doc){
     var data = doc.data() as Map<String, dynamic>;
@@ -240,7 +239,7 @@ class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderSt
     return ListTile(leading: CircleAvatar(backgroundColor: active? Colors.green: Colors.red, child: Icon(active? Icons.check: Icons.close, color: Colors.white)), title: Text(data["mobile"]??"", style: const TextStyle(color: Colors.white)), subtitle: Text(active? "Premium Active": "Free / Expired", style: TextStyle(color: active? Colors.greenAccent: Colors.redAccent, fontSize: 12)), trailing: Text("₹${data["wallet"]??0}", style: const TextStyle(color: Colors.amber)));
   }
   @override Widget build(BuildContext context){
-    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar: AppBar(backgroundColor: Colors.amber, title: const Text("MY TEAM", style: TextStyle(color: Colors.black)), bottom: TabBar(controller: tabCtrl, labelColor: Colors.black, tabs: const [ Tab(text: "L1 (100)"), Tab(text: "L2 (50)"), Tab(text: "L3 (25)"), Tab(text: "EARNINGS"), ])),
+    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar: AppBar(backgroundColor: Colors.amber, title: const Text("MY TEAM", style: TextStyle(color: Colors.black)), bottom: TabBar(controller: tabCtrl, labelColor: Colors.black, unselectedLabelColor: Colors.black54, tabs: const [ Tab(text: "L1 (100)"), Tab(text: "L2 (50)"), Tab(text: "L3 (25)"), Tab(text: "EARNINGS"), ])),
       body: loading? const Center(child:CircularProgressIndicator(color: Colors.amber)): TabBarView(controller: tabCtrl, children: [
         ListView(children: level1.isEmpty? [const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Koi nahi hai Level 1 me", style: TextStyle(color: Colors.white54))))] : level1.map((e)=>userTile(e)).toList()),
         ListView(children: level2.isEmpty? [const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Koi nahi hai Level 2 me", style: TextStyle(color: Colors.white54))))] : level2.map((e)=>userTile(e)).toList()),
