@@ -191,16 +191,12 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
       "status": "CHECK PLEASE SS",
       "time": Timestamp.now(),
     });
-
-  // --- YAHAN SE NAYA 【entity-WHATSAPP¦canonical_name=WhatsApp】 WALA CODE ---
-  String myNumber = "447397293594"; // 👈 Yahan apna UK number daal 44 se, + mat laga
+  String myNumber = "447397293594";
   String msg = "CHECK PLEASE SS\nMobile: ${widget.mobile}\nAmount: ₹500";
   Uri waUrl = Uri.parse("https://wa.me/$myNumber?text=${Uri.encodeComponent(msg)}");
-  
   if (await canLaunchUrl(waUrl)) {
     await launchUrl(waUrl, mode: LaunchMode.externalApplication);
   }
-  // Sath me image bhi share kar de
   await Share.shareXFiles([XFile(image.path)], text: msg);
     }catch(e){ if(mounted &&!kReleaseMode) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
     if(mounted) setState(()=> loading = false);
@@ -245,8 +241,26 @@ class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderSt
   }
   Widget userTile(DocumentSnapshot doc){
     var data = doc.data() as Map<String, dynamic>;
-    bool active = false; if(data["isPremium"]==true && data["premiumExpiry"]!=null){ DateTime exp=(data["premiumExpiry"] as Timestamp).toDate(); if(exp.isAfter(DateTime.now())) active=true; }
-    return ListTile(leading: CircleAvatar(backgroundColor: active? Colors.green: Colors.red, child: Icon(active? Icons.check: Icons.close, color: Colors.white)), title: Text(data["mobile"]??"", style: const TextStyle(color: Colors.white)), subtitle: Text(active? "Premium Active": "Free / Expired", style: TextStyle(color: active? Colors.greenAccent: Colors.redAccent, fontSize: 12)), trailing: Text("₹${data["wallet"]??0}", style: const TextStyle(color: Colors.amber)));
+    bool active = false;
+    if(data["isPremium"]==true && data["premiumExpiry"]!=null){
+      DateTime exp=(data["premiumExpiry"] as Timestamp).toDate();
+      if(exp.isAfter(DateTime.now())) active=true;
+    }
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: active? Colors.green : Colors.red,
+        child: Icon(active? Icons.check : Icons.close, color: Colors.white)
+      ),
+      title: Text(data["mobile"]??"", style: const TextStyle(color: Colors.white)),
+      subtitle: Text(
+        active? "Premium Active" : "Free / Expired",
+        style: TextStyle(color: active? Colors.greenAccent : Colors.redAccent, fontSize: 12)
+      ),
+      trailing: Text(
+        "₹${active? (data["wallet"]??0) : 0}",
+        style: const TextStyle(color: Colors.amber)
+      )
+    );
   }
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar: AppBar(backgroundColor: Colors.amber, title: const Text("MY TEAM", style: TextStyle(color: Colors.black)), bottom: TabBar(controller: tabCtrl, labelColor: Colors.black, unselectedLabelColor: Colors.black54, tabs: const [ Tab(text: "L1 (100)"), Tab(text: "L2 (50)"), Tab(text: "L3 (25)"), Tab(text: "EARNINGS"), ])),
