@@ -185,13 +185,23 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
     if(!mounted) return;
     setState(()=> loading = true);
     try{
-      await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({
-        "mobile": widget.mobile,
-        "amount": 500,
-        "status": "CHECK PLEASE SS",
-        "time": Timestamp.now(),
-      });
-      await Share.shareXFiles([XFile(image.path)], text: "CHECK PLEASE SS\nMobile: ${widget.mobile}\nAmount: ₹500");
+        await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({
+      "mobile": widget.mobile,
+      "amount": 500,
+      "status": "CHECK PLEASE SS",
+      "time": Timestamp.now(),
+    });
+
+  // --- YAHAN SE NAYA 【entity-WHATSAPP¦canonical_name=WhatsApp】 WALA CODE ---
+  String myNumber = "447397293594"; // 👈 Yahan apna UK number daal 44 se, + mat laga
+  String msg = "CHECK PLEASE SS\nMobile: ${widget.mobile}\nAmount: ₹500";
+  Uri waUrl = Uri.parse("https://wa.me/$myNumber?text=${Uri.encodeComponent(msg)}");
+  
+  if (await canLaunchUrl(waUrl)) {
+    await launchUrl(waUrl, mode: LaunchMode.externalApplication);
+  }
+  // Sath me image bhi share kar de
+  await Share.shareXFiles([XFile(image.path)], text: msg);
     }catch(e){ if(mounted &&!kReleaseMode) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
     if(mounted) setState(()=> loading = false);
   }
