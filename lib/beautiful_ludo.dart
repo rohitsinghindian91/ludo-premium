@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 
-void main() {
-  runApp(const MaterialApp(debugShowCheckedModeBanner: false, home: LudoGame()));
-}
+void main() {}
 
 enum GameMode { vsFriend, vsLaddi }
 
@@ -25,7 +23,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   GameMode mode = GameMode.vsFriend;
   late AnimationController _diceController;
   bool isRolling = false;
-
   final safe = [0, 10, 20, 30];
   final startPos = [0, 20];
   final homeEntry = [39, 19];
@@ -43,7 +40,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
 
   int get dice => turn == 0? diceGreen : diceRed;
   bool get isLaddiTurn => mode == GameMode.vsLaddi && turn == 1 &&!gameOver;
-
   bool get isGameStarted {
     for (int p = 0; p < 2; p++) {
       for (int i = 0; i < 4; i++) {
@@ -80,7 +76,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         title: const Text("Mode Change?", style: TextStyle(color: Colors.white)),
         content: const Text("Game chal raha hai. Mode badalne se pura game reset ho jayega. Pakka change karna hai?", style: TextStyle(color: Colors.white70)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Nahi")),
           TextButton(onPressed: () { Navigator.pop(context); _doChangeMode(newMode); }, child: Text("Haan Change Karo", style: TextStyle(color: newMode == GameMode.vsLaddi? Colors.red : Colors.green, fontWeight: FontWeight.bold))),
         ],
       ));
@@ -201,40 +196,93 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     return Offset(ex + (cx - ex) * t, ey + (cy - ey) * t);
   }
 
-  Widget dot() => Container(width: 12, height: 12, decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle));
-  Widget emptyDot() => const SizedBox(width: 12, height: 12);
+  Widget dot() => Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle));
+  Widget emptyDot() => const SizedBox(width: 10, height: 10);
+
   Widget buildDiceFace(int value) {
-    List<Widget> dots = []; Widget d = dot(); Widget e = emptyDot();
-    if (value == 1) dots = [e,e,e, e,d,e, e,e,e];
-    if (value == 2) dots = [d,e,e, e,e,e, e,e,d];
-    if (value == 3) dots = [d,e,e, e,d,e, e,e,d];
-    if (value == 4) dots = [d,e,d, e,e,e, d,e,d];
-    if (value == 5) dots = [d,e,d, e,d,e, d,e,d];
-    if (value == 6) dots = [d,e,d, d,e,d, d,e,d];
-    return Container(width:70,height:70,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(14),boxShadow:[const BoxShadow(color:Colors.black26,blurRadius:5)]),child:Padding(padding:const EdgeInsets.all(7.0),child:GridView.count(crossAxisCount:3, physics: const NeverScrollableScrollPhysics(), children:dots)));
+    Widget d = dot();
+    Widget e = emptyDot();
+    List<Widget> r1 = [e, e, e];
+    List<Widget> r2 = [e, e, e];
+    List<Widget> r3 = [e, e, e];
+
+    if (value == 1) {
+      r2 = [e, d, e];
+    } else if (value == 2) {
+      r1 = [d, e, e];
+      r3 = [e, e, d];
+    } else if (value == 3) {
+      r1 = [d, e, e];
+      r2 = [e, d, e];
+      r3 = [e, e, d];
+    } else if (value == 4) {
+      r1 = [d, e, d];
+      r3 = [d, e, d];
+    } else if (value == 5) {
+      r1 = [d, e, d];
+      r2 = [e, d, e];
+      r3 = [d, e, d];
+    } else if (value == 6) {
+      r1 = [d, e, d];
+      r2 = [d, e, d];
+      r3 = [d, e, d];
+    }
+
+    return Container(
+      width: 68,
+      height: 68,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black12, width: 1),
+        boxShadow: [const BoxShadow(color: Colors.black26, blurRadius: 5)]
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r1),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r2),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r3),
+          ],
+        ),
+      ),
+    );
   }
 
-  Widget diceNearHome(int player,int value){
-    bool isTurn=turn==player &&!canMove &&!gameOver;
+  Widget diceNearHome(int player, int value){
+    bool isTurn = turn==player &&!canMove &&!gameOver;
     bool canTap = isTurn &&!isRolling && (mode==GameMode.vsFriend || (mode==GameMode.vsLaddi && player==0));
-    Color col=player==0?Colors.green:Colors.red;
+    Color col = player==0? Colors.green : Colors.red;
     bool thisDiceRolling = isRolling && turn == player;
     return GestureDetector(
-      onTap: canTap?roll:null,
+      onTap: canTap? roll : null,
       child: AnimatedBuilder(
         animation: _diceController,
         builder: (context, child) {
           double angle = thisDiceRolling? _diceController.value * 4 * pi : 0;
           return Transform.rotate(angle: angle, child: child);
         },
-        child: AnimatedContainer(duration: const Duration(milliseconds:200),width:85,height:85,decoration:BoxDecoration(color: isTurn?col.withOpacity(0.20):Colors.white,borderRadius:BorderRadius.circular(16),border:Border.all(color: isTurn?col:Colors.black12,width: isTurn?3:1.5), boxShadow: [if(isTurn) BoxShadow(color: col.withOpacity(0.4), blurRadius: 10)]),child:Center(child: thisDiceRolling? buildDiceFace(_rng.nextInt(6)+1) : buildDiceFace(value))),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds:200),
+          width: 85,
+          height: 85,
+          decoration: BoxDecoration(
+            color: isTurn? col.withOpacity(0.20) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isTurn? col : Colors.black12, width: isTurn? 3 : 1.5),
+            boxShadow: [if(isTurn) BoxShadow(color: col.withOpacity(0.4), blurRadius: 10)]
+          ),
+          child: Center(child: thisDiceRolling? buildDiceFace(_rng.nextInt(6)+1) : buildDiceFace(value))
+        ),
       )
     );
   }
 
   Widget goti(int p,int t,double s){
     int v=pos[p][t];
-    double boxSize=s*0.14; // CHHOTA BOX
+    double boxSize=s*0.14;
     double pad=s*0.02;
     Offset o;
     if(v==-1){
@@ -256,8 +304,8 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context){
-    double s=min(MediaQuery.of(context).size.width,400)-20;
-    double box=s*0.14; // CHHOTA BOX
+    double s = min(MediaQuery.of(context).size.width,400)-20;
+    double box=s*0.14;
     return Scaffold(
       backgroundColor:const Color(0xFF0A0A0A),
       body:Column(children:[
@@ -288,20 +336,20 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         Expanded(child:Center(child:Container(width:s,height:s,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(24),border:Border.all(color:Colors.amber,width:4)),child:Stack(
           clipBehavior: Clip.none,
           children:[
-          Positioned(left:10,top:10,width:box,height:box,child:Container(decoration:BoxDecoration(color:const Color(0xFFE8F5E9),borderRadius:BorderRadius.circular(8),border:Border.all(color:Colors.green,width:2)))),
-          Positioned(right:10,bottom:10,width:box,height:box,child:Container(decoration:BoxDecoration(color:const Color(0xFFFFEBEE),borderRadius:BorderRadius.circular(8),border:Border.all(color:Colors.red,width:2)))),
+            Positioned(left:10,top:10,width:box,height:box,child:Container(decoration:BoxDecoration(color:const Color(0xFFE8F5E9),borderRadius:BorderRadius.circular(8),border:Border.all(color:Colors.green,width:2)))),
+            Positioned(right:10,bottom:10,width:box,height:box,child:Container(decoration:BoxDecoration(color:const Color(0xFFFFEBEE),borderRadius:BorderRadius.circular(8),border:Border.all(color:Colors.red,width:2)))),
 
-          // DONO DICE SAFE - EK JAISA - AB CUT NAHI HOGA
-          Positioned(left: box + 18, top: 12, child: diceNearHome(0,diceGreen)),
-          Positioned(right: box + 18, bottom: 12, child: diceNearHome(1,diceRed)),
+            Positioned(left: box + 28, top: 18, child: diceNearHome(0,diceGreen)),
+            Positioned(right: box + 28, bottom: 18, child: diceNearHome(1,diceRed)),
 
-          for(int i=0;i<40;i++) Positioned(left:(s/2+s*0.30*cos((i/40)*2*pi-pi/2))-6, top:(s/2+s*0.30*sin((i/40)*2*pi-pi/2))-6, child:Container(width:12,height:12,decoration:BoxDecoration(color:safe.contains(i)?Colors.amber:Colors.white,shape:BoxShape.circle,border:Border.all(color:Colors.black12)))),
-          for(int j=0;j<5;j++) Positioned(left: getHomePathPos(0, j, s).dx - 7, top: getHomePathPos(0, j, s).dy - 7, child: Container(width:14,height:14,decoration:BoxDecoration(color: Colors.green.shade200, shape:BoxShape.circle, border:Border.all(color:Colors.green, width:1.5)))),
-          for(int j=0;j<5;j++) Positioned(left: getHomePathPos(1, j, s).dx - 7, top: getHomePathPos(1, j, s).dy - 7, child: Container(width:14,height:14,decoration:BoxDecoration(color: Colors.red.shade200, shape:BoxShape.circle, border:Border.all(color:Colors.red, width:1.5)))),
-          Positioned(left:s/2-16, top:s/2-16, child: Container(width:32,height:32,decoration:BoxDecoration(color:Colors.amber, shape:BoxShape.circle, border:Border.all(color:Colors.black,width:2)), child:const Icon(Icons.star, size:16))),
-          goti(0,0,s),goti(0,1,s),goti(0,2,s),goti(0,3,s),
-          goti(1,0,s),goti(1,1,s),goti(1,2,s),goti(1,3,s),
-        ])))),
+            for(int i=0;i<40;i++) Positioned(left:(s/2+s*0.30*cos((i/40)*2*pi-pi/2))-6, top:(s/2+s*0.30*sin((i/40)*2*pi-pi/2))-6, child:Container(width:12,height:12,decoration:BoxDecoration(color:safe.contains(i)?Colors.amber:Colors.white,shape:BoxShape.circle,border:Border.all(color:Colors.black12)))),
+            for(int j=0;j<5;j++) Positioned(left: getHomePathPos(0, j, s).dx - 7, top: getHomePathPos(0, j, s).dy - 7, child: Container(width:14,height:14,decoration:BoxDecoration(color: Colors.green.shade200, shape:BoxShape.circle, border:Border.all(color:Colors.green, width:1.5)))),
+            for(int j=0;j<5;j++) Positioned(left: getHomePathPos(1, j, s).dx - 7, top: getHomePathPos(1, j, s).dy - 7, child: Container(width:14,height:14,decoration:BoxDecoration(color: Colors.red.shade200, shape:BoxShape.circle, border:Border.all(color:Colors.red, width:1.5)))),
+            Positioned(left:s/2-16, top:s/2-16, child: Container(width:32,height:32,decoration:BoxDecoration(color:Colors.amber, shape:BoxShape.circle, border:Border.all(color:Colors.black,width:2)), child:const Icon(Icons.star, size:16))),
+            goti(0,0,s),goti(0,1,s),goti(0,2,s),goti(0,3,s),
+            goti(1,0,s),goti(1,1,s),goti(1,2,s),goti(1,3,s),
+          ]
+        )))),
         Container(margin:const EdgeInsets.all(14),padding:const EdgeInsets.symmetric(horizontal:20,vertical:12),decoration:BoxDecoration(color:const Color(0xFF1E1E2E),borderRadius:BorderRadius.circular(16)),child:Text("${turn==0?"GREEN":'🦋🤗°"laddi"°🤗🦋'} KI BAARI - ${gameOver?"GAME OVER": isRolling?"GHUM RAHA HAI..." : canMove?"GOTI CHUNO":"PASSA FEKO"} ${isLaddiTurn?"🦋":""}",style:const TextStyle(color:Colors.white,fontSize:12,fontWeight:FontWeight.bold))),
       ]),
     );
