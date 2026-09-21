@@ -13,7 +13,7 @@ class LudoGame extends StatefulWidget {
   State<LudoGame> createState() => _LudoGameState();
 }
 
-class _LudoGameState extends State<LudoGame> {
+class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin {
   final _rng = Random();
   int diceGreen = 1;
   int diceRed = 1;
@@ -23,10 +23,24 @@ class _LudoGameState extends State<LudoGame> {
   List<List<int>> pos = [[-1,-1,-1,-1],[-1,-1,-1,-1]];
   int consecutiveSixes = 0;
   GameMode mode = GameMode.vsFriend;
+  late AnimationController _diceController;
+  bool isRolling = false;
 
   final safe = [0, 10, 20, 30];
   final startPos = [0, 20];
   final homeEntry = [39, 19];
+
+  @override
+  void initState() {
+    super.initState();
+    _diceController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+  }
+
+  @override
+  void dispose() {
+    _diceController.dispose();
+    super.dispose();
+  }
 
   int get dice => turn == 0? diceGreen : diceRed;
   bool get isLaddiTurn => mode == GameMode.vsLaddi && turn == 1 &&!gameOver;
@@ -51,32 +65,6 @@ class _LudoGameState extends State<LudoGame> {
     return true;
   }
 
-  void changeMode(GameMode newMode) {
-    if (mode == newMode) return;
-    if (isGameStarted &&!gameOver) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1E2E),
-          title: const Text("Mode Change?", style: TextStyle(color: Colors.white)),
-          content: const Text("Game chal raha hai. Mode badalne se pura game reset ho jayega. Pakka change karna hai?", style: TextStyle(color: Colors.white70)),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Nahi, Continue Karo")),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _doChangeMode(newMode);
-              },
-              child: Text("Haan Change Karo", style: TextStyle(color: newMode == GameMode.vsLaddi? Colors.red : Colors.green, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-    } else {
-      _doChangeMode(newMode);
-    }
-  }
-
   void _doChangeMode(GameMode newMode) {
     setState(() {
       mode = newMode;
@@ -90,51 +78,99 @@ class _LudoGameState extends State<LudoGame> {
     });
   }
 
+  void changeMode(GameMode newMode) {
+    if (mode == newMode) return;
+    if (isGameStarted &&!gameOver) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E2E),
+          title: const Text("Mode Change?", style: TextStyle(color: Colors.white)),
+          content: const Text("Game chal raha hai. Mode badalne se pura game reset ho jayega. Pakka change karna hai?", style: TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Nahi")),
+            TextButton(onPressed: () { Navigator.pop(context); _doChangeMode(newMode); }, child: Text("Haan Change Karo", style: TextStyle(color: newMode == GameMode.vsLaddi? Colors.red : Colors.green, fontWeight: FontWeight.bold))),
+          ],
+        ),
+      );
+    } else {
+      _doChangeMode(newMode);
+    }
+  }
+
   void roll() {
-    if (canMove || gameOver) return;
+    if (canMove || gameOver || isRolling) return;
     if (isLaddiTurn) return;
-
-    int d = _rng.nextInt(6) + 1;
-
-    if (d == 6) {
-      consecutiveSixes++;
-      if (consecutiveSixes == 3) {
-        setState(() {
-          if (turn == 0) diceGreen = d; else diceRed = d;
-          turn = 1 - turn;
-          canMove = false;
-          consecutiveSixes = 0;
-        });
-        _checkLaddiTurn();
-        return;
+    setState(() => isRolling = true);
+    _diceController.forward(from: 0);
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      int d = _rng.nextInt(6) + 1;
+      if (d == 6) {
+        consecutiveSixes++;
+        if (consecutiveSixes == 3) {
+          setState(() {
+            if (turn == 0) diceGreen = d; else diceRed = d;
+            turn = 1 - turn;
+            canMove = false;
+            consecutiveSixes = 0;
+            isRolling = false;
+          });
+          _checkLaddiTurn();
+          return;
+        }
+      } else {
+        consecutiveSixes = 0;
       }
-    } else {
-      consecutiveSixes = 0;
-    }
-
-    setState(() {
-      if (turn == 0) diceGreen = d; else diceRed = d;
-      canMove = true;
-    });
-
-    bool any = false;
-    for (int i = 0; i < 4; i++) {
-      if (isValidMove(turn, i, d)) { any = true; break; }
-    }
-    if (!any) {
-      Future.delayed(const Duration(milliseconds: 600), () {
-        if (!mounted || gameOver) return;
-        setState(() {
-          turn = 1 - turn;
-          canMove = false;
-          if (d!= 6) consecutiveSixes = 0;
-        });
-        _checkLaddiTurn();
+      setState(() {
+        if (turn == 0) diceGreen = d; else diceRed = d;
+        canMove = true;
+        isRolling = false;
       });
-    } else {
-      if (isLaddiTurn) {
-        Future.delayed(const Duration(milliseconds: 800), () => laddiMove());
+      bool any = false;
+      for (int i = 0; i < 4; i++) {
+        if (isValidMove(turn, i, d)) { any = true; break; }
       }
+      if (!any) {
+        Future.delayed(const Duration(milliseconds: 600), () {
+          if (!mounted || gameOver) return;
+          setState(() {
+            turn = 1 - turn;
+            canMove = false;
+            if (d!= 6) consecutiveSixes = 0;
+          });
+          _checkLaddiTurn();
+        });
+      }
+    });
+  }
+
+  void _checkLaddiTurn() {
+    if (isLaddiTurn &&!canMove &&!gameOver) {
+      setState(() => isRolling = true);
+      _diceController.forward(from: 0);
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (!mounted) return;
+        int d = _rng.nextInt(6) + 1;
+        if (d == 6) {
+          consecutiveSixes++;
+          if (consecutiveSixes == 3) {
+            setState(() { diceRed = d; turn = 0; canMove = false; consecutiveSixes = 0; isRolling = false; });
+            return;
+          }
+        } else consecutiveSixes = 0;
+        setState(() { diceRed = d; canMove = true; isRolling = false; });
+        bool any = false;
+        for (int i = 0; i < 4; i++) if (isValidMove(turn, i, d)) any = true;
+        if (!any) {
+          Future.delayed(const Duration(milliseconds: 600), () {
+            if (!mounted) return;
+            setState(() { turn = 0; canMove = false; });
+          });
+        } else {
+          Future.delayed(const Duration(milliseconds: 500), () => laddiMove());
+        }
+      });
     }
   }
 
@@ -144,7 +180,6 @@ class _LudoGameState extends State<LudoGame> {
     List<int> valid = [];
     for (int i = 0; i < 4; i++) if (isValidMove(turn, i, d)) valid.add(i);
     if (valid.isEmpty) return;
-
     int bestIdx = valid[0];
     int bestScore = -100;
     for (int idx in valid) {
@@ -165,46 +200,11 @@ class _LudoGameState extends State<LudoGame> {
     moveGoti(bestIdx);
   }
 
-  void _checkLaddiTurn() {
-    if (isLaddiTurn &&!canMove &&!gameOver) {
-      Future.delayed(const Duration(milliseconds: 700), () {
-        if (!mounted) return;
-        int d = _rng.nextInt(6) + 1;
-        if (d == 6) {
-          consecutiveSixes++;
-          if (consecutiveSixes == 3) {
-            setState(() {
-              diceRed = d;
-              turn = 0;
-              canMove = false;
-              consecutiveSixes = 0;
-            });
-            return;
-          }
-        } else consecutiveSixes = 0;
-        setState(() { diceRed = d; canMove = true; });
-        bool any = false;
-        for (int i = 0; i < 4; i++) if (isValidMove(turn, i, d)) any = true;
-        if (!any) {
-          Future.delayed(const Duration(milliseconds: 600), () {
-            if (!mounted) return;
-            setState(() { turn = 0; canMove = false; });
-          });
-        } else {
-          Future.delayed(const Duration(milliseconds: 800), () => laddiMove());
-        }
-      });
-    }
-  }
-
   void moveGoti(int idx) {
     if (!canMove || gameOver) return;
     if (!isValidMove(turn, idx, dice)) return;
-    if (mode == GameMode.vsLaddi && turn == 1 &&!isLaddiTurn) return;
-
     bool gotCut = false;
     bool isWin = false;
-
     setState(() {
       int cur = pos[turn][idx];
       int opp = 1 - turn;
@@ -220,7 +220,6 @@ class _LudoGameState extends State<LudoGame> {
           pos[turn][idx] = next;
         }
       } else pos[turn][idx] = cur + dice;
-
       if (pos[turn].every((v) => v == 45)) {
         isWin = true; gameOver = true; canMove = false;
       } else {
@@ -228,12 +227,11 @@ class _LudoGameState extends State<LudoGame> {
         canMove = false;
       }
     });
-
     if (isWin) {
       Future.delayed(const Duration(milliseconds: 200), () {
         if (!mounted) return;
         showDialog(context: context, barrierDismissible: false, builder: (_) => AlertDialog(
-          title: Text("${turn == 0? "GREEN" : '🦋🤗°"laddi"°🤗🦋'} JEET GAYI! 🥳"),
+          title: Text("${turn == 0? "GREEN" : 'laddi'} JEET GAYI! 🥳"),
           actions: [TextButton(onPressed: () { Navigator.pop(context); restartGame(); }, child: const Text("Restart"))]
         ));
       });
@@ -259,8 +257,8 @@ class _LudoGameState extends State<LudoGame> {
     return Offset(ex + (cx - ex) * t, ey + (cy - ey) * t);
   }
 
-  Widget dot() => Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle));
-  Widget emptyDot() => const SizedBox(width: 8, height: 8);
+  Widget dot() => Container(width: 4, height: 4, decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle));
+  Widget emptyDot() => const SizedBox(width: 4, height: 4);
   Widget buildDiceFace(int value) {
     List<Widget> dots = []; Widget d = dot(); Widget e = emptyDot();
     if (value == 1) dots = [e,e,e, e,d,e, e,e,e];
@@ -269,14 +267,25 @@ class _LudoGameState extends State<LudoGame> {
     if (value == 4) dots = [d,e,d, e,e,e, d,e,d];
     if (value == 5) dots = [d,e,d, e,d,e, d,e,d];
     if (value == 6) dots = [d,e,d, d,e,d, d,e,d];
-    return Container(width:50,height:50,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12),boxShadow:[const BoxShadow(color:Colors.black26,blurRadius:4)]),child:Padding(padding:const EdgeInsets.all(6.0),child:GridView.count(crossAxisCount:3,children:dots)));
+    return Container(width: 24, height: 24, decoration: BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(6),boxShadow:[const BoxShadow(color:Colors.black26,blurRadius:2)]), child: Padding(padding:const EdgeInsets.all(3.0),child:GridView.count(crossAxisCount:3, physics: const NeverScrollableScrollPhysics(), children:dots)));
   }
 
   Widget diceNearHome(int player,int value){
-    bool isTurn=turn==player &&!canMove &&!gameOver;
-    bool canTap = isTurn && (mode==GameMode.vsFriend || (mode==GameMode.vsLaddi && player==0));
-    Color col=player==0?Colors.green:Colors.red;
-    return GestureDetector(onTap: canTap?roll:null,child:AnimatedContainer(duration: const Duration(milliseconds:300),width:60,height:60,decoration:BoxDecoration(color: isTurn?col.withOpacity(0.15):Colors.white,borderRadius:BorderRadius.circular(14),border:Border.all(color: isTurn?col:Colors.black12,width: isTurn?3:1)),child:Center(child:buildDiceFace(value))));
+    bool isTurn = turn==player &&!canMove &&!gameOver;
+    bool canTap = isTurn &&!isRolling && (mode==GameMode.vsFriend || (mode==GameMode.vsLaddi && player==0));
+    Color col = player==0?Colors.green:Colors.red;
+    bool thisDiceRolling = isRolling && turn == player;
+    return GestureDetector(
+      onTap: canTap? roll : null,
+      child: AnimatedBuilder(
+        animation: _diceController,
+        builder: (context, child) {
+          double angle = thisDiceRolling? _diceController.value * 4 * pi : 0;
+          return Transform.rotate(angle: angle, child: child);
+        },
+        child: AnimatedContainer(duration: const Duration(milliseconds:200), width: 32, height: 32, decoration:BoxDecoration(color: isTurn?col.withOpacity(0.15):Colors.white, borderRadius:BorderRadius.circular(8), border:Border.all(color: isTurn?col:Colors.black12,width: isTurn?2:1)), child: Center(child: thisDiceRolling? buildDiceFace(_rng.nextInt(6)+1) : buildDiceFace(value))),
+      )
+    );
   }
 
   Widget goti(int p,int t,double s){
@@ -294,7 +303,6 @@ class _LudoGameState extends State<LudoGame> {
     if(v!= -1 && samePosCount > 0){ o = Offset(o.dx + (samePosCount * 6), o.dy + (samePosCount * 6)); }
     bool act=p==turn && canMove && isValidMove(p, t, dice) &&!gameOver;
     if(mode==GameMode.vsLaddi && p==1) act=false;
-    if(mode==GameMode.vsLaddi && isLaddiTurn) act=false;
     return Positioned(left:o.dx-11,top:o.dy-11,child:GestureDetector(onTap: act? ()=>moveGoti(t) : null,child:Container(width: act?30:22,height: act?30:22,decoration:BoxDecoration(color: p==0?Colors.green:Colors.red,shape:BoxShape.circle,border:Border.all(color: act?Colors.yellow:Colors.white,width:2),boxShadow: act? [const BoxShadow(color:Colors.yellow,blurRadius:8)]:[]))));
   }
 
@@ -306,28 +314,11 @@ class _LudoGameState extends State<LudoGame> {
       backgroundColor:const Color(0xFF0A0A0A),
       body:Column(children:[
         const SizedBox(height: 45),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(color: const Color(0xFF1E1E2E), borderRadius: BorderRadius.circular(12)),
-          child: Row(children: [
-            Expanded(child: GestureDetector(
-              onTap: () => changeMode(GameMode.vsFriend),
-              child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: mode==GameMode.vsFriend?Colors.green:Colors.transparent, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Text("1 VS 1", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                if(mode==GameMode.vsFriend) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.check_circle, size: 14, color: Colors.white)),
-              ])),
-            )),
-            const SizedBox(width: 4),
-            Expanded(child: GestureDetector(
-              onTap: () => changeMode(GameMode.vsLaddi),
-              child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: mode==GameMode.vsLaddi?Colors.red:Colors.transparent, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Flexible(child: Text('VS 🦋🤗°"laddi"°🤗🦋', overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                if(mode==GameMode.vsLaddi) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.check_circle, size: 14, color: Colors.white)),
-              ])),
-            )),
-          ]),
-        ),
+        Container(margin: const EdgeInsets.symmetric(horizontal: 20), padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: const Color(0xFF1E1E2E), borderRadius: BorderRadius.circular(12)), child: Row(children: [
+          Expanded(child: GestureDetector(onTap: () => changeMode(GameMode.vsFriend), child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: mode==GameMode.vsFriend?Colors.green:Colors.transparent, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Text("1 VS 1", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)), if(mode==GameMode.vsFriend) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.check_circle, size: 14, color: Colors.white)),])))),
+          const SizedBox(width: 4),
+          Expanded(child: GestureDetector(onTap: () => changeMode(GameMode.vsLaddi), child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: mode==GameMode.vsLaddi?Colors.red:Colors.transparent, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Flexible(child: Text('VS laddi', overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))), if(mode==GameMode.vsLaddi) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.check_circle, size: 14, color: Colors.white)),])))),
+        ])),
         const SizedBox(height: 10),
         Expanded(child:Center(child:Container(width:s,height:s,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(24),border:Border.all(color:Colors.amber,width:4)),child:Stack(children:[
           Positioned(left:10,top:10,width:box,height:box,child:Container(decoration:BoxDecoration(color:const Color(0xFFE8F5E9),borderRadius:BorderRadius.circular(10),border:Border.all(color:Colors.green,width:2)))),
@@ -341,7 +332,7 @@ class _LudoGameState extends State<LudoGame> {
           goti(0,0,s),goti(0,1,s),goti(0,2,s),goti(0,3,s),
           goti(1,0,s),goti(1,1,s),goti(1,2,s),goti(1,3,s),
         ])))),
-        Container(margin:const EdgeInsets.all(14),padding:const EdgeInsets.symmetric(horizontal:20,vertical:12),decoration:BoxDecoration(color:const Color(0xFF1E1E2E),borderRadius:BorderRadius.circular(16)),child:Text("${turn==0?"GREEN":'🦋🤗°"laddi"°🤗🦋'} KI BAARI - ${gameOver?"GAME OVER":canMove?"GOTI CHUNO":"PASSA FEKO"} ${isLaddiTurn?"🦋":""}",style:const TextStyle(color:Colors.white,fontSize:12,fontWeight:FontWeight.bold))),
+        Container(margin:const EdgeInsets.all(14),padding:const EdgeInsets.symmetric(horizontal:20,vertical:12),decoration:BoxDecoration(color:const Color(0xFF1E1E2E),borderRadius:BorderRadius.circular(16)),child:Text("${turn==0?"GREEN":'laddi'} KI BAARI - ${gameOver?"GAME OVER": isRolling? "GHUM RAHA HAI..." : canMove?"GOTI CHUNO":"PASSA FEKO"}",style:const TextStyle(color:Colors.white,fontSize:12,fontWeight:FontWeight.bold))),
       ]),
     );
   }
