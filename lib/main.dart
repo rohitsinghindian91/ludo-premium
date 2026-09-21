@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import 'beautiful_ludo.dart';
+import 'referral_chart.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -132,7 +133,22 @@ class _HomePageState extends State<HomePage> {
       const SizedBox(height:12),
       Container(width:double.infinity, padding:const EdgeInsets.all(14), decoration:BoxDecoration(color:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Column(crossAxisAlignment:CrossAxisAlignment.start, children:[ Text("MY REFERRAL: $myCode", style:const TextStyle(color:Colors.amber, fontWeight:FontWeight.bold)), const SizedBox(height:6), Text(upi.isEmpty? "UPI: Not Set - Wallet me jao" : "UPI: $upi", style:TextStyle(color: upi.isEmpty? Colors.redAccent : Colors.white60, fontSize:13)), ])),
       const SizedBox(height:12), Container(width:double.infinity, padding:const EdgeInsets.all(10), decoration:BoxDecoration(color:Colors.green.withOpacity(0.15), borderRadius:BorderRadius.circular(12), border: Border.all(color: Colors.green)), child: const Text("3 LEVEL PLAN: L1=₹100 | L2=₹50 | L3=₹25 (Only Active Premium ko)", textAlign:TextAlign.center, style:TextStyle(color:Colors.greenAccent, fontSize:12, fontWeight:FontWeight.bold))),
-      const SizedBox(height:20),
+      const SizedBox(height:12),
+
+SizedBox(
+  width: double.infinity,
+  height: 55,
+  child: ElevatedButton.icon(
+    onPressed: (){
+      Navigator.push(context, MaterialPageRoute(builder: (_)=> const ReferralChartScreen()));
+    },
+    style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, shape: RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))),
+    icon: const Icon(Icons.help_outline, color: Colors.black),
+    label: const Text("HOW 3 LEVEL PLAN WORKS?", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+  ),
+),
+
+const SizedBox(height:20),
       isPrem? SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const BeautifulLudoGame())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY FINAL 4 GOTI LUDO 🎲", style:TextStyle(fontSize:18, fontWeight:FontWeight.bold, color:Colors.white))))
       : Container(width:double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent)), child: const Column(children: [ Icon(Icons.lock, color: Colors.redAccent, size: 40), SizedBox(height: 8), Text("LUDO LOCKED 🔒", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)), SizedBox(height: 4), Text("Khelne ke liye pehle Premium lo", style: TextStyle(color: Colors.white60, fontSize: 13), textAlign: TextAlign.center), ])),
       const SizedBox(height:15),
