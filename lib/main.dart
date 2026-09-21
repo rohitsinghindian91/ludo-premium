@@ -22,12 +22,12 @@ class _SplashState extends State<Splash> {
   check() async {
     var sp = await SharedPreferences.getInstance();
     var m = sp.getString("mobile");
-    await Future.delayed(const Duration(milliseconds:500));
+    await Future.delayed(const Duration(milliseconds:600));
     if(!mounted) return;
     if(m!= null) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> HomePage(mobile: m)));
     else Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> const LoginPage()));
   }
-  @override Widget build(BuildContext context)=> const Scaffold(backgroundColor: Color(0xFF0F172A), body: Center(child: CircularProgressIndicator(color: Colors.amber)));
+  @override Widget build(BuildContext context)=> const Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.casino_rounded, size:80, color:Colors.amber), SizedBox(height:16), CircularProgressIndicator(color: Colors.amber), SizedBox(height:10), Text("LUDO PREMIUM", style:TextStyle(color:Colors.white, fontWeight:FontWeight.bold, letterSpacing:2))])));
 }
 
 class LoginPage extends StatefulWidget { const LoginPage({super.key}); @override State<LoginPage> createState()=>_LoginPageState(); }
@@ -47,13 +47,20 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
   @override Widget build(BuildContext context){
-    return Scaffold(backgroundColor: const Color(0xFF0F172A), body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children:[
-      const Icon(Icons.casino_rounded, size:70, color:Colors.amber), const Text("LUDO PREMIUM", style:TextStyle(color:Colors.white, fontSize:26, fontWeight:FontWeight.bold)), const SizedBox(height:20),
-      TextField(controller:mobileCtrl, keyboardType:TextInputType.phone, maxLength:10, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Mobile", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
-      const SizedBox(height:10), TextField(controller:passCtrl, obscureText:true, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Password", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
-      const SizedBox(height:10), TextField(controller:referCtrl, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Referral Code (Optional)", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
-      const SizedBox(height:20), SizedBox(width:double.infinity, height:50, child:ElevatedButton(onPressed:goOtp, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("GET OTP DIRECT - 1234", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
-    ]))));
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children:[
+        Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.amber, Colors.orange.shade700]), shape: BoxShape.circle), child: const Icon(Icons.casino_rounded, size:50, color:Colors.black)),
+        const SizedBox(height:16),
+        const Text("LUDO PREMIUM", style:TextStyle(color:Colors.white, fontSize:26, fontWeight:FontWeight.w900, letterSpacing:1.5)),
+        const Text("Earn While You Play", style:TextStyle(color:Colors.white54, fontSize:12)),
+        const SizedBox(height:30),
+        TextField(controller:mobileCtrl, keyboardType:TextInputType.phone, maxLength:10, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Mobile", prefixIcon: Icon(Icons.phone, color:Colors.amber), filled:true, fillColor:Color(0xFF151A2B), border:OutlineInputBorder(borderRadius:BorderRadius.circular(14), borderSide: BorderSide.none))),
+        const SizedBox(height:12), TextField(controller:passCtrl, obscureText:true, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Password", prefixIcon: Icon(Icons.lock, color:Colors.amber), filled:true, fillColor:Color(0xFF151A2B), border:OutlineInputBorder(borderRadius:BorderRadius.circular(14), borderSide: BorderSide.none))),
+        const SizedBox(height:12), TextField(controller:referCtrl, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Referral Code (Optional)", prefixIcon: Icon(Icons.card_giftcard, color:Colors.amber), filled:true, fillColor:Color(0xFF151A2B), border:OutlineInputBorder(borderRadius:BorderRadius.circular(14), borderSide: BorderSide.none))),
+        const SizedBox(height:24), SizedBox(width:double.infinity, height:54, child:ElevatedButton(onPressed:goOtp, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14))), child:const Text("GET OTP DIRECT - 1234", style:TextStyle(color:Colors.black, fontWeight:FontWeight.w900, fontSize:14)))),
+      ]))),
+    );
   }
 }
 
@@ -75,11 +82,11 @@ class _OtpPageState extends State<OtpPage> {
     if(mounted) setState((){ load=false; });
   }
   @override Widget build(BuildContext context){
-    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(title:Text("OTP ${widget.mobile}"), backgroundColor:Colors.amber),
+    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar:AppBar(title:Text("OTP ${widget.mobile}"), backgroundColor:Colors.amber, foregroundColor: Colors.black),
     body:Center(child:Padding(padding:const EdgeInsets.all(20), child:Column(mainAxisSize:MainAxisSize.min, children:[
-      const Text("Direct OTP = 1234", style:TextStyle(color:Colors.amber, fontWeight:FontWeight.bold)), const SizedBox(height:20),
-      TextField(controller:otpCtrl, keyboardType:TextInputType.number, maxLength:4, textAlign:TextAlign.center, style:const TextStyle(color:Colors.white, fontSize:32, letterSpacing:8), decoration:InputDecoration(filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
-      const SizedBox(height:20), load?const CircularProgressIndicator(color:Colors.amber):SizedBox(width:double.infinity, height:50, child:ElevatedButton(onPressed:verify, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber), child:const Text("VERIFY 1234", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
+      const Icon(Icons.sms, size:60, color:Colors.amber), const SizedBox(height:10), const Text("Direct OTP = 1234", style:TextStyle(color:Colors.amber, fontWeight:FontWeight.bold)), const SizedBox(height:20),
+      TextField(controller:otpCtrl, keyboardType:TextInputType.number, maxLength:4, textAlign:TextAlign.center, style:const TextStyle(color:Colors.white, fontSize:32, letterSpacing:12, fontWeight:FontWeight.bold), decoration:InputDecoration(filled:true, fillColor:Color(0xFF151A2B), border:OutlineInputBorder(borderRadius:BorderRadius.circular(14), borderSide: BorderSide.none))),
+      const SizedBox(height:20), load?const CircularProgressIndicator(color:Colors.amber):SizedBox(width:double.infinity, height:54, child:ElevatedButton(onPressed:verify, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14))), child:const Text("VERIFY 1234", style:TextStyle(color:Colors.black, fontWeight:FontWeight.w900)))),
     ]))));
   }
 }
@@ -126,29 +133,172 @@ class _HomePageState extends State<HomePage> {
   }
   void buy(){ Navigator.push(context, MaterialPageRoute(builder: (_)=> PremiumPayScreen(mobile: widget.mobile, onPaid: (){ load(); }))).then((_)=>load()); }
   void logout() async { var sp=await SharedPreferences.getInstance(); await sp.clear(); if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder:(_)=>const LoginPage()), (r)=>false); }
+
+  // ✅ WHATSAPP HELP FUNCTION - NEW ADDED
+  void openWhatsappHelp() async {
+    String number = "447397293594";
+    String message = "Hello, Ludo Premium Help chahiye. My ID: ${widget.mobile}";
+    Uri url = Uri.parse("https://wa.me/$number?text=${Uri.encodeComponent(message)}");
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (kDebugMode) debugPrint("WhatsApp open error");
+    }
+  }
+
   @override Widget build(BuildContext context){
-    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(backgroundColor:Colors.amber, title:Text("${widget.mobile} | ₹$wallet", style:const TextStyle(color:Colors.black, fontSize:14, fontWeight:FontWeight.bold)), actions:[IconButton(onPressed:logout, icon:const Icon(Icons.logout))]),
-    body:SingleChildScrollView(child:Padding(padding:const EdgeInsets.all(18), child:Column(children:[
-      Container(width:double.infinity, padding:const EdgeInsets.all(12), decoration:BoxDecoration(color:isPrem?Colors.amber:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Text(isPrem?"PREMIUM TILL $expiry":"FREE USER - PREMIUM LO", textAlign:TextAlign.center, style:TextStyle(color:isPrem?Colors.black:Colors.white, fontWeight:FontWeight.bold))),
-      const SizedBox(height:12),
-      Container(width:double.infinity, padding:const EdgeInsets.all(14), decoration:BoxDecoration(color:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Column(crossAxisAlignment:CrossAxisAlignment.start, children:[ Text("MY REFERRAL: $myCode", style:const TextStyle(color:Colors.amber, fontWeight:FontWeight.bold)), const SizedBox(height:6), Text(upi.isEmpty? "UPI: Not Set - Wallet me jao" : "UPI: $upi", style:TextStyle(color: upi.isEmpty? Colors.redAccent : Colors.white60, fontSize:13)), ])),
-      const SizedBox(height:12),
-      Container(width:double.infinity, padding:const EdgeInsets.all(10), decoration:BoxDecoration(color:Colors.green.withOpacity(0.15), borderRadius:BorderRadius.circular(12), border: Border.all(color: Colors.green)), child: const Text("3 LEVEL PLAN: L1=₹100 | L2=₹50 | L3=₹25 (Only Active Premium ko)", textAlign:TextAlign.center, style:TextStyle(color:Colors.greenAccent, fontSize:12, fontWeight:FontWeight.bold))),
-      const SizedBox(height:10),
-      SizedBox(width:double.infinity, height:50, child:ElevatedButton.icon(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=> const PlanScreen())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(12))), icon: const Icon(Icons.visibility, color: Colors.black), label: const Text("VIEW FULL 3 LEVEL PLAN", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
-      const SizedBox(height:20),
-      isPrem? SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const BeautifulLudoGame())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY FINAL 4 GOTI LUDO 🎲", style:TextStyle(fontSize:18, fontWeight:FontWeight.bold, color:Colors.white))))
-      : Container(width:double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent)), child: const Column(children: [ Icon(Icons.lock, color: Colors.redAccent, size: 40), SizedBox(height: 8), Text("LUDO LOCKED 🔒", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)), SizedBox(height: 4), Text("Khelne ke liye pehle Premium lo", style: TextStyle(color: Colors.white60, fontSize: 13), textAlign: TextAlign.center), ])),
-      const SizedBox(height:15),
-      Row(children:[
-        Expanded(child: SizedBox(height:55, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>WalletScreen(mobile:widget.mobile))).then((_)=>load()); }, child:const Text("WALLET")))),
-        const SizedBox(width:10),
-        Expanded(child: SizedBox(height:55, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>MyTeamScreen(mobile:widget.mobile))); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.blueAccent), child:const Text("MY TEAM", style:TextStyle(color:Colors.white))))),
-      ]),
-      const SizedBox(height:15),
-      SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed: isPrem? null : buy, style:ElevatedButton.styleFrom(backgroundColor: isPrem? Colors.grey : Colors.purple), child:Text(isPrem? "PREMIUM ACTIVE ✅" : "BUY PREMIUM ₹500 - 1 MONTH", style:const TextStyle(color:Colors.white)))),
-      const SizedBox(height: 20), const Text("For help: +447397293594 WHATSAPP", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-    ]))),
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.amber, Colors.orange.shade700]), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.casino, color: Colors.black, size: 20)),
+                  const SizedBox(width: 10),
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("LUDO PREMIUM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)), Text("${widget.mobile} | ₹$wallet", style: const TextStyle(color: Colors.white54, fontSize: 11))]),
+                  const Spacer(),
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.amber.withOpacity(0.2))), child: Row(children: [const Icon(Icons.account_balance_wallet, color: Colors.amber, size: 14), const SizedBox(width: 5), Text("₹$wallet", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12))])),
+                  const SizedBox(width: 8),
+                  InkWell(onTap: logout, child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.white10, shape: BoxShape.circle), child: const Icon(Icons.logout, color: Colors.white54, size: 16))),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: isPrem? LinearGradient(colors: [Colors.amber, Colors.orange.shade700]) : LinearGradient(colors: [const Color(0xFF1E293B), const Color(0xFF151A2B)]),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: isPrem? Colors.amber.withOpacity(0.5) : Colors.white10),
+                  boxShadow: isPrem? [BoxShadow(color: Colors.amber.withOpacity(0.25), blurRadius: 20, offset: const Offset(0, 8))] : [],
+                ),
+                child: Row(
+                  children: [
+                    Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isPrem? Colors.black.withOpacity(0.15) : Colors.white10, borderRadius: BorderRadius.circular(12)), child: Icon(isPrem? Icons.workspace_premium : Icons.lock, color: isPrem? Colors.black : Colors.white54, size: 26)),
+                    const SizedBox(width: 14),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(isPrem? "PREMIUM ACTIVE" : "FREE USER", style: TextStyle(color: isPrem? Colors.black : Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
+                      Text(isPrem? "Till $expiry • Unlimited Earnings" : "Premium lo, Ludo khelo aur kamao", style: TextStyle(color: isPrem? Colors.black87 : Colors.white54, fontSize: 11)),
+                    ])),
+                    if(isPrem) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(20)), child: const Text("PRO", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 10))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)),
+                child: Row(
+                  children: [
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text("MY REFERRAL CODE", style: TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 0.8)),
+                      const SizedBox(height: 4),
+                      Row(children: [Text(myCode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)), const SizedBox(width: 8), Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.15), borderRadius: BorderRadius.circular(6)), child: const Icon(Icons.copy, size: 12, color: Colors.amber))]),
+                      const SizedBox(height: 2),
+                      Text(upi.isEmpty? "UPI: Not Set" : "UPI: $upi", style: TextStyle(color: upi.isEmpty? Colors.redAccent : Colors.white54, fontSize: 11)),
+                    ])),
+                    Container(width: 1, height: 45, color: Colors.white10),
+                    const SizedBox(width: 12),
+                    Column(children: [
+                      Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.green.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.share, color: Colors.greenAccent, size: 18)),
+                      const SizedBox(height: 4),
+                      const Text("SHARE", style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ]),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.green.withOpacity(0.25))),
+                child: Column(
+                  children: [
+                    Row(children: [
+                      Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: Colors.green.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.account_tree_outlined, color: Colors.greenAccent, size: 16)),
+                      const SizedBox(width: 8),
+                      const Text("3 LEVEL INCOME PLAN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      const Spacer(),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.green.withOpacity(0.15), borderRadius: BorderRadius.circular(20)), child: const Text("LIVE", style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold))),
+                    ]),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: Colors.green.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.3))), child: const Column(children: [Text("L1", style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11)), SizedBox(height: 2), Text("₹100", style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w900, fontSize: 13))]))),
+                      const SizedBox(width: 8),
+                      Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: Colors.blue.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withOpacity(0.3))), child: const Column(children: [Text("L2", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 11)), SizedBox(height: 2), Text("₹50", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w900, fontSize: 13))]))),
+                      const SizedBox(width: 8),
+                      Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: Colors.purple.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.purple.withOpacity(0.3))), child: const Column(children: [Text("L3", style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11)), SizedBox(height: 2), Text("₹25", style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.w900, fontSize: 13))]))),
+                    ]),
+                    const SizedBox(height: 12),
+                    SizedBox(width: double.infinity, height: 46, child: ElevatedButton.icon(onPressed: (){ Navigator.push(context, MaterialPageRoute(builder: (_)=> const PlanScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), icon: const Icon(Icons.visibility, color: Colors.black, size: 18), label: const Text("VIEW FULL 3 LEVEL PLAN", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 12)))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              isPrem?
+              Container(
+                width: double.infinity, height: 60,
+                decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.green.shade400, Colors.green.shade700]), borderRadius: BorderRadius.circular(14), boxShadow: [BoxShadow(color: Colors.green.withOpacity(0.35), blurRadius: 18, offset: const Offset(0, 6))]),
+                child: ElevatedButton(onPressed: (){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const BeautifulLudoGame())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))), child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text("🎲", style: TextStyle(fontSize: 18)), SizedBox(width: 8), Text("PLAY FINAL 4 GOTI LUDO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15))])),
+              )
+              : Container(
+                width: double.infinity, padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.red.withOpacity(0.25))),
+                child: Row(children: [
+                  Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.lock, color: Colors.redAccent)),
+                  const SizedBox(width: 12),
+                  const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("LUDO LOCKED 🔒", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)), Text("Khelne ke liye pehle Premium lo", style: TextStyle(color: Colors.white54, fontSize: 11))])),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              Row(children: [
+                Expanded(child: InkWell(onTap: (){ Navigator.push(context, MaterialPageRoute(builder:(_)=>WalletScreen(mobile:widget.mobile))).then((_)=>load()); }, child: Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.white10)), child: Row(children: [Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: Colors.blue.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.account_balance_wallet, color: Colors.blueAccent, size: 18)), const SizedBox(width: 10), const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("WALLET", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)), Text("Manage", style: TextStyle(color: Colors.white54, fontSize: 10))])])))),
+                const SizedBox(width: 12),
+                Expanded(child: InkWell(onTap: (){ Navigator.push(context, MaterialPageRoute(builder:(_)=>MyTeamScreen(mobile:widget.mobile))); }, child: Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.white10)), child: Row(children: [Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: Colors.purple.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.groups, color: Colors.purpleAccent, size: 18)), const SizedBox(width: 10), const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("MY TEAM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)), Text("View Team", style: TextStyle(color: Colors.white54, fontSize: 10))])])))),
+              ]),
+              const SizedBox(height: 14),
+              InkWell(
+                onTap: isPrem? null : buy,
+                child: Container(
+                  width: double.infinity, padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(gradient: isPrem? null : LinearGradient(colors: [const Color(0xFF6A11CB), const Color(0xFF2575FC)]), color: isPrem? Colors.white10 : null, borderRadius: BorderRadius.circular(14)),
+                  child: Row(children: [
+                    Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(isPrem? Icons.check : Icons.workspace_premium, color: Colors.white, size: 18)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(isPrem? "PREMIUM ACTIVE ✅" : "BUY PREMIUM ₹500", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)), Text(isPrem? "Enjoy unlimited play" : "1 Month • Unlock All Features", style: const TextStyle(color: Colors.white70, fontSize: 11))])),
+                    if(!isPrem) Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)), child: const Text("BUY", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11))),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 18),
+              // ✅ FIXED WHATSAPP BOX - CLICKABLE
+              InkWell(
+                onTap: openWhatsappHelp,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.4))),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(padding: const EdgeInsets.all(6), decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle), child: const Icon(Icons.support_agent, size: 16, color: Colors.white)),
+                      const SizedBox(width: 10),
+                      const Text("For help: ", style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      const Text("+447397293594", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(width: 6),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(20)), child: const Text("WHATSAPP", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10))),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -160,11 +310,12 @@ class _WalletScreenState extends State<WalletScreen> {
   void get() async { var d=await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get(); if(d.exists){ if(mounted) setState((){ wallet=d.data()!["wallet"]??0; upiCtrl.text=d.data()!["upi"]??""; loading=false; }); } else { if(mounted) setState((){ loading=false; }); } }
   void save() async { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi":upiCtrl.text.trim()}); if(!mounted) return; Navigator.pop(context); }
   @override Widget build(BuildContext context){
-    return Scaffold(appBar:AppBar(title:const Text("Wallet"), backgroundColor:Colors.amber), backgroundColor: const Color(0xFF0F172A),
-    body:loading?const Center(child:CircularProgressIndicator()):Padding(padding:const EdgeInsets.all(20), child:Column(children:[
-      Text("Wallet: ₹$wallet", style:const TextStyle(color:Colors.amber, fontSize:22)), const SizedBox(height:20),
-      TextField(controller:upiCtrl, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"UPI ID", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
-      const SizedBox(height:20), SizedBox(width:double.infinity, height:50, child:ElevatedButton(onPressed:save, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber), child:const Text("SAVE UPI", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
+    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar:AppBar(title:const Text("Wallet", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)), backgroundColor:Colors.amber, iconTheme: const IconThemeData(color: Colors.black)),
+    body:loading?const Center(child:CircularProgressIndicator(color: Colors.amber)):Padding(padding:const EdgeInsets.all(20), child:Column(children:[
+      Container(width: double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.amber, Colors.orange.shade700]), borderRadius: BorderRadius.circular(16)), child: Column(children: [const Text("Total Wallet", style: TextStyle(color: Colors.black87, fontSize: 12)), Text("₹$wallet", style: const TextStyle(color: Colors.black, fontSize: 36, fontWeight: FontWeight.w900))])),
+      const SizedBox(height:20),
+      TextField(controller:upiCtrl, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"UPI ID", labelStyle: const TextStyle(color: Colors.white54), prefixIcon: const Icon(Icons.account_balance, color: Colors.amber), filled:true, fillColor:const Color(0xFF151A2B), border:OutlineInputBorder(borderRadius:BorderRadius.circular(12), borderSide: BorderSide.none))),
+      const SizedBox(height:20), SizedBox(width:double.infinity, height:52, child:ElevatedButton(onPressed:save, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(12))), child:const Text("SAVE UPI", style:TextStyle(color:Colors.black, fontWeight:FontWeight.w900)))),
     ])),
     );
   }
@@ -189,33 +340,29 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
     if(!mounted) return;
     setState(()=> loading = true);
     try{
-        await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({
-      "mobile": widget.mobile,
-      "amount": 500,
-      "status": "CHECK PLEASE SS",
-      "time": Timestamp.now(),
-    });
-  String myNumber = "447397293594";
-  String msg = "CHECK PLEASE SS\nMobile: ${widget.mobile}\nAmount: ₹500";
-  Uri waUrl = Uri.parse("https://wa.me/$myNumber?text=${Uri.encodeComponent(msg)}");
-  if (await canLaunchUrl(waUrl)) {
-    await launchUrl(waUrl, mode: LaunchMode.externalApplication);
-  }
-  await Share.shareXFiles([XFile(image.path)], text: msg);
+        await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({"mobile": widget.mobile, "amount": 500, "status": "CHECK PLEASE SS", "time": Timestamp.now()});
+        String myNumber = "447397293594";
+        String msg = "CHECK PLEASE SS\nMobile: ${widget.mobile}\nAmount: ₹500";
+        Uri waUrl = Uri.parse("https://wa.me/$myNumber?text=${Uri.encodeComponent(msg)}");
+        if (await canLaunchUrl(waUrl)) { await launchUrl(waUrl, mode: LaunchMode.externalApplication); }
+        await Share.shareXFiles([XFile(image.path)], text: msg);
     }catch(e){ if(mounted &&!kReleaseMode) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
     if(mounted) setState(()=> loading = false);
   }
   @override Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar: AppBar(title: const Text("Buy Premium"), backgroundColor: Colors.amber),
+    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Buy Premium", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)), backgroundColor: Colors.amber, iconTheme: const IconThemeData(color: Colors.black)),
       body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-        const Icon(Icons.workspace_premium, size: 80, color: Colors.amber), const SizedBox(height: 20),
-        const Text("Premium 1 Month - ₹500", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)), const SizedBox(height: 20),
-        Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber)), child: Column(children: [ const Text("Is UPI pe ₹500 bhejo:", style: TextStyle(color: Colors.white70)), const SizedBox(height: 10), SelectableText(myUpiId, style: const TextStyle(color: Colors.amber, fontSize: 20, fontWeight: FontWeight.bold)), ])),
-        const SizedBox(height: 25),
-        SizedBox(width: double.infinity, height: 55, child: ElevatedButton(onPressed: payViaUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("STEP 1: PAY ₹500 VIA UPI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
-        const SizedBox(height: 15),
+        Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.amber, Colors.orange.shade700]), shape: BoxShape.circle), child: const Icon(Icons.workspace_premium, size: 50, color: Colors.black)),
+        const SizedBox(height: 16),
+        const Text("Premium 1 Month - ₹500", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)), const SizedBox(height: 6),
+        const Text("Unlock Ludo + 3 Level Earning", style: TextStyle(color: Colors.white54, fontSize: 12)),
+        const SizedBox(height: 20),
+        Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Column(children: [ const Text("Is UPI pe ₹500 bhejo:", style: TextStyle(color: Colors.white70, fontSize: 12)), const SizedBox(height: 8), SelectableText(myUpiId, style: const TextStyle(color: Colors.amber, fontSize: 20, fontWeight: FontWeight.bold)), ])),
+        const SizedBox(height: 24),
+        SizedBox(width: double.infinity, height: 52, child: ElevatedButton(onPressed: payViaUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(12))), child: const Text("STEP 1: PAY ₹500 VIA UPI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
+        const SizedBox(height: 14),
         loading? const CircularProgressIndicator(color: Colors.amber) :
-        SizedBox(width: double.infinity, height: 55, child: ElevatedButton.icon(onPressed: pickAndSendDirectWhatsapp, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), icon: const Icon(Icons.camera_alt, color: Colors.black), label: const Text("STEP 2: SCREENSHOT SIDHA WHATSAPP", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)))),
+        SizedBox(width: double.infinity, height: 52, child: ElevatedButton.icon(onPressed: pickAndSendDirectWhatsapp, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(12))), icon: const Icon(Icons.camera_alt, color: Colors.black), label: const Text("STEP 2: SCREENSHOT WHATSAPP", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 12)))),
       ])),
     );
   }
@@ -246,24 +393,25 @@ class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderSt
   Widget userTile(DocumentSnapshot doc){
     var data = doc.data() as Map<String, dynamic>;
     bool active = false;
-    if(data["isPremium"]==true && data["premiumExpiry"]!=null){
-      DateTime exp=(data["premiumExpiry"] as Timestamp).toDate();
-      if(exp.isAfter(DateTime.now())) active=true;
-    }
-    return ListTile(
-      leading: CircleAvatar(backgroundColor: active? Colors.green : Colors.red, child: Icon(active? Icons.check : Icons.close, color: Colors.white)),
-      title: Text(data["mobile"]??"", style: const TextStyle(color: Colors.white)),
-      subtitle: Text(active? "Premium Active": "Free / Expired", style: TextStyle(color: active? Colors.greenAccent: Colors.redAccent, fontSize: 12)),
-      trailing: Text("₹${active? (data["wallet"]??0) : 0}", style: const TextStyle(color: Colors.amber))
+    if(data["isPremium"]==true && data["premiumExpiry"]!=null){ DateTime exp=(data["premiumExpiry"] as Timestamp).toDate(); if(exp.isAfter(DateTime.now())) active=true; }
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white10)),
+      child: ListTile(
+        leading: CircleAvatar(backgroundColor: active? Colors.green : Colors.red, child: Icon(active? Icons.check : Icons.close, color: Colors.white, size: 18)),
+        title: Text(data["mobile"]??"", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+        subtitle: Text(active? "Premium Active" : "Free / Expired", style: TextStyle(color: active? Colors.greenAccent : Colors.redAccent, fontSize: 11)),
+        trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: active? Colors.amber.withOpacity(0.15) : Colors.white10, borderRadius: BorderRadius.circular(20)), child: Text("₹${active? (data["wallet"]??0) : 0}", style: TextStyle(color: active? Colors.amber : Colors.white54, fontWeight: FontWeight.bold, fontSize: 12))),
+      ),
     );
   }
   @override Widget build(BuildContext context){
-    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar: AppBar(backgroundColor: Colors.amber, title: const Text("MY TEAM", style: TextStyle(color: Colors.black)), bottom: TabBar(controller: tabCtrl, labelColor: Colors.black, unselectedLabelColor: Colors.black54, tabs: const [ Tab(text: "L1 (100)"), Tab(text: "L2 (50)"), Tab(text: "L3 (25)"), Tab(text: "EARNINGS"), ])),
+    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: Colors.amber, title: const Text("MY TEAM", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)), iconTheme: const IconThemeData(color: Colors.black), bottom: TabBar(controller: tabCtrl, labelColor: Colors.black, unselectedLabelColor: Colors.black54, indicatorColor: Colors.black, tabs: const [ Tab(text: "L1 (100)"), Tab(text: "L2 (50)"), Tab(text: "L3 (25)"), Tab(text: "EARNINGS"), ])),
       body: loading? const Center(child:CircularProgressIndicator(color: Colors.amber)): TabBarView(controller: tabCtrl, children: [
         ListView(children: level1.isEmpty? [const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Koi nahi hai Level 1 me", style: TextStyle(color: Colors.white54))))] : level1.map((e)=>userTile(e)).toList()),
         ListView(children: level2.isEmpty? [const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Koi nahi hai Level 2 me", style: TextStyle(color: Colors.white54))))] : level2.map((e)=>userTile(e)).toList()),
         ListView(children: level3.isEmpty? [const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Koi nahi hai Level 3 me", style: TextStyle(color: Colors.white54))))] : level3.map((e)=>userTile(e)).toList()),
-        ListView(children: earnings.isEmpty? [const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Abhi koi earning nahi", style: TextStyle(color: Colors.white54))))] : earnings.map((e){ var d=e.data() as Map; return ListTile(leading: const Icon(Icons.currency_rupee, color: Colors.green), title: Text("${d["type"]} - ₹${d["amount"]}", style: const TextStyle(color: Colors.white)), subtitle: Text("From: ${d["from"]}", style: const TextStyle(color: Colors.white54, fontSize: 12))); }).toList()),
+        ListView(children: earnings.isEmpty? [const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Abhi koi earning nahi", style: TextStyle(color: Colors.white54))))] : earnings.map((e){ var d=e.data() as Map; return Container(margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: ListTile(leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.green.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.currency_rupee, color: Colors.greenAccent, size: 16)), title: Text("${d["type"]} - ₹${d["amount"]}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)), subtitle: Text("From: ${d["from"]}", style: const TextStyle(color: Colors.white54, fontSize: 11)))); }).toList()),
       ]),
     );
   }
