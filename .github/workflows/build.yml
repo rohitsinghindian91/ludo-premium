@@ -3,38 +3,44 @@ name: Build Secure APK
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Flutter
+      - name: Setup Flutter 3.27.4
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.4'
           channel: 'stable'
           cache: true
 
-      - name: Get Flutter packages
-        run: flutter pub get
+      - name: Clean and get packages
+        run: |
+          flutter clean
+          flutter pub get
 
-      - name: Build Release APK with Obfuscation
-        run: flutter build apk --release --obfuscate --split-debug-info=./symbols --no-tree-shake-icons
+      - name: Fix corrupt launcher icons
+        run: |
+          rm -rf android/app/src/main/res/mipmap-*
+          flutter create . --platforms=android
 
-      - name: Upload Secure APK
+      - name: Build APK Release
+        run: flutter build apk --release
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ludo-secure-apk
+          name: release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 7
-          if-no-files-found: error
