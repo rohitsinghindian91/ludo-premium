@@ -1,113 +1,347 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 
-class BeautifulLudoGame extends StatefulWidget {
-  const BeautifulLudoGame({super.key});
-  @override State<BeautifulLudoGame> createState() => _BeautifulLudoGameState();
+void main() {
+  runApp(const MaterialApp(debugShowCheckedModeBanner: false, home: LudoGame()));
 }
 
-class _BeautifulLudoGameState extends State<BeautifulLudoGame> {
-  int dice = 1;
+enum GameMode { vsFriend, vsLaddi }
+
+class LudoGame extends StatefulWidget {
+  const LudoGame({super.key});
+  @override
+  State<LudoGame> createState() => _LudoGameState();
+}
+
+class _LudoGameState extends State<LudoGame> {
+  final _rng = Random();
+  int diceGreen = 1;
+  int diceRed = 1;
   int turn = 0;
   bool canMove = false;
-  bool isBotMode = true;
-  List<List<int>> pos = [[-1, -1, -1, -1], [-1, -1, -1, -1]];
+  bool gameOver = false;
+  List<List<int>> pos = [[-1,-1,-1,-1],[-1,-1,-1,-1]];
+  int consecutiveSixes = 0;
+  GameMode mode = GameMode.vsFriend;
+
+  final safe = [0, 10, 20, 30];
+  final startPos = [0, 20];
+  final homeEntry = [39, 19];
+
+  int get dice => turn == 0? diceGreen : diceRed;
+  bool get isLaddiTurn => mode == GameMode.vsLaddi && turn == 1 &&!gameOver;
+
+  bool get isGameStarted {
+    for (int p = 0; p < 2; p++) {
+      for (int i = 0; i < 4; i++) {
+        if (pos[p][i]!= -1) return true;
+      }
+    }
+    return false;
+  }
+
+  bool isValidMove(int player, int idx, int d) {
+    int cur = pos[player][idx];
+    if (cur == 45) return false;
+    if (cur == -1) return d == 6;
+    if (cur >= 40) return cur + d <= 45;
+    int distToHome = (homeEntry[player] - cur + 40) % 40;
+    if (d == distToHome + 1) return true;
+    if (d > distToHome + 1) return false;
+    return true;
+  }
+
+  void changeMode(GameMode newMode) {
+    if (mode == newMode) return;
+    if (isGameStarted &&!gameOver) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E2E),
+          title: const Text("Mode Change?", style: TextStyle(color: Colors.white)),
+          content: const Text("Game chal raha hai. Mode badalne se pura game reset ho jayega. Pakka change karna hai?", style: TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Nahi, Continue Karo")),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _doChangeMode(newMode);
+              },
+              child: Text("Haan Change Karo", style: TextStyle(color: newMode == GameMode.vsLaddi? Colors.red : Colors.green, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      _doChangeMode(newMode);
+    }
+  }
+
+  void _doChangeMode(GameMode newMode) {
+    setState(() {
+      mode = newMode;
+      pos = List.generate(2, (_) => List.filled(4, -1));
+      turn = 0;
+      canMove = false;
+      gameOver = false;
+      diceGreen = 1;
+      diceRed = 1;
+      consecutiveSixes = 0;
+    });
+  }
 
   void roll() {
-    if (canMove) return;
-    if (isBotMode && turn == 1) return;
-    int d = Random().nextInt(6) + 1;
-    setState(() { dice = d; canMove = true; });
-    checkAnyMove(d);
-  }
+    if (canMove || gameOver) return;
+    if (isLaddiTurn) return;
 
-  void checkAnyMove(int d) {
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      bool any = false;
-      for (int i = 0; i < 4; i++) {
-        int c = pos[turn][i];
-        if (c == -1 && d == 6) any = true;
-        if (c >= 0 && c < 40) any = true;
-        if (c >= 40 && c < 45 && d <= (45 - c)) any = true;
+    int d = _rng.nextInt(6) + 1;
+
+    if (d == 6) {
+      consecutiveSixes++;
+      if (consecutiveSixes == 3) {
+        setState(() {
+          if (turn == 0) diceGreen = d; else diceRed = d;
+          turn = 1 - turn;
+          canMove = false;
+          consecutiveSixes = 0;
+        });
+        _checkLaddiTurn();
+        return;
       }
-      if (!any) {
-        setState(() { turn = 1 - turn; canMove = false; });
-        triggerBot();
-      } else if (isBotMode && turn == 1) botMove();
-    });
-  }
+    } else {
+      consecutiveSixes = 0;
+    }
 
-  void botRoll() {
-    if (!isBotMode || turn!= 1) return;
-    int d = Random().nextInt(6) + 1;
-    setState(() { dice = d; canMove = true; });
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (!mounted) return;
-      bool any = false;
-      for (int i = 0; i < 4; i++) {
-        int c = pos[1][i];
-        if (c == -1 && d == 6) any = true;
-        if (c >= 0 && c < 40) any = true;
-        if (c >= 40 && c < 45 && d <= (45 - c)) any = true;
-      }
-      if (!any) setState(() { turn = 0; canMove = false; }); else botMove();
-    });
-  }
-
-  void botMove() {
-    int bestIdx = -1;
-    for (int i = 0; i < 4; i++) { int c = pos[1][i]; if (c >= 40 && c < 45 && dice == (45 - c)) { bestIdx = i; break; } }
-    if (bestIdx == -1) { for (int i = 0; i < 4; i++) { int c = pos[1][i]; if (c >= 0 && c < 40) { int next = c + dice; if (next < 40 && pos[0].contains(next)) { bestIdx = i; break; } } } }
-    if (bestIdx == -1 && dice == 6) { for (int i = 0; i < 4; i++) if (pos[1][i] == -1) { bestIdx = i; break; } }
-    if (bestIdx == -1) { int maxPos = -2; for (int i = 0; i < 4; i++) { int c = pos[1][i]; if (c >= 0 && c > maxPos && c < 45) { maxPos = c; bestIdx = i; } } }
-    if (bestIdx == -1) bestIdx = 0;
-    Future.delayed(const Duration(milliseconds: 500), () { if (mounted) move(bestIdx); });
-  }
-
-  void triggerBot() { if (isBotMode && turn == 1) Future.delayed(const Duration(milliseconds: 800), () { if (mounted) botRoll(); }); }
-
-  void move(int idx) {
-    if (!canMove) return;
-    int curr = pos[turn][idx];
-    if (curr == -1 && dice!= 6) return;
-    if (curr >= 40 && curr < 45 && dice > (45 - curr)) { setState(() { turn = 1 - turn; canMove = false; }); triggerBot(); return; }
     setState(() {
-      if (curr == -1) pos[turn][idx] = turn == 0? 0 : 20;
-      else if (curr < 40) {
-        int next = curr + dice;
-        if (next < 40) {
-          for (int p = 0; p < 2; p++) for (int k = 0; k < 4; k++) if (!(p == turn && k == idx) && pos[p][k] == next) pos[p][k] = -1;
-          pos[turn][idx] = next;
-        } else pos[turn][idx] = 40 + (next - 40);
-      } else {
-        if (dice == (45 - curr)) {
-          pos[turn][idx] = 45;
-          if (pos[turn].every((e) => e == 45)) {
-            showDialog(context: context, barrierDismissible: false, builder: (_) => AlertDialog(title: Text("${turn == 0? (isBotMode? "YOU" : "GREEN") : (isBotMode? "BOT" : "RED")} JEET GAYA! 🎉"), actions: [TextButton(onPressed: () { Navigator.pop(context); setState(() { pos = [[-1, -1, -1, -1], [-1, -1, -1, -1]]; turn = 0; canMove = false; dice = 1; }); }, child: const Text("FIR SE KHELO"))]));
-          }
-        } else pos[turn][idx] = curr + dice;
-      }
-      if (dice!= 6) turn = 1 - turn;
-      canMove = false;
+      if (turn == 0) diceGreen = d; else diceRed = d;
+      canMove = true;
     });
-    triggerBot();
+
+    bool any = false;
+    for (int i = 0; i < 4; i++) {
+      if (isValidMove(turn, i, d)) { any = true; break; }
+    }
+    if (!any) {
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (!mounted || gameOver) return;
+        setState(() {
+          turn = 1 - turn;
+          canMove = false;
+          if (d!= 6) consecutiveSixes = 0;
+        });
+        _checkLaddiTurn();
+      });
+    } else {
+      if (isLaddiTurn) {
+        Future.delayed(const Duration(milliseconds: 800), () => laddiMove());
+      }
+    }
   }
 
-  @override Widget build(BuildContext context) {
-    double size = min(MediaQuery.of(context).size.width, 380) - 20;
+  void laddiMove() {
+    if (!canMove ||!isLaddiTurn) return;
+    int d = dice;
+    List<int> valid = [];
+    for (int i = 0; i < 4; i++) if (isValidMove(turn, i, d)) valid.add(i);
+    if (valid.isEmpty) return;
+
+    int bestIdx = valid[0];
+    int bestScore = -100;
+    for (int idx in valid) {
+      int score = 0;
+      int cur = pos[turn][idx];
+      if (cur == -1) score = 90;
+      else if (cur < 40) {
+        int next = (cur + d) % 40;
+        for (int k = 0; k < 4; k++) {
+          if (pos[0][k] == next &&!safe.contains(next)) score = 100;
+        }
+        int distToHome = (homeEntry[turn] - cur + 40) % 40;
+        if (d == distToHome + 1) score = 95;
+        else score = cur;
+      } else score = 80 + cur;
+      if (score > bestScore) { bestScore = score; bestIdx = idx; }
+    }
+    moveGoti(bestIdx);
+  }
+
+  void _checkLaddiTurn() {
+    if (isLaddiTurn &&!canMove &&!gameOver) {
+      Future.delayed(const Duration(milliseconds: 700), () {
+        if (!mounted) return;
+        int d = _rng.nextInt(6) + 1;
+        if (d == 6) {
+          consecutiveSixes++;
+          if (consecutiveSixes == 3) {
+            setState(() {
+              diceRed = d;
+              turn = 0;
+              canMove = false;
+              consecutiveSixes = 0;
+            });
+            return;
+          }
+        } else consecutiveSixes = 0;
+        setState(() { diceRed = d; canMove = true; });
+        bool any = false;
+        for (int i = 0; i < 4; i++) if (isValidMove(turn, i, d)) any = true;
+        if (!any) {
+          Future.delayed(const Duration(milliseconds: 600), () {
+            if (!mounted) return;
+            setState(() { turn = 0; canMove = false; });
+          });
+        } else {
+          Future.delayed(const Duration(milliseconds: 800), () => laddiMove());
+        }
+      });
+    }
+  }
+
+  void moveGoti(int idx) {
+    if (!canMove || gameOver) return;
+    if (!isValidMove(turn, idx, dice)) return;
+    if (mode == GameMode.vsLaddi && turn == 1 &&!isLaddiTurn) return;
+
+    bool gotCut = false;
+    bool isWin = false;
+
+    setState(() {
+      int cur = pos[turn][idx];
+      int opp = 1 - turn;
+      if (cur == -1) pos[turn][idx] = startPos[turn];
+      else if (cur < 40) {
+        int distToHome = (homeEntry[turn] - cur + 40) % 40;
+        if (dice == distToHome + 1) pos[turn][idx] = 40;
+        else {
+          int next = (cur + dice) % 40;
+          if (!safe.contains(next)) {
+            for (int k = 0; k < 4; k++) if (pos[opp][k] == next) { pos[opp][k] = -1; gotCut = true; }
+          }
+          pos[turn][idx] = next;
+        }
+      } else pos[turn][idx] = cur + dice;
+
+      if (pos[turn].every((v) => v == 45)) {
+        isWin = true; gameOver = true; canMove = false;
+      } else {
+        if (dice!= 6 &&!gotCut) { turn = 1 - turn; consecutiveSixes = 0; }
+        canMove = false;
+      }
+    });
+
+    if (isWin) {
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (!mounted) return;
+        showDialog(context: context, barrierDismissible: false, builder: (_) => AlertDialog(
+          title: Text("${turn == 0? "GREEN" : '🦋🤗°"laddi"°🤗🦋'} JEET GAYI! 🥳"),
+          actions: [TextButton(onPressed: () { Navigator.pop(context); restartGame(); }, child: const Text("Restart"))]
+        ));
+      });
+    } else {
+      Future.delayed(const Duration(milliseconds: 400), () => _checkLaddiTurn());
+    }
+  }
+
+  void restartGame() {
+    setState(() {
+      pos = List.generate(2, (_) => List.filled(4, -1));
+      turn = 0; canMove = false; gameOver = false; diceGreen = 1; diceRed = 1; consecutiveSixes = 0;
+    });
+    _checkLaddiTurn();
+  }
+
+  Offset getHomePathPos(int player, int step, double s) {
+    double r = s * 0.30; double cx = s / 2, cy = s / 2;
+    int entry = homeEntry[player];
+    double ang = (entry / 40) * 2 * pi - pi / 2;
+    double ex = cx + r * cos(ang); double ey = cy + r * sin(ang);
+    double t = (step + 1) / 6.0;
+    return Offset(ex + (cx - ex) * t, ey + (cy - ey) * t);
+  }
+
+  Widget dot() => Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle));
+  Widget emptyDot() => const SizedBox(width: 8, height: 8);
+  Widget buildDiceFace(int value) {
+    List<Widget> dots = []; Widget d = dot(); Widget e = emptyDot();
+    if (value == 1) dots = [e,e,e, e,d,e, e,e,e];
+    if (value == 2) dots = [d,e,e, e,e,e, e,e,d];
+    if (value == 3) dots = [d,e,e, e,d,e, e,e,d];
+    if (value == 4) dots = [d,e,d, e,e,e, d,e,d];
+    if (value == 5) dots = [d,e,d, e,d,e, d,e,d];
+    if (value == 6) dots = [d,e,d, d,e,d, d,e,d];
+    return Container(width:50,height:50,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12),boxShadow:[const BoxShadow(color:Colors.black26,blurRadius:4)]),child:Padding(padding:const EdgeInsets.all(6.0),child:GridView.count(crossAxisCount:3,children:dots)));
+  }
+
+  Widget diceNearHome(int player,int value){
+    bool isTurn=turn==player &&!canMove &&!gameOver;
+    bool canTap = isTurn && (mode==GameMode.vsFriend || (mode==GameMode.vsLaddi && player==0));
+    Color col=player==0?Colors.green:Colors.red;
+    return GestureDetector(onTap: canTap?roll:null,child:AnimatedContainer(duration: const Duration(milliseconds:300),width:60,height:60,decoration:BoxDecoration(color: isTurn?col.withOpacity(0.15):Colors.white,borderRadius:BorderRadius.circular(14),border:Border.all(color: isTurn?col:Colors.black12,width: isTurn?3:1)),child:Center(child:buildDiceFace(value))));
+  }
+
+  Widget goti(int p,int t,double s){
+    int v=pos[p][t]; double boxSize=s*0.20; double pad=s*0.03; Offset o;
+    if(v==-1){
+      if(p==0){ double bx=10+pad; double by=10+pad; o=Offset(bx+(t%2)*(boxSize/2.5), by+(t~/2)*(boxSize/2.5)); }
+      else{ double bx=s-10-boxSize+pad; double by=s-10-boxSize+pad; o=Offset(bx+(t%2)*(boxSize/2.5), by+(t~/2)*(boxSize/2.5)); }
+    }else if(v==45){
+      double offsetX = (t%2==0? -8 : 8).toDouble(); double offsetY = (t<2? -8 : 8).toDouble();
+      o=Offset(s/2 + offsetX, s/2 + offsetY);
+    } else if(v>=40){ o=getHomePathPos(p, v-40, s); }
+    else{ double r=s*0.30; double ang=(v/40)*2*pi-pi/2; o=Offset(s/2+r*cos(ang), s/2+r*sin(ang)); }
+    int samePosCount = 0;
+    for(int k=0; k<t; k++){ if(pos[p][k] == v) samePosCount++; }
+    if(v!= -1 && samePosCount > 0){ o = Offset(o.dx + (samePosCount * 6), o.dy + (samePosCount * 6)); }
+    bool act=p==turn && canMove && isValidMove(p, t, dice) &&!gameOver;
+    if(mode==GameMode.vsLaddi && p==1) act=false;
+    if(mode==GameMode.vsLaddi && isLaddiTurn) act=false;
+    return Positioned(left:o.dx-11,top:o.dy-11,child:GestureDetector(onTap: act? ()=>moveGoti(t) : null,child:Container(width: act?30:22,height: act?30:22,decoration:BoxDecoration(color: p==0?Colors.green:Colors.red,shape:BoxShape.circle,border:Border.all(color: act?Colors.yellow:Colors.white,width:2),boxShadow: act? [const BoxShadow(color:Colors.yellow,blurRadius:8)]:[]))));
+  }
+
+  @override
+  Widget build(BuildContext context){
+    double s=min(MediaQuery.of(context).size.width,380)-20;
+    double box=s*0.20;
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
-      appBar: AppBar(backgroundColor: Colors.black, title: Text(isBotMode? "4 GOTI - BOT MODE" : "4 GOTI - 1 VS 1", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900)), actions: [const Text("BOT", style: TextStyle(color: Colors.white, fontSize: 9)), Switch(value: isBotMode, activeColor: Colors.amber, onChanged: (v) { setState(() { isBotMode = v; pos = [[-1, -1, -1, -1], [-1, -1, -1, -1]]; turn = 0; canMove = false; dice = 1; }); }), const SizedBox(width: 8)]),
-      body: Column(children: [
-        Expanded(child: Center(child: Container(width: size, height: size, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFFFFD700), width: 4)), child: Stack(children: [
-          Positioned(left: 10, top: 10, width: size*0.32, height: size*0.32, child: Container(decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.green, width: 2)))),
-          Positioned(right: 10, top: 10, width: size*0.32, height: size*0.32, child: Container(decoration: BoxDecoration(color: const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.red, width: 2)))),
-          Positioned(left: size/2-30, top: size/2-30, width: 60, height: 60, child: Container(decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle), child: const Icon(Icons.home, color: Colors.white))),
-         ...List.generate(40, (i){ double r=size*0.36; double ang=(i/40)*2*pi-pi/2; Offset o=Offset(size/2+r*cos(ang), size/2+r*sin(ang)); return Positioned(left: o.dx-7, top: o.dy-7, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: (i==0||i==20)?Colors.amber:Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.black12))));}),
-         ...List.generate(2, (p)=>List.generate(4,(t){ int v=pos[p][t]; Offset off; if(v==-1){ double bx=p==0?size*0.08:size*0.68; double by=size*0.08; double dx=(t%2)*size*0.12; double dy=(t~/2)*size*0.12; off=Offset(bx+dx, by+dy); } else if(v==45) off=Offset(size/2,size/2); else if(v>=40) off=Offset(size/2-20+(v-40)*10, size/2); else{ double r=size*0.36; double ang=(v/40)*2*pi-pi/2; off=Offset(size/2+r*cos(ang), size/2+r*sin(ang));} bool act=p==turn&&canMove&&v!=45; if(v==-1&&dice!=6) act=false; if(v>=40&&v<45&&dice>(45-v)) act=false; if(isBotMode && p==1) act=false; return Positioned(left: off.dx-11, top: off.dy-11, child: GestureDetector(onTap: act?()=>move(t):null, child: Container(width: act?30:22, height: act?30:22, decoration: BoxDecoration(color: p==0?Colors.green:Colors.red, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)))));})).expand((e)=>e),
+      backgroundColor:const Color(0xFF0A0A0A),
+      body:Column(children:[
+        const SizedBox(height: 45),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(color: const Color(0xFF1E1E2E), borderRadius: BorderRadius.circular(12)),
+          child: Row(children: [
+            Expanded(child: GestureDetector(
+              onTap: () => changeMode(GameMode.vsFriend),
+              child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: mode==GameMode.vsFriend?Colors.green:Colors.transparent, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Text("1 VS 1", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                if(mode==GameMode.vsFriend) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.check_circle, size: 14, color: Colors.white)),
+              ])),
+            )),
+            const SizedBox(width: 4),
+            Expanded(child: GestureDetector(
+              onTap: () => changeMode(GameMode.vsLaddi),
+              child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: mode==GameMode.vsLaddi?Colors.red:Colors.transparent, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Flexible(child: Text('VS 🦋🤗°"laddi"°🤗🦋', overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                if(mode==GameMode.vsLaddi) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.check_circle, size: 14, color: Colors.white)),
+              ])),
+            )),
+          ]),
+        ),
+        const SizedBox(height: 10),
+        Expanded(child:Center(child:Container(width:s,height:s,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(24),border:Border.all(color:Colors.amber,width:4)),child:Stack(children:[
+          Positioned(left:10,top:10,width:box,height:box,child:Container(decoration:BoxDecoration(color:const Color(0xFFE8F5E9),borderRadius:BorderRadius.circular(10),border:Border.all(color:Colors.green,width:2)))),
+          Positioned(right:10,bottom:10,width:box,height:box,child:Container(decoration:BoxDecoration(color:const Color(0xFFFFEBEE),borderRadius:BorderRadius.circular(10),border:Border.all(color:Colors.red,width:2)))),
+          Positioned(left:10+box+12, top:10+box/2-30, child: diceNearHome(0,diceGreen)),
+          Positioned(left:s-10-box-12-60, top:s-10-box/2-30, child: diceNearHome(1,diceRed)),
+          for(int i=0;i<40;i++) Positioned(left:(s/2+s*0.30*cos((i/40)*2*pi-pi/2))-6, top:(s/2+s*0.30*sin((i/40)*2*pi-pi/2))-6, child:Container(width:12,height:12,decoration:BoxDecoration(color:safe.contains(i)?Colors.amber:Colors.white,shape:BoxShape.circle,border:Border.all(color:Colors.black12)))),
+          for(int j=0;j<5;j++) Positioned(left: getHomePathPos(0, j, s).dx - 7, top: getHomePathPos(0, j, s).dy - 7, child: Container(width:14,height:14,decoration:BoxDecoration(color: Colors.green.shade200, shape:BoxShape.circle, border:Border.all(color:Colors.green, width:1.5)))),
+          for(int j=0;j<5;j++) Positioned(left: getHomePathPos(1, j, s).dx - 7, top: getHomePathPos(1, j, s).dy - 7, child: Container(width:14,height:14,decoration:BoxDecoration(color: Colors.red.shade200, shape:BoxShape.circle, border:Border.all(color:Colors.red, width:1.5)))),
+          Positioned(left:s/2-16, top:s/2-16, child: Container(width:32,height:32,decoration:BoxDecoration(color:Colors.amber, shape:BoxShape.circle, border:Border.all(color:Colors.black,width:2)), child:const Icon(Icons.star, size:16))),
+          goti(0,0,s),goti(0,1,s),goti(0,2,s),goti(0,3,s),
+          goti(1,0,s),goti(1,1,s),goti(1,2,s),goti(1,3,s),
         ])))),
-        Container(margin: const EdgeInsets.all(14), padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFF1E1E2E), borderRadius: BorderRadius.circular(16)), child: Row(children: [GestureDetector(onTap: roll, child: Container(width: 56, height: 56, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)), child: Center(child: Text("$dice", style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold))))), const SizedBox(width: 12), Expanded(child: ElevatedButton(onPressed: (canMove || (isBotMode && turn==1))?null:roll, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, minimumSize: const Size(double.infinity, 48)), child: Text(canMove?"GOTI PE TAP KARO":"ROLL DICE 🎲", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold))))])),
+        Container(margin:const EdgeInsets.all(14),padding:const EdgeInsets.symmetric(horizontal:20,vertical:12),decoration:BoxDecoration(color:const Color(0xFF1E1E2E),borderRadius:BorderRadius.circular(16)),child:Text("${turn==0?"GREEN":'🦋🤗°"laddi"°🤗🦋'} KI BAARI - ${gameOver?"GAME OVER":canMove?"GOTI CHUNO":"PASSA FEKO"} ${isLaddiTurn?"🦋":""}",style:const TextStyle(color:Colors.white,fontSize:12,fontWeight:FontWeight.bold))),
       ]),
     );
   }
