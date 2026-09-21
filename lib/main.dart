@@ -1,423 +1,261 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:share_plus/share_plus.dart';
 import 'firebase_options.dart';
-import 'referral_chart.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:share_plus/share_plus.dart';
 import 'beautiful_ludo.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(const MyApp());
+  runApp(const MaterialApp(debugShowCheckedModeBanner: false, home: Splash()));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Ludo Premium',
-      home: Splash(),
-    );
-  }
-}
-
-class Splash extends StatefulWidget {
-  const Splash({super.key});
-  @override
-  State<Splash> createState() => _SplashState();
-}
-
+class Splash extends StatefulWidget { const Splash({super.key}); @override State<Splash> createState()=>_SplashState(); }
 class _SplashState extends State<Splash> {
-  @override
-  void initState() {
-    super.initState();
-    check();
-  }
+  @override void initState(){ super.initState(); check(); }
   check() async {
     var sp = await SharedPreferences.getInstance();
     var m = sp.getString("mobile");
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => m != null && m.isNotEmpty ? HomePage(mobile: m) : const LoginPage()),
-    );
+    await Future.delayed(const Duration(milliseconds:500));
+    if(!mounted) return;
+    if(m!= null) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> HomePage(mobile: m)));
+    else Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> const LoginPage()));
   }
-  @override
-  Widget build(BuildContext context) => const Scaffold(
-    backgroundColor: Color(0xFF0F172A),
-    body: Center(child: CircularProgressIndicator(color: Colors.amber)),
-  );
+  @override Widget build(BuildContext context)=> const Scaffold(backgroundColor: Color(0xFF0F172A), body: Center(child: CircularProgressIndicator(color: Colors.amber)));
 }
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
+class LoginPage extends StatefulWidget { const LoginPage({super.key}); @override State<LoginPage> createState()=>_LoginPageState(); }
 class _LoginPageState extends State<LoginPage> {
   final mobileCtrl = TextEditingController();
   final passCtrl = TextEditingController();
-  final refCtrl = TextEditingController();
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF0F172A),
-    body: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text("LUDO PREMIUM", style: TextStyle(color: Colors.amber, fontSize: 28, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          TextField(controller: mobileCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(hintText: "Mobile", filled: true, fillColor: Colors.white)),
-          const SizedBox(height: 10),
-          TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(hintText: "Password", filled: true, fillColor: Colors.white)),
-          const SizedBox(height: 10),
-          TextField(controller: refCtrl, decoration: const InputDecoration(hintText: "Referral Code (Optional)", filled: true, fillColor: Colors.white)),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () {
-              if (mobileCtrl.text.length < 10) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("10 digit mobile daalo")));
-                return;
-              }
-              Navigator.push(context, MaterialPageRoute(builder: (_) => OtpPage(mobile: mobileCtrl.text.trim(), password: passCtrl.text.trim(), referredBy: refCtrl.text.trim())));
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, minimumSize: const Size(double.infinity, 50)),
-            child: const Text("GET OTP", style: TextStyle(color: Colors.black)),
-          ),
-        ],
-      ),
-    ),
-  );
+  final referCtrl = TextEditingController();
+  void goOtp() async {
+    if(mobileCtrl.text.trim().length!=10){ ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("10 digit mobile dalo"))); return; }
+    var doc = await FirebaseFirestore.instance.collection("users").doc(mobileCtrl.text.trim()).get();
+    if(doc.exists){
+      if(doc['password']!= passCtrl.text.trim()){ ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password galat hai"))); return; }
+      var sp = await SharedPreferences.getInstance(); await sp.setString("mobile", mobileCtrl.text.trim());
+      if(!mounted) return; Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> HomePage(mobile: mobileCtrl.text.trim())));
+    } else {
+      Navigator.push(context, MaterialPageRoute(builder: (_)=> OtpPage(mobile: mobileCtrl.text.trim(), password: passCtrl.text.trim(), referral: referCtrl.text.trim())));
+    }
+  }
+  @override Widget build(BuildContext context){
+    return Scaffold(backgroundColor: const Color(0xFF0F172A), body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children:[
+      const Icon(Icons.casino_rounded, size:70, color:Colors.amber), const Text("LUDO PREMIUM", style:TextStyle(color:Colors.white, fontSize:26, fontWeight:FontWeight.bold)), const SizedBox(height:20),
+      TextField(controller:mobileCtrl, keyboardType:TextInputType.phone, maxLength:10, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Mobile", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
+      const SizedBox(height:10), TextField(controller:passCtrl, obscureText:true, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Password", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
+      const SizedBox(height:10), TextField(controller:referCtrl, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Referral Code (Optional)", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
+      const SizedBox(height:20), SizedBox(width:double.infinity, height:50, child:ElevatedButton(onPressed:goOtp, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("GET OTP DIRECT - 1234", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
+    ]))));
+  }
 }
 
-class OtpPage extends StatefulWidget {
-  final String mobile, password, referredBy;
-  const OtpPage({super.key, required this.mobile, required this.password, required this.referredBy});
-  @override
-  State<OtpPage> createState() => _OtpPageState();
-}
-
+class OtpPage extends StatefulWidget { final String mobile,password,referral; const OtpPage({super.key, required this.mobile, required this.password, required this.referral}); @override State<OtpPage> createState()=>_OtpPageState(); }
 class _OtpPageState extends State<OtpPage> {
-  final otpCtrl = TextEditingController();
-  bool isPremiumActive(Map<String, dynamic> data) {
-    if (data['isPremium'] != true) return false;
-    var expiry = data['premiumExpiry'];
-    if (expiry == null) return false;
-    try {
-      DateTime d = expiry is String ? DateTime.parse(expiry) : (expiry as Timestamp).toDate();
-      return d.isAfter(DateTime.now());
-    } catch (e) {
-      return false;
-    }
+  final otpCtrl = TextEditingController(); bool load=false;
+  void verify() async {
+    if(otpCtrl.text.trim()!="1234"){ ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("OTP 1234 dalo"))); return; }
+    setState((){ load=true; });
+    try{
+      var doc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
+      if(!doc.exists){
+        String refBy=""; if(widget.referral.isNotEmpty){ var q = await FirebaseFirestore.instance.collection("users").where("referralCode", isEqualTo:widget.referral).get(); if(q.docs.isNotEmpty) refBy=q.docs.first.id; }
+        await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({"mobile":widget.mobile, "password":widget.password, "wallet":0, "upi":"", "isPremium":false, "referralCode":widget.mobile, "referredBy":refBy, "premiumExpiry":Timestamp.now(), "premiumDistributed": false});
+      }
+      var sp = await SharedPreferences.getInstance(); await sp.setString("mobile", widget.mobile);
+      if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_)=> HomePage(mobile: widget.mobile)), (r)=>false);
+    }catch(e){ if(mounted &&!kReleaseMode) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString()))); }
+    if(mounted) setState((){ load=false; });
   }
-  Future<void> distribute(String l1, String newUser) async {
-    var users = FirebaseFirestore.instance.collection("users");
-    try {
-      var l1Doc = await users.doc(l1).get();
-      if (!l1Doc.exists) return;
-      var l1Data = l1Doc.data() as Map<String, dynamic>;
-      if (isPremiumActive(l1Data)) {
-        await users.doc(l1).update({"wallet": FieldValue.increment(100)});
-      }
-      String l2 = (l1Data['referredBy'] ?? "").toString();
-      if (l2.isEmpty) return;
-      var l2Doc = await users.doc(l2).get();
-      if (!l2Doc.exists) return;
-      var l2Data = l2Doc.data() as Map<String, dynamic>;
-      if (isPremiumActive(l2Data)) {
-        await users.doc(l2).update({"wallet": FieldValue.increment(50)});
-      }
-      String l3 = (l2Data['referredBy'] ?? "").toString();
-      if (l3.isEmpty) return;
-      var l3Doc = await users.doc(l3).get();
-      if (!l3Doc.exists) return;
-      var l3Data = l3Doc.data() as Map<String, dynamic>;
-      if (isPremiumActive(l3Data)) {
-        await users.doc(l3).update({"wallet": FieldValue.increment(25)});
-      }
-    } catch (e) {
-      debugPrint("$e");
-    }
+  @override Widget build(BuildContext context){
+    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(title:Text("OTP ${widget.mobile}"), backgroundColor:Colors.amber),
+    body:Center(child:Padding(padding:const EdgeInsets.all(20), child:Column(mainAxisSize:MainAxisSize.min, children:[
+      const Text("Direct OTP = 1234", style:TextStyle(color:Colors.amber, fontWeight:FontWeight.bold)), const SizedBox(height:20),
+      TextField(controller:otpCtrl, keyboardType:TextInputType.number, maxLength:4, textAlign:TextAlign.center, style:const TextStyle(color:Colors.white, fontSize:32, letterSpacing:8), decoration:InputDecoration(filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
+      const SizedBox(height:20), load?const CircularProgressIndicator(color:Colors.amber):SizedBox(width:double.infinity, height:50, child:ElevatedButton(onPressed:verify, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber), child:const Text("VERIFY 1234", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
+    ]))));
   }
-  verify() async {
-    if (otpCtrl.text.trim() != "1234") {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("OTP 1234 daalo")));
-      return;
-    }
-    var users = FirebaseFirestore.instance.collection("users");
-    var doc = await users.doc(widget.mobile).get();
-    if (!doc.exists) {
-      await users.doc(widget.mobile).set({
-        "mobile": widget.mobile,
-        "password": widget.password,
-        "referralCode": widget.mobile,
-        "referredBy": widget.referredBy,
-        "wallet": 0,
-        "isPremium": false,
-        "premiumExpiry": null,
-        "upi": "",
-        "createdAt": FieldValue.serverTimestamp()
-      });
-      if (widget.referredBy.isNotEmpty) {
-        await distribute(widget.referredBy, widget.mobile);
-      }
-    }
-    var sp = await SharedPreferences.getInstance();
-    await sp.setString("mobile", widget.mobile);
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => HomePage(mobile: widget.mobile)), (r) => false);
-  }
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF0F172A),
-    body: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text("OTP = 1234", style: TextStyle(color: Colors.white)),
-          const SizedBox(height: 10),
-          TextField(controller: otpCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: "Enter OTP", filled: true, fillColor: Colors.white)),
-          const SizedBox(height: 20),
-          ElevatedButton(onPressed: verify, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, minimumSize: const Size(double.infinity, 50)), child: const Text("VERIFY", style: TextStyle(color: Colors.black))),
-        ],
-      ),
-    ),
-  );
 }
 
-class HomePage extends StatelessWidget {
-  final String mobile;
-  const HomePage({super.key, required this.mobile});
-  bool isActive(Map<String, dynamic> d) {
-    if (d['isPremium'] != true) return false;
-    var e = d['premiumExpiry'];
-    if (e == null) return false;
-    try {
-      DateTime dt = e is String ? DateTime.parse(e) : (e as Timestamp).toDate();
-      return dt.isAfter(DateTime.now());
-    } catch (_) {
-      return false;
+class HomePage extends StatefulWidget { final String mobile; const HomePage({super.key, required this.mobile}); @override State<HomePage> createState()=>_HomePageState(); }
+class _HomePageState extends State<HomePage> {
+  int wallet=0; String upi=""; String myCode=""; bool isPrem=false; String expiry="";
+  @override void initState(){ super.initState(); load(); }
+  void load() async {
+    var d = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
+    if(!d.exists) return; var data=d.data()!;
+    if(!mounted) return;
+    setState((){ wallet=data["wallet"]??0; upi=data["upi"]??""; myCode=data["referralCode"]??widget.mobile; });
+    if(data["isPremium"]==true && data["premiumExpiry"]!=null){
+      DateTime exp=(data["premiumExpiry"] as Timestamp).toDate();
+      if(exp.isAfter(DateTime.now())){
+        if(!mounted) return;
+        setState((){ isPrem=true; expiry="${exp.day}/${exp.month}/${exp.year}"; });
+        if(data["premiumDistributed"]==false){
+          await distributePremiumCommission(widget.mobile);
+          await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"premiumDistributed": true});
+        }
+      }
     }
   }
-  @override
-  Widget build(BuildContext context) {
-    var users = FirebaseFirestore.instance.collection("users");
-    return StreamBuilder<DocumentSnapshot>(
-      stream: users.doc(mobile).snapshots(),
-      builder: (context, snap) {
-        if (!snap.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        var data = snap.data!.data() as Map<String, dynamic>? ?? {};
-        int wallet = (data['wallet'] ?? 0) as int;
-        bool active = isActive(data);
-        String myCode = data['referralCode'] ?? mobile;
-        return Scaffold(
-          backgroundColor: const Color(0xFF0F172A),
-          appBar: AppBar(
-            title: Text("Hi, $mobile"),
-            backgroundColor: Colors.amber,
-            foregroundColor: Colors.black,
-            actions: [
-              IconButton(
-                onPressed: () async {
-                  var sp = await SharedPreferences.getInstance();
-                  await sp.clear();
-                  if (context.mounted) {
-                    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false);
-                  }
-                },
-                icon: const Icon(Icons.logout),
-              )
-            ],
-          ),
-          body: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Wallet", style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text("Rs $wallet", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(10)),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text("My Code: $myCode", style: const TextStyle(fontWeight: FontWeight.bold))),
-                      IconButton(
-                        onPressed: () async {
-                          final uri = Uri.parse("https://wa.me/?text=Ludo Premium join karo, mera code: $myCode https://play.google.com/store/apps/details?id=com.ludo.premium.vludo_premium");
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
-                        },
-                        icon: const Icon(Icons.share),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => MyTeamScreen(mobile: mobile))); }, child: const Text("MY TEAM"))),
-                    const SizedBox(width: 10),
-                    Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => WalletScreen(mobile: mobile))); }, child: const Text("WALLET"))),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                    onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferralChartScreen())); },
-                    child: const Text("HOW 3 LEVEL PLAN WORKS?"),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                if (active)
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, minimumSize: const Size(double.infinity, 60)),
-                      onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const BeautifulLudo())); },
-                      child: const Text("PLAY LUDO - PREMIUM ACTIVE", style: TextStyle(fontSize: 18)),
-                    ),
-                  )
-                else
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, minimumSize: const Size(double.infinity, 60)),
-                      onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => PremiumPayScreen(mobile: mobile))); },
-                      child: const Text("BUY PREMIUM @ Rs 500", style: TextStyle(fontSize: 18)),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
+  Future<void> distributePremiumCommission(String buyerMobile) async {
+    try{
+      var buyerDoc = await FirebaseFirestore.instance.collection("users").doc(buyerMobile).get(); if(!buyerDoc.exists) return;
+      String? currentRef = buyerDoc.data()?["referredBy"]; List<int> commissions = [100, 50, 25]; int levelIndex = 0;
+      while(currentRef!= null && currentRef.isNotEmpty && levelIndex < 3){
+        var refDoc = await FirebaseFirestore.instance.collection("users").doc(currentRef).get(); if(!refDoc.exists) break;
+        var data = refDoc.data()!; bool isActive = false;
+        if(data["isPremium"]==true && data["premiumExpiry"]!=null){
+          DateTime exp = (data["premiumExpiry"] as Timestamp).toDate(); if(exp.isAfter(DateTime.now())) isActive = true;
+        }
+        if(isActive){
+          await FirebaseFirestore.instance.collection("users").doc(currentRef).update({"wallet": FieldValue.increment(commissions[levelIndex])});
+          await FirebaseFirestore.instance.collection("earnings").add({"to": currentRef, "from": buyerMobile, "type": "premium_level_${levelIndex+1}", "amount": commissions[levelIndex], "time": FieldValue.serverTimestamp()});
+          levelIndex++;
+        }
+        currentRef = data["referredBy"] as String?;
+      }
+    }catch(e){ if(kDebugMode) debugPrint("Commission error"); }
+  }
+  void buy(){ Navigator.push(context, MaterialPageRoute(builder: (_)=> PremiumPayScreen(mobile: widget.mobile, onPaid: (){ load(); }))).then((_)=>load()); }
+  void logout() async { var sp=await SharedPreferences.getInstance(); await sp.clear(); if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder:(_)=>const LoginPage()), (r)=>false); }
+  @override Widget build(BuildContext context){
+    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar:AppBar(backgroundColor:Colors.amber, title:Text("${widget.mobile} | ₹$wallet", style:const TextStyle(color:Colors.black, fontSize:14, fontWeight:FontWeight.bold)), actions:[IconButton(onPressed:logout, icon:const Icon(Icons.logout))]),
+    body:SingleChildScrollView(child:Padding(padding:const EdgeInsets.all(18), child:Column(children:[
+      Container(width:double.infinity, padding:const EdgeInsets.all(12), decoration:BoxDecoration(color:isPrem?Colors.amber:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Text(isPrem?"PREMIUM TILL $expiry":"FREE USER - PREMIUM LO", textAlign:TextAlign.center, style:TextStyle(color:isPrem?Colors.black:Colors.white, fontWeight:FontWeight.bold))),
+      const SizedBox(height:12),
+      Container(width:double.infinity, padding:const EdgeInsets.all(14), decoration:BoxDecoration(color:Colors.white10, borderRadius:BorderRadius.circular(12)), child:Column(crossAxisAlignment:CrossAxisAlignment.start, children:[ Text("MY REFERRAL: $myCode", style:const TextStyle(color:Colors.amber, fontWeight:FontWeight.bold)), const SizedBox(height:6), Text(upi.isEmpty? "UPI: Not Set - Wallet me jao" : "UPI: $upi", style:TextStyle(color: upi.isEmpty? Colors.redAccent : Colors.white60, fontSize:13)), ])),
+      const SizedBox(height:12), Container(width:double.infinity, padding:const EdgeInsets.all(10), decoration:BoxDecoration(color:Colors.green.withOpacity(0.15), borderRadius:BorderRadius.circular(12), border: Border.all(color: Colors.green)), child: const Text("3 LEVEL PLAN: L1=₹100 | L2=₹50 | L3=₹25 (Only Active Premium ko)", textAlign:TextAlign.center, style:TextStyle(color:Colors.greenAccent, fontSize:12, fontWeight:FontWeight.bold))),
+      const SizedBox(height:20),
+      isPrem? SizedBox(width:double.infinity, height:60, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const BeautifulLudoGame())); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.green, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(30))), child:const Text("PLAY FINAL 4 GOTI LUDO 🎲", style:TextStyle(fontSize:18, fontWeight:FontWeight.bold, color:Colors.white))))
+      : Container(width:double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent)), child: const Column(children: [ Icon(Icons.lock, color: Colors.redAccent, size: 40), SizedBox(height: 8), Text("LUDO LOCKED 🔒", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)), SizedBox(height: 4), Text("Khelne ke liye pehle Premium lo", style: TextStyle(color: Colors.white60, fontSize: 13), textAlign: TextAlign.center), ])),
+      const SizedBox(height:15),
+      Row(children:[
+        Expanded(child: SizedBox(height:55, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>WalletScreen(mobile:widget.mobile))).then((_)=>load()); }, child:const Text("WALLET")))),
+        const SizedBox(width:10),
+        Expanded(child: SizedBox(height:55, child:ElevatedButton(onPressed:(){ Navigator.push(context, MaterialPageRoute(builder:(_)=>MyTeamScreen(mobile:widget.mobile))); }, style:ElevatedButton.styleFrom(backgroundColor:Colors.blueAccent), child:const Text("MY TEAM", style:TextStyle(color:Colors.white))))),
+      ]),
+      const SizedBox(height:15),
+      SizedBox(width:double.infinity, height:55, child:ElevatedButton(onPressed: isPrem? null : buy, style:ElevatedButton.styleFrom(backgroundColor: isPrem? Colors.grey : Colors.purple), child:Text(isPrem? "PREMIUM ACTIVE ✅" : "BUY PREMIUM ₹500 - 1 MONTH", style:const TextStyle(color:Colors.white)))),
+      const SizedBox(height: 20), const Text("For help: +447397293594 WHATSAPP", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+    ]))),
     );
   }
 }
 
-class WalletScreen extends StatefulWidget {
-  final String mobile;
-  const WalletScreen({super.key, required this.mobile});
-  @override
-  State<WalletScreen> createState() => _WalletScreenState();
-}
-
+class WalletScreen extends StatefulWidget { final String mobile; const WalletScreen({super.key, required this.mobile}); @override State<WalletScreen> createState()=>_WalletScreenState(); }
 class _WalletScreenState extends State<WalletScreen> {
-  final upiCtrl = TextEditingController();
-  @override
-  void initState() { super.initState(); load(); }
-  load() async {
-    var d = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
-    if (d.exists) upiCtrl.text = d.data()?['upi'] ?? "";
-    setState(() {});
+  final upiCtrl=TextEditingController(); int wallet=0; bool loading=true;
+  @override void initState(){ super.initState(); get(); }
+  void get() async { var d=await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get(); if(d.exists){ if(mounted) setState((){ wallet=d.data()!["wallet"]??0; upiCtrl.text=d.data()!["upi"]??""; loading=false; }); } else { if(mounted) setState((){ loading=false; }); } }
+  void save() async { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi":upiCtrl.text.trim()}); if(!mounted) return; Navigator.pop(context); }
+  @override Widget build(BuildContext context){
+    return Scaffold(appBar:AppBar(title:const Text("Wallet"), backgroundColor:Colors.amber), backgroundColor: const Color(0xFF0F172A),
+    body:loading?const Center(child:CircularProgressIndicator()):Padding(padding:const EdgeInsets.all(20), child:Column(children:[
+      Text("Wallet: ₹$wallet", style:const TextStyle(color:Colors.amber, fontSize:22)), const SizedBox(height:20),
+      TextField(controller:upiCtrl, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"UPI ID", filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)))),
+      const SizedBox(height:20), SizedBox(width:double.infinity, height:50, child:ElevatedButton(onPressed:save, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber), child:const Text("SAVE UPI", style:TextStyle(color:Colors.black, fontWeight:FontWeight.bold)))),
+    ])),
+    );
   }
-  save() async {
-    await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": upiCtrl.text.trim()});
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Saved")));
-  }
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text("Wallet")),
-    body: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          TextField(controller: upiCtrl, decoration: const InputDecoration(labelText: "Your UPI ID")),
-          const SizedBox(height: 20),
-          ElevatedButton(onPressed: save, child: const Text("SAVE UPI")),
-        ],
-      ),
-    ),
-  );
 }
 
-class PremiumPayScreen extends StatelessWidget {
-  final String mobile;
-  const PremiumPayScreen({super.key, required this.mobile});
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text("Buy Premium")),
-    body: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          const Text("Pay Rs 500 to UPI: kumar131@fam", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () async {
-              final uri = Uri.parse("upi://pay?pa=kumar131@fam&pn=Kumar&am=500&cu=INR");
-              await launchUrl(uri, mode: LaunchMode.externalApplication);
-            },
-            child: const Text("PAY NOW"),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () async {
-              final uri = Uri.parse("https://wa.me/447397293594?text=Hi, I paid 500 for Ludo Premium, my mobile $mobile");
-              await launchUrl(uri, mode: LaunchMode.externalApplication);
-            },
-            child: const Text("SEND SCREENSHOT ON WHATSAPP"),
-          ),
-        ],
-      ),
-    ),
-  );
+class PremiumPayScreen extends StatefulWidget {
+  final String mobile; final VoidCallback onPaid;
+  const PremiumPayScreen({super.key, required this.mobile, required this.onPaid});
+  @override State<PremiumPayScreen> createState()=> _PremiumPayScreenState();
+}
+class _PremiumPayScreenState extends State<PremiumPayScreen> {
+  final String myUpiId = "kumar131@fam";
+  bool loading = false;
+  Future<void> payViaUpi() async {
+    final String upiUrl = "upi://pay?pa=$myUpiId&pn=LUDO OWNER&am=500&cu=INR&tn=Premium ${widget.mobile}";
+    try { await launchUrl(Uri.parse(upiUrl), mode: LaunchMode.externalApplication); } catch(e){ if(kDebugMode) debugPrint("UPI Error"); }
+  }
+  Future<void> pickAndSendDirectWhatsapp() async {
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if(image == null) return;
+    if(!mounted) return;
+    setState(()=> loading = true);
+    try{
+        await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({
+      "mobile": widget.mobile,
+      "amount": 500,
+      "status": "CHECK PLEASE SS",
+      "time": Timestamp.now(),
+    });
+
+  // --- YAHAN SE NAYA 【entity-WHATSAPP¦canonical_name=WhatsApp】 WALA CODE ---
+  String myNumber = "447397293594"; // 👈 Yahan apna UK number daal 44 se, + mat laga
+  String msg = "CHECK PLEASE SS\nMobile: ${widget.mobile}\nAmount: ₹500";
+  Uri waUrl = Uri.parse("https://wa.me/$myNumber?text=${Uri.encodeComponent(msg)}");
+  
+  if (await canLaunchUrl(waUrl)) {
+    await launchUrl(waUrl, mode: LaunchMode.externalApplication);
+  }
+  // Sath me image bhi share kar de
+  await Share.shareXFiles([XFile(image.path)], text: msg);
+    }catch(e){ if(mounted &&!kReleaseMode) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+    if(mounted) setState(()=> loading = false);
+  }
+  @override Widget build(BuildContext context) {
+    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar: AppBar(title: const Text("Buy Premium"), backgroundColor: Colors.amber),
+      body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
+        const Icon(Icons.workspace_premium, size: 80, color: Colors.amber), const SizedBox(height: 20),
+        const Text("Premium 1 Month - ₹500", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)), const SizedBox(height: 20),
+        Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber)), child: Column(children: [ const Text("Is UPI pe ₹500 bhejo:", style: TextStyle(color: Colors.white70)), const SizedBox(height: 10), SelectableText(myUpiId, style: const TextStyle(color: Colors.amber, fontSize: 20, fontWeight: FontWeight.bold)), ])),
+        const SizedBox(height: 25),
+        SizedBox(width: double.infinity, height: 55, child: ElevatedButton(onPressed: payViaUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("STEP 1: PAY ₹500 VIA UPI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
+        const SizedBox(height: 15),
+        loading? const CircularProgressIndicator(color: Colors.amber) :
+        SizedBox(width: double.infinity, height: 55, child: ElevatedButton.icon(onPressed: pickAndSendDirectWhatsapp, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), icon: const Icon(Icons.camera_alt, color: Colors.black), label: const Text("STEP 2: SCREENSHOT SIDHA WHATSAPP", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)))),
+      ])),
+    );
+  }
 }
 
-class MyTeamScreen extends StatelessWidget {
-  final String mobile;
-  const MyTeamScreen({super.key, required this.mobile});
-  @override
-  Widget build(BuildContext context) {
-    var users = FirebaseFirestore.instance.collection("users");
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(title: const Text("My Team"), bottom: const TabBar(tabs: [Tab(text: "L1"), Tab(text: "EARNINGS")])),
-        body: TabBarView(
-          children: [
-            StreamBuilder<QuerySnapshot>(
-              stream: users.where("referredBy", isEqualTo: mobile).snapshots(),
-              builder: (c, s) {
-                if (!s.hasData) return const Center(child: CircularProgressIndicator());
-                return ListView(children: s.data!.docs.map((d) => ListTile(title: Text(d['mobile']))).toList());
-              },
-            ),
-            StreamBuilder<QuerySnapshot>(
-              stream: users.doc(mobile).collection("earnings").orderBy("time", descending: true).snapshots(),
-              builder: (c, s) {
-                if (!s.hasData) return const Center(child: CircularProgressIndicator());
-                return ListView(
-                  children: s.data!.docs.map((d) {
-                    var m = d.data() as Map;
-                    return ListTile(title: Text("Rs ${m['amount']} from ${m['from']}"), subtitle: Text("Level ${m['level']}"));
-                  }).toList(),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
+class MyTeamScreen extends StatefulWidget { final String mobile; const MyTeamScreen({super.key, required this.mobile}); @override State<MyTeamScreen> createState()=>_MyTeamScreenState(); }
+class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderStateMixin {
+  late TabController tabCtrl;
+  List<DocumentSnapshot> level1=[], level2=[], level3=[];
+  List<DocumentSnapshot> earnings=[];
+  bool loading=true;
+  @override void initState(){ super.initState(); tabCtrl=TabController(length: 4, vsync: this); fetchTeam(); }
+  @override void dispose(){ tabCtrl.dispose(); super.dispose(); }
+  Future<void> fetchTeam() async {
+    if(!mounted) return; setState(()=>loading=true);
+    try{
+      var l1 = await FirebaseFirestore.instance.collection("users").where("referredBy", isEqualTo: widget.mobile).get();
+      level1 = l1.docs;
+      List<DocumentSnapshot> l2temp=[]; for(var doc in l1.docs){ var q = await FirebaseFirestore.instance.collection("users").where("referredBy", isEqualTo: doc.id).get(); l2temp.addAll(q.docs); }
+      level2 = l2temp;
+      List<DocumentSnapshot> l3temp=[]; for(var doc in l2temp){ var q = await FirebaseFirestore.instance.collection("users").where("referredBy", isEqualTo: doc.id).get(); l3temp.addAll(q.docs); }
+      level3 = l3temp;
+      var earn = await FirebaseFirestore.instance.collection("earnings").where("to", isEqualTo: widget.mobile).get();
+      earnings = earn.docs;
+    }catch(e){ if(kDebugMode) debugPrint("error"); }
+    if(mounted) setState(()=>loading=false);
+  }
+  Widget userTile(DocumentSnapshot doc){
+    var data = doc.data() as Map<String, dynamic>;
+    bool active = false; if(data["isPremium"]==true && data["premiumExpiry"]!=null){ DateTime exp=(data["premiumExpiry"] as Timestamp).toDate(); if(exp.isAfter(DateTime.now())) active=true; }
+    return ListTile(leading: CircleAvatar(backgroundColor: active? Colors.green: Colors.red, child: Icon(active? Icons.check: Icons.close, color: Colors.white)), title: Text(data["mobile"]??"", style: const TextStyle(color: Colors.white)), subtitle: Text(active? "Premium Active": "Free / Expired", style: TextStyle(color: active? Colors.greenAccent: Colors.redAccent, fontSize: 12)), trailing: Text("₹${data["wallet"]??0}", style: const TextStyle(color: Colors.amber)));
+  }
+  @override Widget build(BuildContext context){
+    return Scaffold(backgroundColor: const Color(0xFF0F172A), appBar: AppBar(backgroundColor: Colors.amber, title: const Text("MY TEAM", style: TextStyle(color: Colors.black)), bottom: TabBar(controller: tabCtrl, labelColor: Colors.black, unselectedLabelColor: Colors.black54, tabs: const [ Tab(text: "L1 (100)"), Tab(text: "L2 (50)"), Tab(text: "L3 (25)"), Tab(text: "EARNINGS"), ])),
+      body: loading? const Center(child:CircularProgressIndicator(color: Colors.amber)): TabBarView(controller: tabCtrl, children: [
+        ListView(children: level1.isEmpty? [const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Koi nahi hai Level 1 me", style: TextStyle(color: Colors.white54))))] : level1.map((e)=>userTile(e)).toList()),
+        ListView(children: level2.isEmpty? [const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Koi nahi hai Level 2 me", style: TextStyle(color: Colors.white54))))] : level2.map((e)=>userTile(e)).toList()),
+        ListView(children: level3.isEmpty? [const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Koi nahi hai Level 3 me", style: TextStyle(color: Colors.white54))))] : level3.map((e)=>userTile(e)).toList()),
+        ListView(children: earnings.isEmpty? [const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Abhi koi earning nahi", style: TextStyle(color: Colors.white54))))] : earnings.map((e){ var d=e.data() as Map; return ListTile(leading: const Icon(Icons.currency_rupee, color: Colors.green), title: Text("${d["type"]} - ₹${d["amount"]}", style: const TextStyle(color: Colors.white)), subtitle: Text("From: ${d["from"]}", style: const TextStyle(color: Colors.white54, fontSize: 12))); }).toList()),
+      ]),
     );
   }
 }
