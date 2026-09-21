@@ -134,16 +134,11 @@ class _HomePageState extends State<HomePage> {
   void buy(){ Navigator.push(context, MaterialPageRoute(builder: (_)=> PremiumPayScreen(mobile: widget.mobile, onPaid: (){ load(); }))).then((_)=>load()); }
   void logout() async { var sp=await SharedPreferences.getInstance(); await sp.clear(); if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder:(_)=>const LoginPage()), (r)=>false); }
 
-  // ✅ WHATSAPP HELP FUNCTION - NEW ADDED
   void openWhatsappHelp() async {
     String number = "447397293594";
     String message = "Hello, Ludo Premium Help chahiye. My ID: ${widget.mobile}";
     Uri url = Uri.parse("https://wa.me/$number?text=${Uri.encodeComponent(message)}");
-    try {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      if (kDebugMode) debugPrint("WhatsApp open error");
-    }
+    try { await launchUrl(url, mode: LaunchMode.externalApplication); } catch (e) { if (kDebugMode) debugPrint("WhatsApp open error"); }
   }
 
   @override Widget build(BuildContext context){
@@ -173,7 +168,6 @@ class _HomePageState extends State<HomePage> {
                   gradient: isPrem? LinearGradient(colors: [Colors.amber, Colors.orange.shade700]) : LinearGradient(colors: [const Color(0xFF1E293B), const Color(0xFF151A2B)]),
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: isPrem? Colors.amber.withOpacity(0.5) : Colors.white10),
-                  boxShadow: isPrem? [BoxShadow(color: Colors.amber.withOpacity(0.25), blurRadius: 20, offset: const Offset(0, 8))] : [],
                 ),
                 child: Row(
                   children: [
@@ -237,11 +231,12 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(height: 16),
+              // YAHI LINE FIX KI HAI - BeautifulLudoGame -> LudoGame
               isPrem?
               Container(
                 width: double.infinity, height: 60,
                 decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.green.shade400, Colors.green.shade700]), borderRadius: BorderRadius.circular(14), boxShadow: [BoxShadow(color: Colors.green.withOpacity(0.35), blurRadius: 18, offset: const Offset(0, 6))]),
-                child: ElevatedButton(onPressed: (){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const BeautifulLudoGame())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))), child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text("🎲", style: TextStyle(fontSize: 18)), SizedBox(width: 8), Text("PLAY FINAL 4 GOTI LUDO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15))])),
+                child: ElevatedButton(onPressed: (){ Navigator.push(context, MaterialPageRoute(builder:(_)=>const LudoGame())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))), child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text("🎲", style: TextStyle(fontSize: 18)), SizedBox(width: 8), Text("PLAY FINAL 4 GOTI LUDO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15))])),
               )
               : Container(
                 width: double.infinity, padding: const EdgeInsets.all(18),
@@ -273,7 +268,6 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(height: 18),
-              // ✅ FIXED WHATSAPP BOX - CLICKABLE
               InkWell(
                 onTap: openWhatsappHelp,
                 borderRadius: BorderRadius.circular(12),
