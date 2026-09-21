@@ -36,6 +36,9 @@ jobs:
           rm -rf android/app/src/main/res/mipmap-*
           flutter create . --platforms=android
 
+      - name: Generate App Icon
+        run: flutter pub run flutter_launcher_icons
+
       - name: Build APK Release
         run: flutter build apk --release
 
