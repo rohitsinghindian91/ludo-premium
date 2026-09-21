@@ -30,17 +30,6 @@ jobs:
           flutter clean
           flutter pub get
 
-      - name: Recreate android folder
-        run: flutter create . --platforms=android
-
-      - name: Copy custom icon to all mipmaps
-        run: |
-          for d in android/app/src/main/res/mipmap-*; do
-            cp assets/app_icon.png $d/ic_launcher.png
-            cp assets/app_icon.png $d/ic_launcher_round.png 2>/dev/null || true
-            cp assets/app_icon.png $d/ic_launcher_foreground.png 2>/dev/null || true
-          done
-
       - name: Build APK Release
         run: flutter build apk --release
 
