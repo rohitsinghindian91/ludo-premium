@@ -1,1 +1,75 @@
-<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ludo Super Admin</title><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><style>body{background:#0f0f0f;color:#fff;font-family:Arial;padding:10px}h2{color:#00ff88}table{width:100%;border-collapse:collapse;background:#1a1a1a}th,td{border:1px solid #333;padding:8px;font-size:13px;text-align:left}th{background:#222;color:#00ff88}.true{color:#00ff88;font-weight:bold}.false{color:#ff4444;font-weight:bold}button{padding:5px 10px;border:none;border-radius:4px;cursor:pointer;font-size:12px;margin:2px}.on{background:#00c853;color:white}.off{background:#d50000;color:white}.expire{background:#2962ff;color:white}input{padding:4px;border-radius:4px;border:none}</style></head><body><h2>🎲 Ludo Premium - Full Control</h2><p id="count">Loading...</p><table id="tbl"></table><script>const cfg={apiKey:"AIzaSyCwLEeS-TrsVabQT9rltt5dXN0-omR9qBc",authDomain:"ludo-premium-50-e427e.firebaseapp.com",projectId:"ludo-premium-50-e427e"};firebase.initializeApp(cfg);const db=firebase.firestore();let premiumMap={};function loadAll(){db.collection("premium_requests").onSnapshot(s=>{premiumMap={};s.forEach(d=>{premiumMap[d.data().mobile]=d.data();});loadUsers();});}function loadUsers(){db.collection("users").onSnapshot(s=>{document.getElementById('count').innerText="Total Users: "+s.size;let h=`<tr><th>Mobile</th><th>Refer Code</th><th>UPI ID</th><th>Premium</th><th>Expire Date</th><th>Action</th></tr>`;s.forEach(doc=>{let u=doc.data();let id=doc.id;let mobile=u.mobile||id;let refer=u.refer_code||u.referCode||'-';let prem=premiumMap[mobile];let upi=prem?prem.payToUpi:(u.upi||u.payToUpi||'-');let isPrem=u.is_premium?true:false;let expire=u.expire_date||u.premium_expire||'-';h+=`<tr><td><b>${mobile}</b></td><td>${refer}</td><td>${upi}</td><td class="${isPrem}">${isPrem?'TRUE ✅':'FALSE ❌'}</td><td>${expire}<br><input type="date" id="date-${id}"></td><td><button class="on" onclick="makeTrue('${id}','${mobile}')">TRUE</button><button class="off" onclick="makeFalse('${id}','${mobile}')">FALSE</button><br><button class="expire" onclick="setExpire('${id}')">Set Expire</button></td></tr>`;});document.getElementById('tbl').innerHTML=h;});}function makeTrue(docId,mobile){db.collection("users").doc(docId).set({is_premium:true,mobile:mobile},{merge:true});if(premiumMap[mobile]){db.collection("premium_requests").where("mobile","==",mobile).get().then(snap=>{snap.forEach(d=>d.ref.update({status:"approved"}));});}}function makeFalse(docId,mobile){db.collection("users").doc(docId).set({is_premium:false},{merge:true});}function setExpire(docId){let d=document.getElementById('date-'+docId).value;if(!d)return alert("Date select karo pehle");db.collection("users").doc(docId).set({expire_date:d,premium_expire:d},{merge:true});alert("Expire Date Set: "+d);}loadAll();</script></body></html>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LUDO PREMIUM ADMIN</title>
+<style>body{background:#0A0E1A;color:#fff;font-family:sans-serif;padding:10px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border:1px solid #333;padding:8px;font-size:12px;text-align:left}th{background:#1E293B;position:sticky;top:0}tr:nth-child(even){background:#151A2B}.premium{color:#22c55e;font-weight:bold}.free{color:#ef4444}.btn{padding:4px 8px;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:bold}.btn-true{background:#22c55e;color:#000}.btn-false{background:#ef4444;color:#fff}</style>
+</head>
+<body>
+<h2>ADMIN - Latest Registration Uper ⬆️</h2>
+<div>Total Users: <span id="total">0</span> | Premium: <span id="prem">0</span></div>
+<table><thead><tr><th>#</th><th>Mobile</th><th>My Code</th><th>Joined With (Refer By)</th><th>Wallet</th><th>UPI</th><th>Premium</th><th>Joined At</th><th>Action</th></tr></thead><tbody id="tbody"></tbody></table>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, updateDoc, Timestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC3vGx...",
+  authDomain: "ludo-premium-50-e427e.firebaseapp.com",
+  projectId: "ludo-premium-50-e427e",
+  storageBucket: "ludo-premium-50-e427e.appspot.com",
+  messagingSenderId: "123",
+  appId: "1:123:web:abc"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+async function load(){
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "<tr><td colspan=9>Loading...</td></tr>";
+  try{
+    const q = query(collection(db,"users"), orderBy("createdAt","desc"));
+    let snap;
+    try{ snap = await getDocs(q); }catch(e){ snap = await getDocs(collection(db,"users")); } // agar createdAt nahi hai to bina order ke
+    let users = [];
+    snap.forEach(d=> users.push({id:d.id, ...d.data()}));
+    // Agar createdAt se order fail hua to client side sort latest uper
+    users.sort((a,b)=>{
+      const at = a.createdAt?.seconds || 0;
+      const bt = b.createdAt?.seconds || 0;
+      return bt - at;
+    });
+    let premCount = users.filter(u=>u.isPremium).length;
+    document.getElementById("total").innerText = users.length;
+    document.getElementById("prem").innerText = premCount;
+    tbody.innerHTML = "";
+    users.forEach((u,i)=>{
+      const joined = u.referredBy ? u.referredBy : "Direct / No Refer";
+      const created = u.createdAt ? new Date(u.createdAt.seconds*1000).toLocaleString() : "Old User";
+      tbody.innerHTML += `<tr>
+        <td>${i+1}</td>
+        <td>${u.mobile || u.id}</td>
+        <td><b style="color:#fbbf24">${u.referralCode || u.id}</b></td>
+        <td><span style="color:${u.referredBy ? '#22c55e' : '#666'}">${joined}</span><br><small style="font-size:9px;color:#888">Lock - 1st time only</small></td>
+        <td>₹${u.wallet || 0}</td>
+        <td>${u.upi || '-'}</td>
+        <td class="${u.isPremium?'premium':'free'}">${u.isPremium?'TRUE ✅':'FALSE ❌'}</td>
+        <td>${created}</td>
+        <td>
+          <button class="btn btn-true" onclick="setPremium('${u.id}',true)">TRUE</button>
+          <button class="btn btn-false" onclick="setPremium('${u.id}',false)">FALSE</button>
+        </td>
+      </tr>`;
+    });
+  }catch(e){ tbody.innerHTML = `<tr><td colspan=9>Error: ${e.message}</td></tr>`; }
+}
+window.setPremium = async (id, val)=>{
+  const exp = new Date(); exp.setMonth(exp.getMonth()+1);
+  await updateDoc(doc(db,"users",id), {isPremium: val, premiumExpiry: Timestamp.fromDate(exp), premiumDistributed: val?false:true});
+  load();
+}
+load();
+</script>
+</body>
+</html>
