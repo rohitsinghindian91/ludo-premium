@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import 'beautiful_ludo.dart';
 import 'plan_screen.dart';
+import 'friends_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -603,9 +604,53 @@ class _HomePageState extends State<HomePage> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FriendsScreen(mobile: widget.mobile)
+                          )
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue
+                      ),
+                      child: const Text(
+                        "FRIENDS",
+                        style: TextStyle(color: Colors.white)
+                      )
+                    )
+                  )
+                ]
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
                         Share.share("My Code $myCode");
                       },
-                      child: const Text("SHARE")
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white24
+                      ),
+                      child: const Text(
+                        "SHARE",
+                        style: TextStyle(color: Colors.white)
+                      )
+                    )
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => WalletScreen(mobile: widget.mobile)
+                          )
+                        );
+                      },
+                      child: const Text("WALLET")
                     )
                   )
                 ]
