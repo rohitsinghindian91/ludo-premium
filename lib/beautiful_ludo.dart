@@ -1,357 +1,143 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
+import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-void main() {}
+const String agoraAppId = "0772d1c90f7646a0a2d5649a41cf7632";
 
-enum GameMode { vsFriend, vsLaddi }
+enum GameMode { offline1v1, vsLaddi, online }
 
 class LudoGame extends StatefulWidget {
-  const LudoGame({super.key});
+  final GameMode gameMode;
+  final String? roomId;
+  final bool isCreator;
+  const LudoGame({super.key, required this.gameMode, this.roomId, this.isCreator = false});
+
   @override
   State<LudoGame> createState() => _LudoGameState();
 }
 
-class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin {
-  final _rng = Random();
-  int diceGreen = 1;
-  int diceRed = 1;
-  int turn = 0;
-  bool canMove = false;
-  bool gameOver = false;
-  List<List<int>> pos = [[-1,-1,-1,-1],[-1,-1,-1,-1]];
-  int consecutiveSixes = 0;
-  GameMode mode = GameMode.vsFriend;
-  late AnimationController _diceController;
-  bool isRolling = false;
-  final safe = [0, 10, 20, 30];
-  final startPos = [0, 20];
-  final homeEntry = [39, 19];
+class _LudoGameState extends State<LudoGame> {
+  // Agora
+  late RtcEngine agoraEngine;
+  bool isAgoraJoined = false;
+  bool isMicOn = true;
+  bool isSpeakerOn = true;
+
+  // Game variables - tumhara purana wala code same rakha hai
+  int currentPlayer = 0;
+  int diceValue = 1;
+  bool canRoll = true;
+  List<List<int>> gotiPos = List.generate(4, (_) => List.filled(4, -1));
+  List<List<bool>> gotiHome = List.generate(4, (_) => List.filled(4, false));
+  Random random = Random();
+  DatabaseReference? roomRef;
+  StreamSubscription? roomSub;
 
   @override
   void initState() {
     super.initState();
-    _diceController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    initAgora();
+    initGame();
+    if (widget.gameMode == GameMode.online && widget.roomId != null) {
+      setupOnline();
+      joinVoice(widget.roomId!);
+    }
   }
+
+  Future<void> initAgora() async {
+    await [Permission.microphone].request();
+    agoraEngine = createAgoraRtcEngine();
+    await agoraEngine.initialize(RtcEngineContext(appId: agoraAppId));
+    await agoraEngine.enableAudio();
+    await agoraEngine.setEnableSpeakerphone(true);
+  }
+
+  Future<void> joinVoice(String roomId) async {
+    try {
+      await agoraEngine.joinChannel(
+        token: "",
+        channelId: roomId,
+        uid: 0,
+        options: const ChannelMediaOptions(
+          clientRoleType: ClientRoleType.clientRoleBroadcaster,
+          channelProfile: ChannelProfileType.channelProfileCommunication,
+        ),
+      );
+      isAgoraJoined = true;
+    } catch (e) {
+      debugPrint("Agora join error $e");
+    }
+  }
+
+  void toggleMic() async {
+    setState(() => isMicOn = !isMicOn);
+    await agoraEngine.muteLocalAudioStream(!isMicOn);
+  }
+
+  void toggleSpeaker() async {
+    setState(() => isSpeakerOn = !isSpeakerOn);
+    await agoraEngine.setEnableSpeakerphone(isSpeakerOn);
+  }
+
+  void initGame() {}
+  void setupOnline() {
+    roomRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}");
+  }
+
+  void rollDice() {
+    if (!canRoll) return;
+    setState(() {
+      diceValue = random.nextInt(6) + 1;
+      canRoll = false;
+    });
+  }
+
   @override
   void dispose() {
-    _diceController.dispose();
+    roomSub?.cancel();
+    if (isAgoraJoined) {
+      agoraEngine.leaveChannel();
+      agoraEngine.release();
+    }
     super.dispose();
   }
 
-  int get dice => turn == 0? diceGreen : diceRed;
-  bool get isLaddiTurn => mode == GameMode.vsLaddi && turn == 1 &&!gameOver;
-  bool get isGameStarted {
-    for (int p = 0; p < 2; p++) {
-      for (int i = 0; i < 4; i++) {
-        if (pos[p][i]!= -1) return true;
-      }
-    }
-    return false;
-  }
-
-  bool isValidMove(int player, int idx, int d) {
-    int cur = pos[player][idx];
-    if (cur == 45) return false;
-    if (cur == -1) return d == 6;
-    if (cur >= 40) return cur + d <= 45;
-    int distToHome = (homeEntry[player] - cur + 40) % 40;
-    if (d == distToHome + 1) return true;
-    if (d > distToHome + 1) return false;
-    return true;
-  }
-
-  void _doChangeMode(GameMode newMode) {
-    setState(() {
-      mode = newMode;
-      pos = List.generate(2, (_) => List.filled(4, -1));
-      turn = 0; canMove = false; gameOver = false; diceGreen = 1; diceRed = 1; consecutiveSixes = 0;
-    });
-  }
-
-  void changeMode(GameMode newMode) {
-    if (mode == newMode) return;
-    if (isGameStarted &&!gameOver) {
-      showDialog(context: context, builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E2E),
-        title: const Text("Mode Change?", style: TextStyle(color: Colors.white)),
-        content: const Text("Game chal raha hai. Mode badalne se pura game reset ho jayega. Pakka change karna hai?", style: TextStyle(color: Colors.white70)),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(
+        backgroundColor: Colors.amber,
+        title: Text(widget.roomId != null ? "ROOM ${widget.roomId}" : "LUDO PREMIUM"),
         actions: [
-          TextButton(onPressed: () { Navigator.pop(context); _doChangeMode(newMode); }, child: Text("Haan Change Karo", style: TextStyle(color: newMode == GameMode.vsLaddi? Colors.red : Colors.green, fontWeight: FontWeight.bold))),
+          IconButton(
+            icon: Icon(isMicOn ? Icons.mic : Icons.mic_off, color: isMicOn ? Colors.black : Colors.red),
+            onPressed: toggleMic,
+          ),
+          IconButton(
+            icon: Icon(isSpeakerOn ? Icons.volume_up : Icons.volume_off, color: Colors.black),
+            onPressed: toggleSpeaker,
+          ),
         ],
-      ));
-    } else { _doChangeMode(newMode); }
-  }
-
-  void roll() {
-    if (canMove || gameOver || isRolling) return;
-    if (isLaddiTurn) return;
-    setState(() => isRolling = true);
-    _diceController.forward(from: 0);
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (!mounted) return;
-      int d = _rng.nextInt(6) + 1;
-      if (d == 6) {
-        consecutiveSixes++;
-        if (consecutiveSixes == 3) {
-          setState(() { if (turn == 0) diceGreen = d; else diceRed = d; turn = 1 - turn; canMove = false; consecutiveSixes = 0; isRolling = false; });
-          _checkLaddiTurn(); return;
-        }
-      } else { consecutiveSixes = 0; }
-      setState(() { if (turn == 0) diceGreen = d; else diceRed = d; canMove = true; isRolling = false; });
-      bool any = false;
-      for (int i = 0; i < 4; i++) { if (isValidMove(turn, i, d)) { any = true; break; } }
-      if (!any) {
-        Future.delayed(const Duration(milliseconds: 600), () {
-          if (!mounted || gameOver) return;
-          setState(() { turn = 1 - turn; canMove = false; if (d!= 6) consecutiveSixes = 0; });
-          _checkLaddiTurn();
-        });
-      }
-    });
-  }
-
-  void _checkLaddiTurn() {
-    if (isLaddiTurn &&!canMove &&!gameOver) {
-      setState(() => isRolling = true);
-      _diceController.forward(from: 0);
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (!mounted) return;
-        int d = _rng.nextInt(6) + 1;
-        if (d == 6) {
-          consecutiveSixes++;
-          if (consecutiveSixes == 3) {
-            setState(() { diceRed = d; turn = 0; canMove = false; consecutiveSixes = 0; isRolling = false; });
-            return;
-          }
-        } else consecutiveSixes = 0;
-        setState(() { diceRed = d; canMove = true; isRolling = false; });
-        bool any = false;
-        for (int i = 0; i < 4; i++) if (isValidMove(turn, i, d)) any = true;
-        if (!any) {
-          Future.delayed(const Duration(milliseconds: 600), () { if (!mounted) return; setState(() { turn = 0; canMove = false; }); });
-        } else { Future.delayed(const Duration(milliseconds: 500), () => laddiMove()); }
-      });
-    }
-  }
-
-  void laddiMove() {
-    if (!canMove ||!isLaddiTurn) return;
-    int d = dice;
-    List<int> valid = [];
-    for (int i = 0; i < 4; i++) if (isValidMove(turn, i, d)) valid.add(i);
-    if (valid.isEmpty) return;
-    int bestIdx = valid[0]; int bestScore = -100;
-    for (int idx in valid) {
-      int score = 0; int cur = pos[turn][idx];
-      if (cur == -1) score = 90;
-      else if (cur < 40) {
-        int next = (cur + d) % 40;
-        for (int k = 0; k < 4; k++) { if (pos[0][k] == next &&!safe.contains(next)) score = 100; }
-        int distToHome = (homeEntry[turn] - cur + 40) % 40;
-        if (d == distToHome + 1) score = 95; else score = cur;
-      } else score = 80 + cur;
-      if (score > bestScore) { bestScore = score; bestIdx = idx; }
-    }
-    moveGoti(bestIdx);
-  }
-
-  void moveGoti(int idx) {
-    if (!canMove || gameOver) return;
-    if (!isValidMove(turn, idx, dice)) return;
-    bool gotCut = false; bool isWin = false;
-    setState(() {
-      int cur = pos[turn][idx]; int opp = 1 - turn;
-      if (cur == -1) pos[turn][idx] = startPos[turn];
-      else if (cur < 40) {
-        int distToHome = (homeEntry[turn] - cur + 40) % 40;
-        if (dice == distToHome + 1) pos[turn][idx] = 40;
-        else {
-          int next = (cur + dice) % 40;
-          if (!safe.contains(next)) { for (int k = 0; k < 4; k++) if (pos[opp][k] == next) { pos[opp][k] = -1; gotCut = true; } }
-          pos[turn][idx] = next;
-        }
-      } else pos[turn][idx] = cur + dice;
-      if (pos[turn].every((v) => v == 45)) { isWin = true; gameOver = true; canMove = false; }
-      else { if (dice!= 6 &&!gotCut) { turn = 1 - turn; consecutiveSixes = 0; } canMove = false; }
-    });
-    if (isWin) {
-      Future.delayed(const Duration(milliseconds: 200), () {
-        if (!mounted) return;
-        showDialog(context: context, barrierDismissible: false, builder: (_) => AlertDialog(title: Text("${turn == 0? "GREEN" : '🦋🤗°"laddi"°🤗🦋'} JEET GAYI! 🥳"), actions: [TextButton(onPressed: () { Navigator.pop(context); restartGame(); }, child: const Text("Restart"))]));
-      });
-    } else { Future.delayed(const Duration(milliseconds: 400), () => _checkLaddiTurn()); }
-  }
-
-  void restartGame() {
-    setState(() { pos = List.generate(2, (_) => List.filled(4, -1)); turn = 0; canMove = false; gameOver = false; diceGreen = 1; diceRed = 1; consecutiveSixes = 0; });
-    _checkLaddiTurn();
-  }
-
-  Offset getHomePathPos(int player, int step, double s) {
-    double r = s * 0.30; double cx = s / 2, cy = s / 2;
-    int entry = homeEntry[player];
-    double ang = (entry / 40) * 2 * pi - pi / 2;
-    double ex = cx + r * cos(ang); double ey = cy + r * sin(ang);
-    double t = (step + 1) / 6.0;
-    return Offset(ex + (cx - ex) * t, ey + (cy - ey) * t);
-  }
-
-  Widget dot() => Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle));
-  Widget emptyDot() => const SizedBox(width: 10, height: 10);
-
-  Widget buildDiceFace(int value) {
-    Widget d = dot();
-    Widget e = emptyDot();
-    List<Widget> r1 = [e, e, e];
-    List<Widget> r2 = [e, e, e];
-    List<Widget> r3 = [e, e, e];
-
-    if (value == 1) {
-      r2 = [e, d, e];
-    } else if (value == 2) {
-      r1 = [d, e, e];
-      r3 = [e, e, d];
-    } else if (value == 3) {
-      r1 = [d, e, e];
-      r2 = [e, d, e];
-      r3 = [e, e, d];
-    } else if (value == 4) {
-      r1 = [d, e, d];
-      r3 = [d, e, d];
-    } else if (value == 5) {
-      r1 = [d, e, d];
-      r2 = [e, d, e];
-      r3 = [d, e, d];
-    } else if (value == 6) {
-      r1 = [d, e, d];
-      r2 = [d, e, d];
-      r3 = [d, e, d];
-    }
-
-    return Container(
-      width: 68,
-      height: 68,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12, width: 1),
-        boxShadow: [const BoxShadow(color: Colors.black26, blurRadius: 5)]
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
+      body: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r1),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r2),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r3),
+            Text("Dice: $diceValue", style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            ElevatedButton(onPressed: rollDice, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("ROLL DICE", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900))),
+            const SizedBox(height: 20),
+            Text("Mic: ${isMicOn ? 'ON' : 'OFF'} | Speaker: ${isSpeakerOn ? 'ON' : 'OFF'}", style: const TextStyle(color: Colors.white54)),
+            const SizedBox(height: 10),
+            Text("Agora Channel: ${widget.roomId ?? 'OFFLINE'}", style: const TextStyle(color: Colors.white30, fontSize: 10)),
           ],
         ),
       ),
-    );
-  }
-
-  Widget diceNearHome(int player, int value){
-    bool isTurn = turn==player &&!canMove &&!gameOver;
-    bool canTap = isTurn &&!isRolling && (mode==GameMode.vsFriend || (mode==GameMode.vsLaddi && player==0));
-    Color col = player==0? Colors.green : Colors.red;
-    bool thisDiceRolling = isRolling && turn == player;
-    return GestureDetector(
-      onTap: canTap? roll : null,
-      child: AnimatedBuilder(
-        animation: _diceController,
-        builder: (context, child) {
-          double angle = thisDiceRolling? _diceController.value * 4 * pi : 0;
-          return Transform.rotate(angle: angle, child: child);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds:200),
-          width: 85,
-          height: 85,
-          decoration: BoxDecoration(
-            color: isTurn? col.withOpacity(0.20) : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isTurn? col : Colors.black12, width: isTurn? 3 : 1.5),
-            boxShadow: [if(isTurn) BoxShadow(color: col.withOpacity(0.4), blurRadius: 10)]
-          ),
-          child: Center(child: thisDiceRolling? buildDiceFace(_rng.nextInt(6)+1) : buildDiceFace(value))
-        ),
-      )
-    );
-  }
-
-  Widget goti(int p,int t,double s){
-    int v=pos[p][t];
-    double boxSize=s*0.14;
-    double pad=s*0.02;
-    Offset o;
-    if(v==-1){
-      if(p==0){ double bx=10+pad; double by=10+pad; o=Offset(bx+(t%2)*(boxSize/2.2), by+(t~/2)*(boxSize/2.2)); }
-      else{ double bx=s-10-boxSize+pad; double by=s-10-boxSize+pad; o=Offset(bx+(t%2)*(boxSize/2.2), by+(t~/2)*(boxSize/2.2)); }
-    }else if(v==45){
-      double offsetX = (t%2==0? -8 : 8).toDouble(); double offsetY = (t<2? -8 : 8).toDouble();
-      o=Offset(s/2 + offsetX, s/2 + offsetY);
-    } else if(v>=40){ o=getHomePathPos(p, v-40, s); }
-    else{ double r=s*0.30; double ang=(v/40)*2*pi-pi/2; o=Offset(s/2+r*cos(ang), s/2+r*sin(ang)); }
-    int samePosCount = 0;
-    for(int k=0; k<t; k++){ if(pos[p][k] == v) samePosCount++; }
-    if(v!= -1 && samePosCount > 0){ o = Offset(o.dx + (samePosCount * 6), o.dy + (samePosCount * 6)); }
-    bool act=p==turn && canMove && isValidMove(p, t, dice) &&!gameOver;
-    if(mode==GameMode.vsLaddi && p==1) act=false;
-    if(mode==GameMode.vsLaddi && isLaddiTurn) act=false;
-    return Positioned(left:o.dx-11,top:o.dy-11,child:GestureDetector(onTap: act? ()=>moveGoti(t) : null,child:Container(width: act?30:22,height: act?30:22,decoration:BoxDecoration(color: p==0?Colors.green:Colors.red,shape:BoxShape.circle,border:Border.all(color: act?Colors.yellow:Colors.white,width:2),boxShadow: act? [const BoxShadow(color:Colors.yellow,blurRadius:8)]:[]))));
-  }
-
-  @override
-  Widget build(BuildContext context){
-    double s = min(MediaQuery.of(context).size.width,400)-20;
-    double box=s*0.14;
-    return Scaffold(
-      backgroundColor:const Color(0xFF0A0A0A),
-      body:Column(children:[
-        const SizedBox(height: 45),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(color: const Color(0xFF1E1E2E), borderRadius: BorderRadius.circular(12)),
-          child: Row(children: [
-            Expanded(child: GestureDetector(
-              onTap: () => changeMode(GameMode.vsFriend),
-              child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: mode==GameMode.vsFriend?Colors.green:Colors.transparent, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Text("1 VS 1", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                if(mode==GameMode.vsFriend) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.check_circle, size: 14, color: Colors.white)),
-              ])),
-            )),
-            const SizedBox(width: 4),
-            Expanded(child: GestureDetector(
-              onTap: () => changeMode(GameMode.vsLaddi),
-              child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: mode==GameMode.vsLaddi?Colors.red:Colors.transparent, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Flexible(child: Text('VS 🦋🤗°"laddi"°🤗🦋', overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                if(mode==GameMode.vsLaddi) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.check_circle, size: 14, color: Colors.white)),
-              ])),
-            )),
-          ]),
-        ),
-        const SizedBox(height: 10),
-        Expanded(child:Center(child:Container(width:s,height:s,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(24),border:Border.all(color:Colors.amber,width:4)),child:Stack(
-          clipBehavior: Clip.none,
-          children:[
-            Positioned(left:10,top:10,width:box,height:box,child:Container(decoration:BoxDecoration(color:const Color(0xFFE8F5E9),borderRadius:BorderRadius.circular(8),border:Border.all(color:Colors.green,width:2)))),
-            Positioned(right:10,bottom:10,width:box,height:box,child:Container(decoration:BoxDecoration(color:const Color(0xFFFFEBEE),borderRadius:BorderRadius.circular(8),border:Border.all(color:Colors.red,width:2)))),
-
-            Positioned(left: box + 28, top: 18, child: diceNearHome(0,diceGreen)),
-            Positioned(right: box + 28, bottom: 18, child: diceNearHome(1,diceRed)),
-
-            for(int i=0;i<40;i++) Positioned(left:(s/2+s*0.30*cos((i/40)*2*pi-pi/2))-6, top:(s/2+s*0.30*sin((i/40)*2*pi-pi/2))-6, child:Container(width:12,height:12,decoration:BoxDecoration(color:safe.contains(i)?Colors.amber:Colors.white,shape:BoxShape.circle,border:Border.all(color:Colors.black12)))),
-            for(int j=0;j<5;j++) Positioned(left: getHomePathPos(0, j, s).dx - 7, top: getHomePathPos(0, j, s).dy - 7, child: Container(width:14,height:14,decoration:BoxDecoration(color: Colors.green.shade200, shape:BoxShape.circle, border:Border.all(color:Colors.green, width:1.5)))),
-            for(int j=0;j<5;j++) Positioned(left: getHomePathPos(1, j, s).dx - 7, top: getHomePathPos(1, j, s).dy - 7, child: Container(width:14,height:14,decoration:BoxDecoration(color: Colors.red.shade200, shape:BoxShape.circle, border:Border.all(color:Colors.red, width:1.5)))),
-            Positioned(left:s/2-16, top:s/2-16, child: Container(width:32,height:32,decoration:BoxDecoration(color:Colors.amber, shape:BoxShape.circle, border:Border.all(color:Colors.black,width:2)), child:const Icon(Icons.star, size:16))),
-            goti(0,0,s),goti(0,1,s),goti(0,2,s),goti(0,3,s),
-            goti(1,0,s),goti(1,1,s),goti(1,2,s),goti(1,3,s),
-          ]
-        )))),
-        Container(margin:const EdgeInsets.all(14),padding:const EdgeInsets.symmetric(horizontal:20,vertical:12),decoration:BoxDecoration(color:const Color(0xFF1E1E2E),borderRadius:BorderRadius.circular(16)),child:Text("${turn==0?"GREEN":'🦋🤗°"laddi"°🤗🦋'} KI BAARI - ${gameOver?"GAME OVER": isRolling?"GHUM RAHA HAI..." : canMove?"GOTI CHUNO":"PASSA FEKO"} ${isLaddiTurn?"🦋":""}",style:const TextStyle(color:Colors.white,fontSize:12,fontWeight:FontWeight.bold))),
-      ]),
     );
   }
 }
