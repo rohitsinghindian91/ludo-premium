@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,16 +31,11 @@ jobs:
           flutter clean
           flutter pub get
 
-      - name: Fix corrupt launcher icons
-        run: |
-          rm -rf android/app/src/main/res/mipmap-*
-          flutter create . --platforms=android
-
       - name: Generate App Icon
-        run: flutter pub run flutter_launcher_icons
+        run: dart run flutter_launcher_icons
 
       - name: Build APK Release
-        run: flutter build apk --release
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
