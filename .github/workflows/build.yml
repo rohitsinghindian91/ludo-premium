@@ -26,13 +26,8 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Clean and get packages
-        run: |
-          flutter clean
-          flutter pub get
-
-      - name: Generate App Icon
-        run: dart run flutter_launcher_icons
+      - name: Get packages
+        run: flutter pub get
 
       - name: Build APK Release
         run: flutter build apk --release --no-tree-shake-icons
