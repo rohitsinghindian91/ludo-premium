@@ -58,7 +58,7 @@ class _LoginPageState extends State<LoginPage> {
         const SizedBox(height:30),
         TextField(controller:mobileCtrl, keyboardType:TextInputType.phone, maxLength:10, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Mobile", prefixIcon: Icon(Icons.phone, color:Colors.amber), filled:true, fillColor:Color(0xFF151A2B), border:OutlineInputBorder(borderRadius:BorderRadius.circular(14), borderSide: BorderSide.none))),
         const SizedBox(height:12), TextField(controller:passCtrl, obscureText:true, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Password", prefixIcon: Icon(Icons.lock, color:Colors.amber), filled:true, fillColor:Color(0xFF151A2B), border:OutlineInputBorder(borderRadius:BorderRadius.circular(14), borderSide: BorderSide.none))),
-        const SizedBox(height:12), TextField(controller:referCtrl, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Referral Code (Optional)", prefixIcon: Icon(Icons.card_giftcard, color:Colors.amber), filled:true, fillColor:Color(0xFF151A2B), border:OutlineInputBorder(borderRadius:BorderRadius.circular(14), borderSide: BorderSide.none))),
+        const SizedBox(height:12), TextField(controller:referCtrl, style:const TextStyle(color:Colors.white), decoration:InputDecoration(labelText:"Referral Code (Optional) - 1st Time Lock", prefixIcon: Icon(Icons.card_giftcard, color:Colors.amber), filled:true, fillColor:Color(0xFF151A2B), border:OutlineInputBorder(borderRadius:BorderRadius.circular(14), borderSide: BorderSide.none))),
         const SizedBox(height:24), SizedBox(width:double.infinity, height:54, child:ElevatedButton(onPressed:goOtp, style:ElevatedButton.styleFrom(backgroundColor:Colors.amber, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14))), child:const Text("LOGIN / GET OTP 1234", style:TextStyle(color:Colors.black, fontWeight:FontWeight.w900, fontSize:14)))),
       ]))),
     );
@@ -74,8 +74,23 @@ class _OtpPageState extends State<OtpPage> {
     try{
       var doc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
       if(!doc.exists){
-        String refBy=""; if(widget.referral.isNotEmpty){ var q = await FirebaseFirestore.instance.collection("users").where("referralCode", isEqualTo:widget.referral).get(); if(q.docs.isNotEmpty) refBy=q.docs.first.id; }
-        await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({"mobile":widget.mobile, "password":widget.password, "wallet":0, "upi":"", "isPremium":false, "referralCode":widget.mobile, "referredBy":refBy, "premiumExpiry":Timestamp.now(), "premiumDistributed": false});
+        String refBy="";
+        if(widget.referral.isNotEmpty){
+          var q = await FirebaseFirestore.instance.collection("users").where("referralCode", isEqualTo:widget.referral).get();
+          if(q.docs.isNotEmpty) refBy=q.docs.first.id;
+        }
+        await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({
+          "mobile":widget.mobile,
+          "password":widget.password,
+          "wallet":0,
+          "upi":"",
+          "isPremium":false,
+          "referralCode":widget.mobile,
+          "referredBy":refBy, // Jiska code daal ke aaya - Lock rahega
+          "premiumExpiry":Timestamp.now(),
+          "premiumDistributed": false,
+          "createdAt": FieldValue.serverTimestamp() // Latest uper dikhane ke liye
+        });
       }
       var sp = await SharedPreferences.getInstance(); await sp.setString("mobile", widget.mobile);
       if(!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_)=> HomePage(mobile: widget.mobile)), (r)=>false);
@@ -94,13 +109,18 @@ class _OtpPageState extends State<OtpPage> {
 
 class HomePage extends StatefulWidget { final String mobile; const HomePage({super.key, required this.mobile}); @override State<HomePage> createState()=>_HomePageState(); }
 class _HomePageState extends State<HomePage> {
-  int wallet=0; String upi=""; String myCode=""; bool isPrem=false; String expiry="";
+  int wallet=0; String upi=""; String myCode=""; String referredBy=""; bool isPrem=false; String expiry="";
   @override void initState(){ super.initState(); load(); }
   void load() async {
     var d = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
     if(!d.exists) return; var data=d.data()!;
     if(!mounted) return;
-    setState((){ wallet=data["wallet"]??0; upi=data["upi"]??""; myCode=data["referralCode"]??widget.mobile; });
+    setState((){
+      wallet=data["wallet"]??0;
+      upi=data["upi"]??"";
+      myCode=data["referralCode"]??widget.mobile;
+      referredBy=data["referredBy"]??""; // Jiska code daal ke aaya
+    });
     if(data["isPremium"]==true && data["premiumExpiry"]!=null){
       DateTime exp=(data["premiumExpiry"] as Timestamp).toDate();
       if(exp.isAfter(DateTime.now())){
@@ -177,12 +197,42 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
+              const SizedBox(height: 14),
+              // DONO CODE DIKHEGA - MY CODE + JOINED WITH
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text("MY CODE (Aapka Code)", style: TextStyle(color: Colors.white38, fontSize: 9, letterSpacing: 0.8)),
+                          const SizedBox(height: 4),
+                          Text(myCode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                          const Text("Ye aap dusro ko do", style: TextStyle(color: Colors.greenAccent, fontSize: 9)),
+                        ])),
+                        Container(width: 1, height: 45, color: Colors.white10),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text("JOINED WITH (Jiska dala)", style: TextStyle(color: Colors.white38, fontSize: 9, letterSpacing: 0.8)),
+                          const SizedBox(height: 4),
+                          Text(referredBy.isEmpty? "Direct Join" : referredBy, style: TextStyle(color: referredBy.isEmpty? Colors.white54 : Colors.amber, fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text(referredBy.isEmpty? "Koi code nahi dala" : "Lock hai - Change nahi hoga", style: TextStyle(color: referredBy.isEmpty? Colors.white38 : Colors.greenAccent, fontSize: 8)),
+                        ])),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if(upi.isNotEmpty) Text("UPI: $upi", style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                    if(upi.isEmpty) const Text("UPI: Not Set - Wallet me jake set karo", style: TextStyle(color: Colors.redAccent, fontSize: 11)),
+                  ],
+                ),
+              ),
               const SizedBox(height: 16),
-              // FIX: Ab LobbyScreen khulega jisme Voice + Speaker hai
               Container(
                 width: double.infinity, height: 60,
                 decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.green.shade400, Colors.green.shade700]), borderRadius: BorderRadius.circular(14)),
-                child: ElevatedButton(onPressed: (){ Navigator.push(context, MaterialPageRoute(builder:(_)=> LobbyScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))), child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text("🎲", style: TextStyle(fontSize: 18)), SizedBox(width: 8), Text("PLAY LUDO - OFFLINE / BOT / ONLINE VOICE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12))])),
+                child: ElevatedButton(onPressed: (){ Navigator.push(context, MaterialPageRoute(builder:(_)=> LobbyScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))), child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Text("🎲", style: TextStyle(fontSize: 18)), SizedBox(width: 8), Text("PLAY LUDO - VOICE + MIC + SPEAKER", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12))])),
               ),
               const SizedBox(height: 14),
               Row(children: [
@@ -191,7 +241,7 @@ class _HomePageState extends State<HomePage> {
                 Expanded(child: InkWell(onTap: (){ Navigator.push(context, MaterialPageRoute(builder:(_)=>MyTeamScreen(mobile:widget.mobile))); }, child: Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(14)), child: const Row(children: [Icon(Icons.groups, color: Colors.purpleAccent, size: 18), SizedBox(width: 10), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("MY TEAM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)), Text("View Team", style: TextStyle(color: Colors.white54, fontSize: 10))])])))),
               ]),
               const SizedBox(height: 14),
-              InkWell(onTap: isPrem? null : buy, child: Container(width: double.infinity, padding: const EdgeInsets.all(14), decoration: BoxDecoration(gradient: isPrem? null : LinearGradient(colors: [const Color(0xFF6A11CB), const Color(0xFF2575FC)]), color: isPrem? Colors.white10 : null, borderRadius: BorderRadius.circular(14)), child: Row(children: [Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(isPrem? Icons.check : Icons.workspace_premium, color: Colors.white, size: 18)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(isPrem? "PREMIUM ACTIVE ✅" : "BUY PREMIUM ₹500", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)), Text(isPrem? "Enjoy unlimited play" : "1 Month • Unlock All Features", style: const TextStyle(color: Colors.white70, fontSize: 11))]))),
+              InkWell(onTap: isPrem? null : buy, child: Container(width: double.infinity, padding: const EdgeInsets.all(14), decoration: BoxDecoration(gradient: isPrem? null : LinearGradient(colors: [const Color(0xFF6A11CB), const Color(0xFF2575FC)]), color: isPrem? Colors.white10 : null, borderRadius: BorderRadius.circular(14)), child: Row(children: [Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(isPrem? Icons.check : Icons.workspace_premium, color: Colors.white, size: 18)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(isPrem? "PREMIUM ACTIVE ✅" : "BUY PREMIUM ₹500", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)), Text(isPrem? "Enjoy unlimited play" : "1 Month • Unlock All Features", style: const TextStyle(color: Colors.white70, fontSize: 11))]))]))),
               const SizedBox(height: 18),
               InkWell(onTap: openWhatsappHelp, child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.4))), child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.support_agent, size: 16, color: Colors.white), SizedBox(width: 10), Text("Help: +447397293594", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14))]))),
             ],
@@ -201,6 +251,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
 class WalletScreen extends StatefulWidget { final String mobile; const WalletScreen({super.key, required this.mobile}); @override State<WalletScreen> createState()=>_WalletScreenState(); }
 class _WalletScreenState extends State<WalletScreen> {
   final upiCtrl=TextEditingController(); int wallet=0; bool loading=true;
@@ -218,6 +269,7 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 }
+
 class PremiumPayScreen extends StatefulWidget { final String mobile; final VoidCallback onPaid; const PremiumPayScreen({super.key, required this.mobile, required this.onPaid}); @override State<PremiumPayScreen> createState()=> _PremiumPayScreenState(); }
 class _PremiumPayScreenState extends State<PremiumPayScreen> {
   final String myUpiId = "kumar131@fam"; bool loading = false;
@@ -246,6 +298,7 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
     );
   }
 }
+
 class MyTeamScreen extends StatefulWidget { final String mobile; const MyTeamScreen({super.key, required this.mobile}); @override State<MyTeamScreen> createState()=>_MyTeamScreenState(); }
 class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderStateMixin {
   late TabController tabCtrl; List<DocumentSnapshot> level1=[], level2=[], level3=[]; List<DocumentSnapshot> earnings=[]; bool loading=true;
