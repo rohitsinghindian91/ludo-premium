@@ -46,7 +46,7 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(children: [
       Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.amber, Colors.orange.shade700]), shape: BoxShape.circle), child: const Icon(Icons.casino_rounded, size: 50, color: Colors.black)),
       const SizedBox(height: 16), const Text("LUDO PREMIUM", style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)), const SizedBox(height: 30),
-      TextField(controller: nameCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Apna Naam (jaise Rohit)", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
+      TextField(controller: nameCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Apna Naam", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
       const SizedBox(height: 12),
       TextField(controller: mobileCtrl, keyboardType: TextInputType.phone, maxLength: 10, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Mobile", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
       const SizedBox(height: 12),
@@ -55,7 +55,7 @@ class _LoginPageState extends State<LoginPage> {
       TextField(controller: referCtrl, keyboardType: TextInputType.phone, maxLength: 10, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Referral Code (Optional)", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
       const SizedBox(height: 20),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: goOtp, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))), child: const Text("NEXT", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)))),
-    ]))));
+    ])))));
   }
 }
 
