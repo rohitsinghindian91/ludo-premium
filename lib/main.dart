@@ -38,6 +38,7 @@ class Splash extends StatefulWidget {
 class _SplashState extends State<Splash> {
   @override
   void initState() { super.initState(); checkUser(); }
+
   Future<void> checkUser() async {
     var m = sp.getString("mobile");
     await Future.delayed(const Duration(milliseconds: 600));
@@ -48,6 +49,7 @@ class _SplashState extends State<Splash> {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
@@ -125,6 +127,7 @@ class OtpPage extends StatefulWidget {
 class _OtpPageState extends State<OtpPage> {
   final otpCtrl = TextEditingController();
   bool load = false;
+
   Future<void> verifyOtp() async {
     if (otpCtrl.text.trim()!= "1234") {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("OTP 1234 dalo")));
@@ -142,8 +145,9 @@ class _OtpPageState extends State<OtpPage> {
     await sp.setString("mobile", widget.mobile);
     setState(() => load = false);
     if (!mounted) return;
-    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => HomeScreen(mobile: widget.mobile)), (r) => false);
+    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => HomeScreen(mobile: widget.mobile)), (r)=>false);
   }
+
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: const Color(0xFF0A0E1A), title: const Text("OTP Verify")), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
       const Text("OTP 1234 hai", style: TextStyle(color: Colors.white54)), const SizedBox(height: 20),
@@ -171,6 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (data["isPremium"] == true && data["premiumExpiry"]!= null) { DateTime exp = (data["premiumExpiry"] as Timestamp).toDate(); if (exp.isAfter(DateTime.now())) { setState(() { isPrem = true; expiry = "${exp.day}/${exp.month}/${exp.year}"; }); if (data["premiumDistributed"] == false) { distributePremium(); } } }
     });
   }
+
   Future<void> distributePremium() async {
     try {
       var me = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get(); if (!me.exists) return; var data = me.data()!; if (data["premiumDistributed"] == true) return; String l1 = data["referredBy"]?? "";
@@ -190,9 +195,11 @@ class _HomeScreenState extends State<HomeScreen> {
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"premiumDistributed": true});
     } catch (e) { debugPrint("dist error $e"); }
   }
+
   void openPremium() { Navigator.push(context, MaterialPageRoute(builder: (_) => PremiumPayScreen(mobile: widget.mobile, onPaid: (){}))); }
   void doLogout() async { await sp.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r)=>false); }
   void openHelp() async { Uri url = Uri.parse("https://wa.me/447397293594?text=Help ${widget.mobile}"); await launchUrl(url, mode: LaunchMode.externalApplication); }
+
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
       Row(children: [const Icon(Icons.casino, color: Colors.amber), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
@@ -215,6 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class WalletScreen extends StatefulWidget { final String mobile; const WalletScreen({super.key, required this.mobile}); @override State<WalletScreen> createState() => _WalletScreenState(); }
+
 class _WalletScreenState extends State<WalletScreen> {
   final upiCtrl = TextEditingController(); int wallet = 0; bool loading = true; String existingUpi = ""; String myPassword = "";
   @override void initState() { super.initState(); loadWallet(); }
@@ -222,7 +230,6 @@ class _WalletScreenState extends State<WalletScreen> {
   Future<void> saveUpi() async {
     String newUpi = upiCtrl.text.trim(); if (newUpi.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI dalo"))); return; }
     if (existingUpi.isEmpty) { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi}); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Set Ho Gaya"))); Navigator.pop(context); return; }
-    if (newUpi == existingUpi) { Navigator.pop(context); return; }
     TextEditingController passCtrl = TextEditingController(); bool? ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(backgroundColor: const Color(0xFF1E1E2E), title: const Text("Password Daalo", style: TextStyle(color: Colors.white, fontSize: 13)), content: TextField(controller: passCtrl, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(filled: true, fillColor: const Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")), ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("Verify"))]));
     if (ok!= true) return; if (passCtrl.text.trim()!= myPassword) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password galat"))); return; }
     await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi}); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Change Ho Gaya"))); Navigator.pop(context);
@@ -231,6 +238,7 @@ class _WalletScreenState extends State<WalletScreen> {
 }
 
 class PremiumPayScreen extends StatefulWidget { final String mobile; final VoidCallback onPaid; const PremiumPayScreen({super.key, required this.mobile, required this.onPaid}); @override State<PremiumPayScreen> createState() => _PremiumPayScreenState(); }
+
 class _PremiumPayScreenState extends State<PremiumPayScreen> {
   final String myUpiId = "kumar131@fam"; bool loading = false;
   Future<void> payUpi() async { String url = "upi://pay?pa=$myUpiId&pn=LUDO&am=500&cu=INR"; await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication); }
@@ -243,6 +251,7 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
 }
 
 class MyTeamScreen extends StatefulWidget { final String mobile; const MyTeamScreen({super.key, required this.mobile}); @override State<MyTeamScreen> createState() => _MyTeamScreenState(); }
+
 class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderStateMixin {
   late TabController tabCtrl; List<DocumentSnapshot> l1 = []; List<DocumentSnapshot> l2 = []; List<DocumentSnapshot> l3 = []; List<DocumentSnapshot> earn = []; bool loading = true;
   @override void initState() { super.initState(); tabCtrl = TabController(length: 4, vsync: this); fetchTeam(); }
