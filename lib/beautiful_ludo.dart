@@ -34,10 +34,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void _createRoomWithCodeDialog() async {
     String c = genCode();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $c bana rahe hain...")));
+
     try {
-      final db = getRtdb();
-      print("Creating room $c on ${db.databaseURL}");
-      await db.ref("ludo_rooms/$c/game").set({
+      getRtdb().ref("ludo_rooms/$c/game").set({
         "pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]],
         "turn": 0,
         "diceGreen": 1,
@@ -45,14 +44,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
         "canMove": false,
         "gameOver": false,
         "createdAt": ServerValue.timestamp
-      }).timeout(Duration(seconds: 10));
-      print("Room $c CREATED SUCCESS");
+      });
     } catch(e) {
-      print("CREATE FAILED: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("FAILED: $e"), backgroundColor: Colors.red, duration: Duration(seconds: 6))
-      );
-      return;
+      print("Set error: $e");
     }
 
     showDialog(context: context, builder: (_) => AlertDialog(
