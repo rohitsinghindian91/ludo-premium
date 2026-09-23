@@ -2,6 +2,7 @@
 // ignore_for_file: type=lint
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) { throw UnsupportedError('DefaultFirebaseOptions have not been configured for web - you can reconfigure this by running the FlutterFire CLI again.'); }
@@ -14,5 +15,13 @@ class DefaultFirebaseOptions {
       default: throw UnsupportedError('DefaultFirebaseOptions are not supported for this platform.');
     }
   }
-  static const FirebaseOptions android = FirebaseOptions(apiKey: 'AIzaSyCWLEeS-TrsVabQT9rltt5dXN0-omR9qBc', appId: '1:472725834005:android:d6dde95567e0b44a8e411c', messagingSenderId: '472725834005', projectId: 'ludo-premium-50-e427e', storageBucket: 'ludo-premium-50-e427e.firebasestorage.app',);
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyCWLEeS-TrsVabQT9rltt5dXN0-omR9qBc', 
+    appId: '1:472725834005:android:d6dde95567e0b44a8e411c', 
+    messagingSenderId: '472725834005', 
+    projectId: 'ludo-premium-50-e427e', 
+    storageBucket: 'ludo-premium-50-e427e.firebasestorage.app',
+    databaseURL: 'https://ludo-premium-50-default-rtdb.asia-southeast1.firebasedatabase.app',
+  );
 }
