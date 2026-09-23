@@ -108,18 +108,18 @@ class _HomePageState extends State<HomePage> {
       if (l1.isNotEmpty) {
         var l1Doc = await FirebaseFirestore.instance.collection("users").doc(l1).get();
         if (l1Doc.exists) {
-          int w1 = l1Doc.data()?["wallet"]?? 0; await FirebaseFirestore.instance.collection("users").doc(l1).update({"wallet": w1 + 200});
-          await FirebaseFirestore.instance.collection("earnings").add({"to": l1, "from": widget.mobile, "amount": 200, "type": "L1 Premium", "time": FieldValue.serverTimestamp()});
+          await FirebaseFirestore.instance.collection("users").doc(l1).update({"wallet": FieldValue.increment(100)});
+          await FirebaseFirestore.instance.collection("earnings").add({"to": l1, "from": widget.mobile, "amount": 100, "type": "L1 Premium", "time": FieldValue.serverTimestamp()});
           String l2 = l1Doc.data()?["referredBy"]?? "";
           if (l2.isNotEmpty) {
             var l2Doc = await FirebaseFirestore.instance.collection("users").doc(l2).get();
             if (l2Doc.exists) {
-              int w2 = l2Doc.data()?["wallet"]?? 0; await FirebaseFirestore.instance.collection("users").doc(l2).update({"wallet": w2 + 100});
-              await FirebaseFirestore.instance.collection("earnings").add({"to": l2, "from": widget.mobile, "amount": 100, "type": "L2 Premium", "time": FieldValue.serverTimestamp()});
+              await FirebaseFirestore.instance.collection("users").doc(l2).update({"wallet": FieldValue.increment(50)});
+              await FirebaseFirestore.instance.collection("earnings").add({"to": l2, "from": widget.mobile, "amount": 50, "type": "L2 Premium", "time": FieldValue.serverTimestamp()});
               String l3 = l2Doc.data()?["referredBy"]?? "";
               if (l3.isNotEmpty) {
                 var l3Doc = await FirebaseFirestore.instance.collection("users").doc(l3).get();
-                if (l3Doc.exists) { int w3 = l3Doc.data()?["wallet"]?? 0; await FirebaseFirestore.instance.collection("users").doc(l3).update({"wallet": w3 + 50}); await FirebaseFirestore.instance.collection("earnings").add({"to": l3, "from": widget.mobile, "amount": 50, "type": "L3 Premium", "time": FieldValue.serverTimestamp()}); }
+                if (l3Doc.exists) { await FirebaseFirestore.instance.collection("users").doc(l3).update({"wallet": FieldValue.increment(25)}); await FirebaseFirestore.instance.collection("earnings").add({"to": l3, "from": widget.mobile, "amount": 25, "type": "L3 Premium", "time": FieldValue.serverTimestamp()}); }
               }
             }
           }
@@ -190,6 +190,8 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Buy Premium"), backgroundColor: Colors.amber), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [const Text("Premium Rs 500", style: TextStyle(color: Colors.white, fontSize: 22)), const SizedBox(height: 20), SelectableText(myUpiId, style: const TextStyle(color: Colors.amber, fontSize: 20)), const SizedBox(height: 20), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: payUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("PAY Rs 500"))), const SizedBox(height: 12), loading? const CircularProgressIndicator() : SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: sendSS, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SEND SCREENSHOT", style: TextStyle(color: Colors.black)))) ])));
   }
 }
+
+class LobbyScreen extends StatelessWidget { const LobbyScreen({super.key}); @override Widget build(BuildContext context) { return Scaffold(backgroundColor: Color(0xFF0A0E1A), appBar: AppBar(title: Text("Lobby"), backgroundColor: Colors.amber), body: Center(child: Text("Ludo Lobby", style: TextStyle(color: Colors.white)))); } }
 
 class MyTeamScreen extends StatefulWidget { final String mobile; const MyTeamScreen({super.key, required this.mobile}); @override State<MyTeamScreen> createState() => _MyTeamScreenState(); }
 class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderStateMixin {
