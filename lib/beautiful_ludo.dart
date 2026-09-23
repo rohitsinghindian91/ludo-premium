@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'main.dart';
 
 const String agoraAppId = "0772d1c90f7646a0a2d5649a41cf7632";
+const String agoraToken = "[STRIPPED 159 bytes]";
 
 enum GameMode { online, offline, bot }
 
@@ -21,8 +22,20 @@ class _LobbyScreenState extends State<LobbyScreen> {
   final codeCtrl = TextEditingController();
   String genCode() => (Random().nextInt(9000) + 1000).toString();
 
-  void _createRoomWithCodeDialog() {
+  void _createRoomWithCodeDialog() async {
     String c = genCode();
+    try {
+      await FirebaseDatabase.instance.ref("ludo_rooms/$c/game").set({
+        "pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]],
+        "turn": 0,
+        "diceGreen": 1,
+        "diceRed": 1,
+        "canMove": false,
+        "gameOver": false,
+        "createdAt": DateTime.now().millisecondsSinceEpoch
+      });
+    } catch(e) { debugPrint("Create room error $e"); }
+
     showDialog(context: context, builder: (_) => AlertDialog(
       backgroundColor: Color(0xFF1E1E2E),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -49,11 +62,20 @@ class _LobbyScreenState extends State<LobbyScreen> {
     ));
   }
 
-  void joinRoom() {
+  void joinRoom() async {
     String code = codeCtrl.text.trim();
     if(code.length!= 4){
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("4 digit code dalo")));
       return;
+    }
+    try {
+      var snap = await FirebaseDatabase.instance.ref("ludo_rooms/$code/game").get();
+      if(!snap.exists){
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code mila hi nahi")));
+        return;
+      }
+    } catch(e){
+      debugPrint("Join check error $e");
     }
     Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
   }
@@ -204,7 +226,8 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       await agoraEngine!.setEnableSpeakerphone(true);
       int myUid = widget.myPlayer + 1;
       try {
-        await agoraEngine!.joinChannel(token: "", channelId: widget.roomId, uid: myUid, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication));
+        // TOKEN SET KAR DIYA
+        await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: myUid, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication));
         setState(()=> isAgoraJoined = true);
       } catch(e){ debugPrint("Agora error $e"); }
       roomRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/game");
@@ -272,11 +295,12 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   int get dice => turn == 0? diceGreen : diceRed;
   bool get isMyTurn { if (widget.mode == GameMode.offline) return true; if (widget.mode == GameMode.bot) return turn == 0; return turn == widget.myPlayer; }
   bool isValidMove(int p, int idx, int d) { int cur = pos[p][idx]; if (cur == 45) return false; if (cur == -1) return d == 6; if (cur >= 40) return cur + d <= 45; int dist = (homeEntry[p] - cur + 40) % 40; if (d == dist + 1) return true; if (d > dist + 1) return false; return true; }
-  void sendMessage() {
+  void sendMessage() async {
     if (chatCtrl.text.trim().isEmpty) return;
     String name = myName; String text = chatCtrl.text.trim(); chatCtrl.clear();
-    if(widget.mode == GameMode.online && chatRef!= null) chatRef!.push().set({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch});
-    else setState(() { chatMessages.add({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); });
+    if(widget.mode == GameMode.online && chatRef!= null) {
+      try { await chatRef!.push().set({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); } catch(e){ debugPrint("Chat error: $e"); }
+    } else setState(() { chatMessages.add({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); });
   }
   void toggleMic() async { setState(() => isMicOn =!isMicOn); if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
   void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); }
