@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:share_plus/share_plus.dart';
 import 'beautiful_ludo.dart';
 import 'plan_screen.dart';
 import 'friends_screen.dart';
@@ -16,94 +15,166 @@ void main() async {
   runApp(const MaterialApp(debugShowCheckedModeBanner: false, home: Splash()));
 }
 
-class Splash extends StatefulWidget { const Splash({super.key}); @override State<Splash> createState() => _SplashState(); }
+class Splash extends StatefulWidget {
+  const Splash({super.key});
+  @override
+  State<Splash> createState() => _SplashState();
+}
+
 class _SplashState extends State<Splash> {
-  @override void initState() { super.initState(); checkUser(); }
+  @override
+  void initState() {
+    super.initState();
+    checkUser();
+  }
+
   Future<void> checkUser() async {
     var sp = await SharedPreferences.getInstance();
     var m = sp.getString("mobile");
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
-    if (m!= null && m.isNotEmpty) { Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomePage(mobile: m))); }
-    else { Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage())); }
+    if (m!= null && m.isNotEmpty) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomePage(mobile: m)));
+    } else {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+    }
   }
-  @override Widget build(BuildContext context) {
-    return const Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.casino_rounded, size: 80, color: Colors.amber), SizedBox(height: 16), CircularProgressIndicator(color: Colors.amber), SizedBox(height: 10), Text("LUDO PREMIUM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))])));
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFF0A0E1A),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.casino_rounded, size: 80, color: Colors.amber),
+            SizedBox(height: 16),
+            CircularProgressIndicator(color: Colors.amber),
+            SizedBox(height: 10),
+            Text("LUDO PREMIUM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+          ],
+        ),
+      ),
+    );
   }
 }
 
-class LoginPage extends StatefulWidget { const LoginPage({super.key}); @override State<LoginPage> createState() => _LoginPageState(); }
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
 class _LoginPageState extends State<LoginPage> {
-  final nameCtrl = TextEditingController(); final mobileCtrl = TextEditingController(); final passCtrl = TextEditingController(); final referCtrl = TextEditingController();
+  final nameCtrl = TextEditingController();
+  final mobileCtrl = TextEditingController();
+  final passCtrl = TextEditingController();
+  final referCtrl = TextEditingController();
+
   Future<void> goOtp() async {
-    if (nameCtrl.text.trim().length < 2) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Naam dalo"))); return; }
-    if (mobileCtrl.text.trim().length!= 10) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("10 digit mobile dalo"))); return; }
-    if (passCtrl.text.trim().length < 4) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password 4 digit"))); return; }
+    if (nameCtrl.text.trim().length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Naam dalo")));
+      return;
+    }
+    if (mobileCtrl.text.trim().length!= 10) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("10 digit mobile dalo")));
+      return;
+    }
+    if (passCtrl.text.trim().length < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password 4 digit")));
+      return;
+    }
     if (!mounted) return;
-    Navigator.push(context, MaterialPageRoute(builder: (_) => OtpPage(name: nameCtrl.text.trim(), mobile: mobileCtrl.text.trim(), password: passCtrl.text.trim(), referral: referCtrl.text.trim())));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OtpPage(
+          name: nameCtrl.text.trim(),
+          mobile: mobileCtrl.text.trim(),
+          password: passCtrl.text.trim(),
+          referral: referCtrl.text.trim(),
+        ),
+      ),
+    );
   }
-  @override Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(children: [
-      Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.amber, Colors.orange.shade700]), shape: BoxShape.circle), child: const Icon(Icons.casino_rounded, size: 50, color: Colors.black)),
-      const SizedBox(height: 16), const Text("LUDO PREMIUM", style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)), const SizedBox(height: 30),
-      TextField(controller: nameCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Apna Naam", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
-      const SizedBox(height: 12),
-      TextField(controller: mobileCtrl, keyboardType: TextInputType.phone, maxLength: 10, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Mobile", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
-      const SizedBox(height: 12),
-      TextField(controller: passCtrl, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Password", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
-      const SizedBox(height: 12),
-      TextField(controller: referCtrl, keyboardType: TextInputType.phone, maxLength: 10, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Referral Code (Optional)", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
-      const SizedBox(height: 20),
-      SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: goOtp, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))), child: const Text("NEXT", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)))),
-    ])))));
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [Colors.amber, Colors.orange.shade700]),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.casino_rounded, size: 50, color: Colors.black),
+              ),
+              const SizedBox(height: 16),
+              const Text("LUDO PREMIUM", style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 30),
+              TextField(controller: nameCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Apna Naam", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
+              const SizedBox(height: 12),
+              TextField(controller: mobileCtrl, keyboardType: TextInputType.phone, maxLength: 10, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Mobile", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
+              const SizedBox(height: 12),
+              TextField(controller: passCtrl, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Password", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
+              const SizedBox(height: 12),
+              TextField(controller: referCtrl, keyboardType: TextInputType.phone, maxLength: 10, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Referral Code (Optional)", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
+              const SizedBox(height: 20),
+              SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: goOtp, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))), child: const Text("NEXT", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)))),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
-class OtpPage extends StatefulWidget { final String name, mobile, password, referral; const OtpPage({super.key, required this.name, required this.mobile, required this.password, required this.referral}); @override State<OtpPage> createState() => _OtpPageState(); }
+class OtpPage extends StatefulWidget {
+  final String name, mobile, password, referral;
+  const OtpPage({super.key, required this.name, required this.mobile, required this.password, required this.referral});
+  @override State<OtpPage> createState() => _OtpPageState();
+}
 class _OtpPageState extends State<OtpPage> {
   final otpCtrl = TextEditingController(); bool load = false;
   Future<void> verifyOtp() async {
     if (otpCtrl.text.trim()!= "1234") { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("OTP 1234 dalo"))); return; }
     setState(() => load = true);
     var doc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
-    if (!doc.exists) {
-      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({"name": widget.name, "mobile": widget.mobile, "password": widget.password, "referralCode": widget.mobile, "referredBy": widget.referral, "wallet": 0, "upi": "", "isPremium": false, "premiumExpiry": null, "premiumDistributed": false, "createdAt": FieldValue.serverTimestamp()});
-    }
+    if (!doc.exists) { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({"name": widget.name, "mobile": widget.mobile, "password": widget.password, "referralCode": widget.mobile, "referredBy": widget.referral, "wallet": 0, "upi": "", "isPremium": false, "premiumExpiry": null, "premiumDistributed": false, "createdAt": FieldValue.serverTimestamp()}); }
     var sp = await SharedPreferences.getInstance(); await sp.setString("mobile", widget.mobile);
     setState(() => load = false);
     if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => HomePage(mobile: widget.mobile)), (r) => false);
   }
   @override Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: const Color(0xFF0A0E1A), title: const Text("OTP Verify")), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-      const Text("OTP 1234 hai", style: TextStyle(color: Colors.white54)), const SizedBox(height: 20),
-      TextField(controller: otpCtrl, keyboardType: TextInputType.number, maxLength: 4, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 32, letterSpacing: 12, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
-      const SizedBox(height: 20),
-      load? const CircularProgressIndicator(color: Colors.amber) : SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: verifyOtp, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))), child: const Text("VERIFY 1234", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)))),
-    ])));
+    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: const Color(0xFF0A0E1A), title: const Text("OTP Verify")), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [const Text("OTP 1234 hai", style: TextStyle(color: Colors.white54)), const SizedBox(height: 20), TextField(controller: otpCtrl, keyboardType: TextInputType.number, maxLength: 4, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 32, letterSpacing: 12, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))), const SizedBox(height: 20), load? const CircularProgressIndicator(color: Colors.amber) : SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: verifyOtp, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))), child: const Text("VERIFY 1234", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900))))])));
   }
 }
 
 class HomePage extends StatefulWidget { final String mobile; const HomePage({super.key, required this.mobile}); @override State<HomePage> createState() => _HomePageState(); }
 class _HomePageState extends State<HomePage> {
-  int wallet = 0; String upi = ""; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = "";
+  int wallet = 0; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = "";
   @override void initState() { super.initState(); listenUser(); }
   void listenUser() {
     FirebaseFirestore.instance.collection("users").doc(widget.mobile).snapshots().listen((d) async {
       if (!d.exists) return; var data = d.data()!; if (!mounted) return;
-      setState(() { wallet = data["wallet"]?? 0; upi = data["upi"]?? ""; myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; });
+      setState(() { wallet = data["wallet"]?? 0; myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; });
       if (referredBy.isNotEmpty && referredByName.isEmpty) { var refDoc = await FirebaseFirestore.instance.collection("users").doc(referredBy).get(); if (refDoc.exists) { if (mounted) setState(() => referredByName = refDoc.data()?["name"]?? referredBy); } }
-      if (data["isPremium"] == true) {
-        if (data["premiumExpiry"]!= null) {
-          DateTime exp = (data["premiumExpiry"] as Timestamp).toDate();
-          if (exp.isAfter(DateTime.now())) { setState(() { isPrem = true; expiry = "${exp.day}/${exp.month}/${exp.year}"; }); if (data["premiumDistributed"] == false) { distributePremium(); } }
-        }
+      if (data["isPremium"] == true && data["premiumExpiry"]!= null) {
+        DateTime exp = (data["premiumExpiry"] as Timestamp).toDate();
+        if (exp.isAfter(DateTime.now())) { setState(() { isPrem = true; expiry = "${exp.day}/${exp.month}/${exp.year}"; }); if (data["premiumDistributed"] == false) { distributePremium(); } }
       }
     });
   }
   Future<void> distributePremium() async {
     try {
-      var me = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
-      if (!me.exists) return; var data = me.data()!; if (data["premiumDistributed"] == true) return;
+      var me = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get(); if (!me.exists) return; var data = me.data()!; if (data["premiumDistributed"] == true) return;
       String l1 = data["referredBy"]?? "";
       if (l1.isNotEmpty) {
         var l1Doc = await FirebaseFirestore.instance.collection("users").doc(l1).get();
@@ -117,10 +188,7 @@ class _HomePageState extends State<HomePage> {
               await FirebaseFirestore.instance.collection("users").doc(l2).update({"wallet": FieldValue.increment(50)});
               await FirebaseFirestore.instance.collection("earnings").add({"to": l2, "from": widget.mobile, "amount": 50, "type": "L2 Premium", "time": FieldValue.serverTimestamp()});
               String l3 = l2Doc.data()?["referredBy"]?? "";
-              if (l3.isNotEmpty) {
-                var l3Doc = await FirebaseFirestore.instance.collection("users").doc(l3).get();
-                if (l3Doc.exists) { await FirebaseFirestore.instance.collection("users").doc(l3).update({"wallet": FieldValue.increment(25)}); await FirebaseFirestore.instance.collection("earnings").add({"to": l3, "from": widget.mobile, "amount": 25, "type": "L3 Premium", "time": FieldValue.serverTimestamp()}); }
-              }
+              if (l3.isNotEmpty) { var l3Doc = await FirebaseFirestore.instance.collection("users").doc(l3).get(); if (l3Doc.exists) { await FirebaseFirestore.instance.collection("users").doc(l3).update({"wallet": FieldValue.increment(25)}); await FirebaseFirestore.instance.collection("earnings").add({"to": l3, "from": widget.mobile, "amount": 25, "type": "L3 Premium", "time": FieldValue.serverTimestamp()}); } }
             }
           }
         }
@@ -130,14 +198,14 @@ class _HomePageState extends State<HomePage> {
   }
   void openPremium() { Navigator.push(context, MaterialPageRoute(builder: (_) => PremiumPayScreen(mobile: widget.mobile, onPaid: () {}))); }
   void doLogout() async { var sp = await SharedPreferences.getInstance(); await sp.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false); }
-  void openHelp() async { String num = "447397293594"; String msg = "Help ${widget.mobile}"; Uri url = Uri.parse("https://wa.me/$num?text=${Uri.encodeComponent(msg)}"); await launchUrl(url, mode: LaunchMode.externalApplication); }
+  void openHelp() async { Uri url = Uri.parse("https://wa.me/447397293594?text=Help ${widget.mobile}"); await launchUrl(url, mode: LaunchMode.externalApplication); }
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
       Row(children: [const Icon(Icons.casino, color: Colors.amber), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
       const SizedBox(height: 16),
       Container(width: double.infinity, padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: LinearGradient(colors: isPrem? [Colors.amber, Colors.orange] : [Color(0xFF1E293B), Color(0xFF151A2B)]), borderRadius: BorderRadius.circular(16)), child: Text(isPrem? "PREMIUM ACTIVE Till $expiry" : "FREE USER - Buy Premium", style: TextStyle(color: isPrem? Colors.black : Colors.white, fontWeight: FontWeight.bold))),
       const SizedBox(height: 12),
-      Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("My Refer Code (Locked): $myCode", style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)), Text("Name Locked: $myName", style: const TextStyle(color: Colors.white54, fontSize: 10)), Text(referredBy.isEmpty? "Referred By: Direct (No Refer)" : "Referred By (Locked): ${referredByName.isEmpty? referredBy : referredByName} | Code: $referredBy | Last4: ****${referredBy.length >= 4? referredBy.substring(referredBy.length - 4) : referredBy}", style: const TextStyle(color: Colors.white54, fontSize: 10)) ])),
+      Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("My Refer Code (Locked): $myCode", style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)), Text("Name Locked: $myName", style: const TextStyle(color: Colors.white54, fontSize: 10)), Text(referredBy.isEmpty? "Referred By: Direct" : "Referred By: ${referredByName.isEmpty? referredBy : referredByName} | Last4: ****${referredBy.length >= 4? referredBy.substring(referredBy.length - 4) : referredBy}", style: const TextStyle(color: Colors.white54, fontSize: 10))])),
       const SizedBox(height: 16),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: () { if (!isPrem) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pehle Premium Lo"))); openPremium(); return; } Navigator.push(context, MaterialPageRoute(builder: (_) => LobbyScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("PLAY LUDO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
       const SizedBox(height: 12),
@@ -162,15 +230,15 @@ class _WalletScreenState extends State<WalletScreen> {
   }
   Future<void> saveUpi() async {
     String newUpi = upiCtrl.text.trim(); if (newUpi.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI dalo"))); return; }
-    if (existingUpi.isEmpty) { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi}); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Set Ho Gaya - Locked"))); Navigator.pop(context); return; }
+    if (existingUpi.isEmpty) { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi}); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Set Ho Gaya"))); Navigator.pop(context); return; }
     if (newUpi == existingUpi) { Navigator.pop(context); return; }
     TextEditingController passCtrl = TextEditingController();
-    bool? ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(backgroundColor: Color(0xFF1E1E2E), title: const Text("Password Daalo UPI Change Ke Liye", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)), content: TextField(controller: passCtrl, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "Login Password", hintStyle: TextStyle(color: Colors.white54), filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")), ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("Verify", style: TextStyle(color: Colors.black))) ]));
-    if (ok!= true) return; if (passCtrl.text.trim()!= myPassword) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password galat hai"))); return; }
+    bool? ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(backgroundColor: Color(0xFF1E1E2E), title: const Text("Password Daalo", style: TextStyle(color: Colors.white, fontSize: 13)), content: TextField(controller: passCtrl, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "Login Password", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")), ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("Verify"))]));
+    if (ok!= true) return; if (passCtrl.text.trim()!= myPassword) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password galat"))); return; }
     await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi}); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Change Ho Gaya"))); Navigator.pop(context);
   }
   @override Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Wallet"), backgroundColor: Colors.amber), body: loading? const Center(child: CircularProgressIndicator()) : Padding(padding: const EdgeInsets.all(20), child: Column(children: [Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontSize: 36, fontWeight: FontWeight.bold)), const SizedBox(height: 20), TextField(controller: upiCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "UPI ID", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))), const SizedBox(height: 20), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: saveUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SAVE", style: TextStyle(color: Colors.black)))) ])));
+    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Wallet"), backgroundColor: Colors.amber), body: loading? const Center(child: CircularProgressIndicator()) : Padding(padding: const EdgeInsets.all(20), child: Column(children: [Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontSize: 36, fontWeight: FontWeight.bold)), const SizedBox(height: 20), TextField(controller: upiCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "UPI ID", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))), const SizedBox(height: 20), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: saveUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SAVE")))])));
   }
 }
 
@@ -180,12 +248,11 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
   Future<void> payUpi() async { String url = "upi://pay?pa=$myUpiId&pn=LUDO&am=500&cu=INR"; await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication); }
   Future<void> sendSS() async {
     final picker = ImagePicker(); final XFile? img = await picker.pickImage(source: ImageSource.gallery); if (img == null) return;
-    setState(() { loading = true; });
-    await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({"mobile": widget.mobile, "amount": 500, "status": "CHECK", "time": Timestamp.now()});
-    String num = "447397293594"; Uri wa = Uri.parse("https://wa.me/$num?text=Check ${widget.mobile}"); await launchUrl(wa, mode: LaunchMode.externalApplication); setState(() { loading = false; });
+    setState(() { loading = true; }); await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({"mobile": widget.mobile, "amount": 500, "status": "CHECK", "time": Timestamp.now()});
+    Uri wa = Uri.parse("https://wa.me/447397293594?text=Check ${widget.mobile}"); await launchUrl(wa, mode: LaunchMode.externalApplication); setState(() { loading = false; });
   }
   @override Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Buy Premium"), backgroundColor: Colors.amber), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [const Text("Premium Rs 500", style: TextStyle(color: Colors.white, fontSize: 22)), const SizedBox(height: 20), SelectableText(myUpiId, style: const TextStyle(color: Colors.amber, fontSize: 20)), const SizedBox(height: 20), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: payUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("PAY Rs 500"))), const SizedBox(height: 12), loading? const CircularProgressIndicator() : SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: sendSS, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SEND SCREENSHOT", style: TextStyle(color: Colors.black)))) ])));
+    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Buy Premium"), backgroundColor: Colors.amber), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [const Text("Premium Rs 500", style: TextStyle(color: Colors.white, fontSize: 22)), const SizedBox(height: 20), SelectableText(myUpiId, style: const TextStyle(color: Colors.amber, fontSize: 20)), const SizedBox(height: 20), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: payUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("PAY Rs 500"))), const SizedBox(height: 12), loading? const CircularProgressIndicator() : SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: sendSS, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SEND SCREENSHOT")))])));
   }
 }
 
