@@ -10,9 +10,6 @@ import 'package:flutter/services.dart';
 
 const String agoraAppId = "0772d1c90f7646a0a2d5649a41cf7632";
 
-void main() {
-  runApp(MaterialApp(debugShowCheckedModeBanner: false, theme: ThemeData.dark(), home: LobbyScreen()));
-}
 enum GameMode { online, offline, bot }
 
 class LobbyScreen extends StatefulWidget {
@@ -43,12 +40,46 @@ class _LobbyScreenState extends State<LobbyScreen> {
       ]),
       actions: [
         TextButton(onPressed: ()=>Navigator.pop(context), child: Text("Band karo")),
-        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: (){
+        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: () async {
           Navigator.pop(context);
+          try {
+            var gameRef = FirebaseDatabase.instance.ref("ludo_rooms/$c/game");
+            var snap = await gameRef.get();
+            if(!snap.exists){
+              await gameRef.set({
+                "pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]],
+                "turn": 0,
+                "diceGreen": 1,
+                "diceRed": 1,
+                "canMove": false,
+                "gameOver": false,
+                "createdAt": DateTime.now().millisecondsSinceEpoch
+              });
+            }
+          } catch(e){ debugPrint("Room create error: $e"); }
           Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
         }, child: Text("GAME SHURU KARO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))
       ],
     ));
+  }
+
+  Future<void> joinRoom() async {
+    String code = codeCtrl.text.trim();
+    if(code.length!= 4) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("4 digit code dalo")));
+      return;
+    }
+    try {
+      var gameRef = FirebaseDatabase.instance.ref("ludo_rooms/$code/game");
+      var snap = await gameRef.get().timeout(Duration(seconds: 5));
+      if(!snap.exists){
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code nahi mila! Host ne CREATE kiya kya?")));
+        return;
+      }
+      Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
+    } catch(e){
+      Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
+    }
   }
 
   @override Widget build(BuildContext context) {
@@ -66,7 +97,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
       SizedBox(height: 10),
       TextField(controller: codeCtrl, maxLength: 4, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: TextStyle(letterSpacing: 8, fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white), decoration: InputDecoration(counterText: "", hintText: "CODE", hintStyle: TextStyle(color: Colors.white30), filled: true, fillColor: Color(0xFF1E1E2E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
       SizedBox(height: 8),
-      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: () { if (codeCtrl.text.length == 4) Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: codeCtrl.text, myPlayer: 1, mode: GameMode.online))); }, child: Text("JOIN ROOM - ONLINE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)))),
+      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: joinRoom, child: Text("JOIN ROOM - ONLINE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)))),
     ]))));
   }
 }
@@ -85,27 +116,15 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
   String? myQueueKey;
   Timer? _timer;
 
-  @override void initState() {
-    super.initState();
-    startQuickMatch();
-  }
-
-  @override void dispose() {
-    _timer?.cancel();
-    if(myQueueKey!= null) {
-      try { queueRef.child(myQueueKey!).remove(); } catch(_){}
-    }
-    super.dispose();
-  }
+  @override void initState() { super.initState(); startQuickMatch(); }
+  @override void dispose() { _timer?.cancel(); if(myQueueKey!= null) { try { queueRef.child(myQueueKey!).remove(); } catch(_){} } super.dispose(); }
 
   void launchBot() {
     if(botLaunched) return;
     botLaunched = true;
     _timer?.cancel();
     searching = false;
-    if(myQueueKey!= null) {
-      try { queueRef.child(myQueueKey!).remove(); } catch(_){}
-    }
+    if(myQueueKey!= null) { try { queueRef.child(myQueueKey!).remove(); } catch(_){} }
     if(!mounted) return;
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot)));
   }
@@ -113,13 +132,8 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
   Future<void> startQuickMatch() async {
     _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       if(!mounted) { timer.cancel(); return; }
-      if(countdown > 0) {
-        setState((){ countdown--; });
-      } else {
-        launchBot();
-      }
+      if(countdown > 0) { setState((){ countdown--; }); } else { launchBot(); }
     });
-
     try {
       var snap = await queueRef.get().timeout(Duration(seconds: 3));
       String? foundRoomId; String? foundKey;
@@ -145,16 +159,9 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: foundRoomId!, myPlayer: 1, mode: GameMode.online)));
         return;
       }
-
       myRoomId = (Random().nextInt(9000)+1000).toString();
       myQueueKey = queueRef.push().key!;
-      await queueRef.child(myQueueKey!).set({
-        "roomId": myRoomId,
-        "hostId": myId,
-        "status": "waiting",
-        "createdAt": DateTime.now().millisecondsSinceEpoch
-      }).timeout(Duration(seconds: 3));
-
+      await queueRef.child(myQueueKey!).set({"roomId": myRoomId, "hostId": myId, "status": "waiting", "createdAt": DateTime.now().millisecondsSinceEpoch}).timeout(Duration(seconds: 3));
       queueRef.child(myQueueKey!).onValue.listen((event) async {
         if(event.snapshot.value!= null && mounted && searching &&!botLaunched){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -168,12 +175,8 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
           }
         }
       });
-
-    } catch(e){
-      debugPrint("Firebase slow: $e");
-    }
+    } catch(e){ debugPrint("Firebase slow: $e"); }
   }
-
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       CircularProgressIndicator(color: Colors.orange, strokeWidth: 6),
@@ -236,6 +239,19 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       } catch(e){ debugPrint("Agora error $e"); }
       roomRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/game");
       chatRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/chats");
+      roomRef!.onValue.listen((event){
+        if(event.snapshot.value!= null && mounted){
+          var data = Map<String,dynamic>.from(event.snapshot.value as Map);
+          setState((){
+            if(data['pos']!= null) { try { var raw = data['pos'] as List; pos = List<List<int>>.from(raw.map((e)=> List<int>.from((e as List).map((x)=> x as int)))); } catch(_){} }
+            if(data['turn']!= null) turn = data['turn'] as int;
+            if(data['diceGreen']!= null) diceGreen = data['diceGreen'] as int;
+            if(data['diceRed']!= null) diceRed = data['diceRed'] as int;
+            if(data['canMove']!= null) canMove = data['canMove'] as bool;
+            if(data['gameOver']!= null) gameOver = data['gameOver'] as bool;
+          });
+        }
+      });
       var playersRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/players/${widget.myPlayer}");
       if(myMobile!= null) await playersRef.set({"mobile": myMobile, "name": myName, "player": widget.myPlayer, "joinedAt": DateTime.now().millisecondsSinceEpoch});
       else await playersRef.set({"mobile": "guest_${myId}", "name": myName, "player": widget.myPlayer, "joinedAt": DateTime.now().millisecondsSinceEpoch});
@@ -250,19 +266,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           else setState(()=> opponentName = "Real User");
         }
       });
-      roomRef!.onValue.listen((event){
-        if(event.snapshot.value!= null && mounted){
-          var data = Map<String,dynamic>.from(event.snapshot.value as Map);
-          setState((){
-            if(data['pos']!= null) { try { var raw = data['pos'] as List; pos = List<List<int>>.from(raw.map((e)=> List<int>.from((e as List).map((x)=> x as int)))); } catch(_){} }
-            if(data['turn']!= null) turn = data['turn'] as int;
-            if(data['diceGreen']!= null) diceGreen = data['diceGreen'] as int;
-            if(data['diceRed']!= null) diceRed = data['diceRed'] as int;
-            if(data['canMove']!= null) canMove = data['canMove'] as bool;
-            if(data['gameOver']!= null) gameOver = data['gameOver'] as bool;
-          });
-        }
-      });
       chatRef!.onChildAdded.listen((event){
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -270,7 +273,9 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           setState((){ chatMessages.add({"player": player, "msg": msg, "time": data['time']}); });
         }
       });
-      if(widget.myPlayer == 0) roomRef!.get().then((snap){ if(!snap.exists){ syncRoom(); } });
+      if(widget.myPlayer == 0) {
+        roomRef!.get().then((snap){ if(!snap.exists){ syncRoom(); } });
+      }
     } else { setState(()=> opponentName = selectedBotName); }
   }
 
