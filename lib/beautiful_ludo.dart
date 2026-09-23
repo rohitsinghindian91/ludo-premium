@@ -84,18 +84,8 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
   String? myQueueKey;
   Timer? _timer;
 
-  @override void initState() {
-    super.initState();
-    startQuickMatch();
-  }
-
-  @override void dispose() {
-    _timer?.cancel();
-    if(myQueueKey!= null){
-      queueRef.child(myQueueKey!).remove();
-    }
-    super.dispose();
-  }
+  @override void initState() { super.initState(); startQuickMatch(); }
+  @override void dispose() { _timer?.cancel(); if(myQueueKey!= null) queueRef.child(myQueueKey!).remove(); super.dispose(); }
 
   Future<void> startQuickMatch() async {
     try {
@@ -122,16 +112,9 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: foundRoomId!, myPlayer: 1, mode: GameMode.online)));
         return;
       }
-
       myRoomId = (Random().nextInt(9000)+1000).toString();
       myQueueKey = queueRef.push().key!;
-      await queueRef.child(myQueueKey!).set({
-        "roomId": myRoomId,
-        "hostId": myId,
-        "status": "waiting",
-        "createdAt": DateTime.now().millisecondsSinceEpoch
-      });
-
+      await queueRef.child(myQueueKey!).set({"roomId": myRoomId, "hostId": myId, "status": "waiting", "createdAt": DateTime.now().millisecondsSinceEpoch});
       queueRef.child(myQueueKey!).onValue.listen((event) async {
         if(event.snapshot.value!= null && mounted && searching){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -144,15 +127,10 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
           }
         }
       });
-
       _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-        if(!mounted) {
-          timer.cancel();
-          return;
-        }
-        if(countdown > 0) {
-          setState((){ countdown--; });
-        } else {
+        if(!mounted) { timer.cancel(); return; }
+        if(countdown > 0) { setState((){ countdown--; }); }
+        else {
           timer.cancel();
           if(searching && mounted) {
             setState((){ searching = false; });
@@ -161,15 +139,11 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
           }
         }
       });
-
     } catch(e){
       _timer?.cancel();
-      if(mounted) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot)));
-      }
+      if(mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot)));
     }
   }
-
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       CircularProgressIndicator(color: Colors.orange, strokeWidth: 6),
@@ -216,11 +190,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     var sp = await SharedPreferences.getInstance();
     myMobile = sp.getString("mobile");
     if(myMobile!= null){
-      try {
-        var doc = await FirebaseFirestore.instance.collection("users").doc(myMobile).get();
-        myName = doc.data()?["name"]?? "You";
-        if(mounted) setState((){});
-      } catch(e){}
+      try { var doc = await FirebaseFirestore.instance.collection("users").doc(myMobile).get(); myName = doc.data()?["name"]?? "You"; if(mounted) setState((){}); } catch(e){}
     }
     if(widget.mode == GameMode.online){
       await [Permission.microphone].request();
@@ -237,27 +207,17 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       roomRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/game");
       chatRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/chats");
       var playersRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/players/${widget.myPlayer}");
-      if(myMobile!= null) {
-        await playersRef.set({"mobile": myMobile, "name": myName, "player": widget.myPlayer, "joinedAt": DateTime.now().millisecondsSinceEpoch});
-      } else {
-        await playersRef.set({"mobile": "guest_${myId}", "name": myName, "player": widget.myPlayer, "joinedAt": DateTime.now().millisecondsSinceEpoch});
-      }
+      if(myMobile!= null) await playersRef.set({"mobile": myMobile, "name": myName, "player": widget.myPlayer, "joinedAt": DateTime.now().millisecondsSinceEpoch});
+      else await playersRef.set({"mobile": "guest_${myId}", "name": myName, "player": widget.myPlayer, "joinedAt": DateTime.now().millisecondsSinceEpoch});
       FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/players/${1 - widget.myPlayer}").onValue.listen((event) async {
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
           String? oppMob = data["mobile"]?.toString();
           String? oppName = data["name"]?.toString();
           if(oppMob!= null) opponentMobile = oppMob;
-          if(oppName!= null && oppName.isNotEmpty){
-            setState(()=> opponentName = oppName);
-          } else if(oppMob!= null &&!oppMob.startsWith("guest")){
-            try {
-              var uDoc = await FirebaseFirestore.instance.collection("users").doc(oppMob).get();
-              if(uDoc.exists && mounted) setState(()=> opponentName = uDoc.data()?["name"]?? "Real User");
-            } catch(e){}
-          } else {
-            setState(()=> opponentName = "Real User");
-          }
+          if(oppName!= null && oppName.isNotEmpty) setState(()=> opponentName = oppName);
+          else if(oppMob!= null &&!oppMob.startsWith("guest")){ try { var uDoc = await FirebaseFirestore.instance.collection("users").doc(oppMob).get(); if(uDoc.exists && mounted) setState(()=> opponentName = uDoc.data()?["name"]?? "Real User"); } catch(e){} }
+          else setState(()=> opponentName = "Real User");
         }
       });
       roomRef!.onValue.listen((event){
@@ -280,35 +240,19 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           setState((){ chatMessages.add({"player": player, "msg": msg, "time": data['time']}); });
         }
       });
-      if(widget.myPlayer == 0){
-        roomRef!.get().then((snap){ if(!snap.exists){ syncRoom(); } });
-      }
-    } else {
-      setState(()=> opponentName = selectedBotName);
-    }
+      if(widget.myPlayer == 0) roomRef!.get().then((snap){ if(!snap.exists){ syncRoom(); } });
+    } else { setState(()=> opponentName = selectedBotName); }
   }
 
   String get myId => Random().nextInt(999999).toString();
   Future<void> addFriendFromGame() async {
-    if(widget.mode == GameMode.bot){
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$selectedBotName BOT hai, add nahi hogi 😅")));
-      return;
-    }
-    if(widget.mode == GameMode.offline){
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("OFFLINE me add nahi hota")));
-      return;
-    }
-    if(opponentMobile.isEmpty || opponentMobile.startsWith("guest")){
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Opponent abhi connect nahi hua")));
-      return;
-    }
+    if(widget.mode == GameMode.bot){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$selectedBotName BOT hai, add nahi hogi 😅"))); return; }
+    if(widget.mode == GameMode.offline){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("OFFLINE me add nahi hota"))); return; }
+    if(opponentMobile.isEmpty || opponentMobile.startsWith("guest")){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Opponent abhi connect nahi hua"))); return; }
     await sendFriendRequest(opponentMobile, opponentName);
   }
   Future<void> sendFriendRequest(String toMobile, String toName) async {
-    if(myMobile==null){
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login karo pehle")));
-      return;
-    }
+    if(myMobile==null){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login karo pehle"))); return; }
     var doc = await FirebaseFirestore.instance.collection("users").doc(toMobile).get();
     if(!doc.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$toName nahi mila"))); return; }
     var q = await FirebaseFirestore.instance.collection("friend_requests").where("from", isEqualTo: myMobile).where("to", isEqualTo: toMobile).where("status", isEqualTo: "pending").get();
@@ -326,14 +270,9 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
 
   void sendMessage() {
     if (chatCtrl.text.trim().isEmpty) return;
-    String name = myName;
-    String text = chatCtrl.text.trim();
-    chatCtrl.clear();
-    if(widget.mode == GameMode.online && chatRef!= null){
-      chatRef!.push().set({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch});
-    } else {
-      setState(() { chatMessages.add({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); });
-    }
+    String name = myName; String text = chatCtrl.text.trim(); chatCtrl.clear();
+    if(widget.mode == GameMode.online && chatRef!= null) chatRef!.push().set({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch});
+    else setState(() { chatMessages.add({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); });
   }
   void toggleMic() async { setState(() => isMicOn =!isMicOn); if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
   void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); }
@@ -393,13 +332,10 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     return Scaffold(
       backgroundColor: Color(0xFF0A0E1A),
       appBar: AppBar(backgroundColor: Color(0xFF151A2B),
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.mode == GameMode.offline? "OFFLINE - $myName" : widget.mode == GameMode.bot? "$myName vs $selectedBotName" : "ROOM ${widget.roomId} - $myName vs $opponentName", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-          if(widget.mode == GameMode.online) Text("Code: ${widget.roomId} - Tap to copy", style: TextStyle(fontSize: 9, color: Colors.amber, fontWeight: FontWeight.normal))
-        ]),
+        title: Text(widget.mode == GameMode.offline? "OFFLINE - $myName" : widget.mode == GameMode.bot? "$myName vs $selectedBotName" : "ROOM ${widget.roomId} - $myName vs $opponentName", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
         actions: [
           if(widget.mode == GameMode.online) IconButton(icon: Icon(Icons.copy, color: Colors.white70, size: 18), onPressed: (){ Clipboard.setData(ClipboardData(text: widget.roomId)); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room code copied: ${widget.roomId}"))); }),
-          IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent, size: 22), tooltip: "Add Friend", onPressed: addFriendFromGame),
+          IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent, size: 22), onPressed: addFriendFromGame),
           IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber, size: 22), onPressed: () => setState(() => showChat =!showChat))
         ]),
       body: Column(children: [
@@ -419,52 +355,29 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
               for (int j = 0; j < 5; j++) Positioned(left: getHomePathPos(1, j, s).dx - 7, top: getHomePathPos(1, j, s).dy - 7, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: Colors.red.shade200, shape: BoxShape.circle, border: Border.all(color: Colors.red.shade400)))),
               goti(0, 0, s), goti(0, 1, s), goti(0, 2, s), goti(0, 3, s), goti(1, 0, s), goti(1, 1, s), goti(1, 2, s), goti(1, 3, s)
             ]))),
+          // MIC / SPEAKER KO AB YAHAN SE HATA DIYA - AB KHALI JAGAH PE HAI
+          Positioned(top: 15, left: 0, right: 0, child: Center(child: Container(padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)), child: Row(mainAxisSize: MainAxisSize.min, children: [
+            GestureDetector(onTap: toggleMic, child: Container(padding: EdgeInsets.all(8), decoration: BoxDecoration(color: isMicOn? Colors.green : Colors.red, shape: BoxShape.circle), child: Icon(isMicOn? Icons.mic : Icons.mic_off, color: Colors.white, size: 18))),
+            SizedBox(width: 10),
+            GestureDetector(onTap: toggleSpeaker, child: Container(padding: EdgeInsets.all(8), decoration: BoxDecoration(color: isSpeakerOn? Colors.green : Colors.red, shape: BoxShape.circle), child: Icon(isSpeakerOn? Icons.volume_up : Icons.volume_off, color: Colors.white, size: 18))),
+            SizedBox(width: 10),
+            Text(isMicOn? "Mic On" : "Mic Off", style: TextStyle(color: Colors.white, fontSize: 10)),
+          ])))),
           if (showChat) Positioned(bottom: 0, left: 0, right: 0, child: Container(height: 380, decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)), border: Border.all(color: Colors.amber.withOpacity(0.5))), child: Column(children: [
             Container(padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("CHAT - $myName vs $opponentName", style: TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.bold)), GestureDetector(onTap: ()=> setState(()=> showChat=false), child: Container(padding: EdgeInsets.all(4), decoration: BoxDecoration(color: Colors.black, shape: BoxShape.circle), child: Icon(Icons.close, color: Colors.white, size: 16)))])),
             Expanded(child: ListView.builder(padding: EdgeInsets.all(10), itemCount: chatMessages.length, itemBuilder: (c, i) { var m = chatMessages[i]; bool isMe = m['player'] == myName; return Align(alignment: isMe? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: EdgeInsets.symmetric(vertical: 4), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8), constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7), decoration: BoxDecoration(color: isMe? Colors.green : Colors.white24, borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12), bottomLeft: isMe? Radius.circular(12) : Radius.circular(0), bottomRight: isMe? Radius.circular(0) : Radius.circular(12))), child: Text("${m['player']}: ${m['msg']}", style: TextStyle(fontSize: 13, color: Colors.white)))); })),
             Divider(height: 1, color: Colors.white10),
-            Container(
-              padding: EdgeInsets.fromLTRB(10, 8, 10, MediaQuery.of(context).viewInsets.bottom + 10),
-              color: Color(0xFF0A0E1A),
-              child: Row(children: [
-                Expanded(child: TextField(
-                  controller: chatCtrl,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => sendMessage(),
-                  style: TextStyle(color: Colors.white, fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: "Type message...",
-                    hintStyle: TextStyle(color: Colors.white54),
-                    filled: true,
-                    fillColor: Color(0xFF2A2A3E),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 18, vertical: 14)
-                  )
-                )),
+            Container(padding: EdgeInsets.fromLTRB(10, 8, 10, MediaQuery.of(context).viewInsets.bottom + 10), color: Color(0xFF0A0E1A), child: Row(children: [
+                Expanded(child: TextField(controller: chatCtrl, textInputAction: TextInputAction.send, onSubmitted: (_) => sendMessage(), style: TextStyle(color: Colors.white, fontSize: 14), decoration: InputDecoration(hintText: "Type message...", hintStyle: TextStyle(color: Colors.white54), filled: true, fillColor: Color(0xFF2A2A3E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none), contentPadding: EdgeInsets.symmetric(horizontal: 18, vertical: 14)))),
                 SizedBox(width: 10),
-                GestureDetector(
-                  onTap: sendMessage,
-                  child: Container(
-                    padding: EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
-                    child: Icon(Icons.send, color: Colors.black, size: 22)
-                  )
-                ),
-              ])
-            ),
+                GestureDetector(onTap: sendMessage, child: Container(padding: EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.amber, shape: BoxShape.circle), child: Icon(Icons.send, color: Colors.black, size: 22))),
+              ])),
           ])))
         ])),
         Container(margin: EdgeInsets.fromLTRB(10, 5, 10, 10), padding: EdgeInsets.symmetric(horizontal: 15, vertical: 12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(20), border: Border.all(color: turn==0? Colors.green : Colors.red, width: 1.5)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.casino, color: turn==0? Colors.green : Colors.red, size: 16), SizedBox(width: 6), Text("${turn == 0? myName : opponentName} KI BAARI ${isMyTurn? "(TAP DICE)" : ""}", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))])),
       ]),
-      floatingActionButton: showChat? null : Column(mainAxisSize: MainAxisSize.min, children: [
-        FloatingActionButton.small(heroTag: "mic", backgroundColor: isMicOn? Colors.green : Colors.red, onPressed: toggleMic, child: Icon(isMicOn? Icons.mic : Icons.mic_off, color: Colors.white, size: 20)),
-        SizedBox(height: 8),
-        FloatingActionButton.small(heroTag: "speaker", backgroundColor: isSpeakerOn? Colors.green : Colors.red, onPressed: toggleSpeaker, child: Icon(isSpeakerOn? Icons.volume_up : Icons.volume_off, color: Colors.white, size: 20)),
-        SizedBox(height: 8),
-        FloatingActionButton.small(heroTag: "addf", backgroundColor: Colors.blue, onPressed: addFriendFromGame, child: Icon(Icons.person_add, color: Colors.white, size: 20)),
-        SizedBox(height: 8),
-        FloatingActionButton.small(heroTag: "chat", backgroundColor: Colors.amber, onPressed: () => setState(() => showChat =!showChat), child: Icon(Icons.chat, color: Colors.black, size: 20)),
-      ]),
+      // FAB HATA DIYA - AB MIC UPAR HAI, CHAT KHULNE PE BHI SEND BUTTON SAHI DIKHEGA
+      floatingActionButton: showChat? null : FloatingActionButton.small(backgroundColor: Colors.amber, onPressed: () => setState(() => showChat =!showChat), child: Icon(Icons.chat, color: Colors.black, size: 20)),
     );
   }
 }
