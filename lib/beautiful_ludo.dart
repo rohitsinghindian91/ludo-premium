@@ -49,7 +49,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Firebase error: $e")));
       return;
     }
-
     showDialog(context: context, builder: (_) => AlertDialog(
       backgroundColor: Color(0xFF1E1E2E),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -89,7 +88,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
         return;
       }
     } catch(e){
-      debugPrint("Join check error $e");
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Join error: $e")));
       return;
     }
@@ -314,7 +312,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     if (chatCtrl.text.trim().isEmpty) return;
     String name = myName; String text = chatCtrl.text.trim(); chatCtrl.clear();
     if(widget.mode == GameMode.online && chatRef!= null) {
-      try { await chatRef!.push().set({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); } catch(e){ debugPrint("Chat error: $e"); }
+      try { await chatRef!.push().set({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); } catch(e){}
     } else setState(() { chatMessages.add({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); });
   }
   void toggleMic() async { setState(() => isMicOn =!isMicOn); if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
