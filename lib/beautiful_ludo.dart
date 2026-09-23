@@ -190,12 +190,8 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   }
 
   Future<void> initAgoraAndRoom() async {
-    try {
-      myMobile = sp.getString("mobile");
-    } catch (e) {
-      var localSp = await SharedPreferences.getInstance();
-      myMobile = localSp.getString("mobile");
-    }
+    var localSp = await SharedPreferences.getInstance();
+    myMobile = localSp.getString("mobile");
     if(myMobile!= null){
       try { var doc = await FirebaseFirestore.instance.collection("users").doc(myMobile).get(); myName = doc.data()?["name"]?? "You"; if(mounted) setState((){}); } catch(e){}
     }
