@@ -10,7 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 const String agoraAppId = "0772d1c90f7646a0a2d5649a41cf7632";
-const String agoraToken = "007eJxTYPh1YfP9e1y2v5p7p5p7p5p7p5p7";
+const String agoraToken = "007eJxTYPh1YfP9e1y2v5p7p5p7p5p7";
 
 const String rtdbUrl = "https://ludo-premium-50-default-rtdb.asia-southeast1.firebasedatabase.app";
 
@@ -33,21 +33,28 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
   void _createRoomWithCodeDialog() async {
     String c = genCode();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $c bana rahe hain...")));
     try {
-      await getRtdb().ref("ludo_rooms/$c/game").set({
+      final db = getRtdb();
+      print("Creating room $c on ${db.databaseURL}");
+      await db.ref("ludo_rooms/$c/game").set({
         "pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]],
         "turn": 0,
         "diceGreen": 1,
         "diceRed": 1,
         "canMove": false,
         "gameOver": false,
-        "createdAt": DateTime.now().millisecondsSinceEpoch
-      });
+        "createdAt": ServerValue.timestamp
+      }).timeout(Duration(seconds: 10));
+      print("Room $c CREATED SUCCESS");
     } catch(e) {
-      debugPrint("Create room error $e");
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Firebase error: $e")));
+      print("CREATE FAILED: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("FAILED: $e"), backgroundColor: Colors.red, duration: Duration(seconds: 6))
+      );
       return;
     }
+
     showDialog(context: context, builder: (_) => AlertDialog(
       backgroundColor: Color(0xFF1E1E2E),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -57,10 +64,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
         SizedBox(height: 12),
         Container(padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(12)),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(c, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 12, color: Colors.black)),
+            Text(c, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 8, color: Colors.black)),
             IconButton(icon: Icon(Icons.copy, color: Colors.black), onPressed: (){
               Clipboard.setData(ClipboardData(text: c));
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Code copy ho gaya: $c")));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Code copy: $c")));
             }),
           ]),
         ),
