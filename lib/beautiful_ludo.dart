@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
+import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -81,11 +82,18 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
   String myId = Random().nextInt(999999).toString();
   String? myRoomId;
   String? myQueueKey;
+  Timer? _timer;
 
-  @override void initState() { super.initState(); startQuickMatch(); }
+  @override void initState() {
+    super.initState();
+    startQuickMatch();
+  }
 
   @override void dispose() {
-    if(myQueueKey!= null) queueRef.child(myQueueKey!).remove();
+    _timer?.cancel();
+    if(myQueueKey!= null){
+      queueRef.child(myQueueKey!).remove();
+    }
     super.dispose();
   }
 
@@ -105,20 +113,30 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
         }
       }
       if(foundRoomId!= null && foundKey!= null){
+        if(!mounted) return;
         setState((){ statusText = "Real Dost mil gaya! Join ho rahe hain..."; });
         await queueRef.child(foundKey).update({"status": "matched", "guestId": myId});
         await Future.delayed(Duration(milliseconds: 500));
         if(!mounted) return;
+        _timer?.cancel();
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: foundRoomId!, myPlayer: 1, mode: GameMode.online)));
         return;
       }
+
       myRoomId = (Random().nextInt(9000)+1000).toString();
       myQueueKey = queueRef.push().key!;
-      await queueRef.child(myQueueKey!).set({"roomId": myRoomId, "hostId": myId, "status": "waiting", "createdAt": DateTime.now().millisecondsSinceEpoch});
+      await queueRef.child(myQueueKey!).set({
+        "roomId": myRoomId,
+        "hostId": myId,
+        "status": "waiting",
+        "createdAt": DateTime.now().millisecondsSinceEpoch
+      });
+
       queueRef.child(myQueueKey!).onValue.listen((event) async {
-        if(event.snapshot.value!= null && mounted){
+        if(event.snapshot.value!= null && mounted && searching){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
           if(data['status'] == 'matched' && data['guestId']!= null){
+            _timer?.cancel();
             setState((){ searching = false; statusText = "Real Dost mil gaya!"; });
             await Future.delayed(Duration(milliseconds: 500));
             if(!mounted) return;
@@ -126,18 +144,32 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
           }
         }
       });
-      for(int i=10; i>=0; i--){
-        if(!mounted ||!searching) break;
-        setState((){ countdown = i; });
-        await Future.delayed(Duration(seconds: 1));
-      }
-      if(searching && mounted){
+
+      _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+        if(!mounted) {
+          timer.cancel();
+          return;
+        }
+        if(countdown > 0) {
+          setState((){ countdown--; });
+        } else {
+          timer.cancel();
+          if(searching && mounted) {
+            setState((){ searching = false; });
+            queueRef.child(myQueueKey!).remove();
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot)));
+          }
+        }
+      });
+
+    } catch(e){
+      _timer?.cancel();
+      if(mounted) {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot)));
       }
-    } catch(e){
-      if(mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot)));
     }
   }
+
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       CircularProgressIndicator(color: Colors.orange, strokeWidth: 6),
@@ -377,7 +409,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
               gradient: LinearGradient(colors: [Color(0xFFFFF9C4), Color(0xFFE1F5FE), Color(0xFFFCE4EC)], begin: Alignment.topLeft, end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.amber, width: 4)),
             child: Stack(clipBehavior: Clip.none, children: [
-              // PREMIUM TEXT HATA DIYA - YAHAN SE
               Positioned(left: s*0.23, top: s*0.23, width: s*0.54, height: s*0.54, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)]), border: Border.all(color: Colors.white, width: 2)))),
               Positioned(left: 10, top: 10, width: box, height: box, child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFC8E6C9), Color(0xFFE8F5E9)]), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green, width: 3)))),
               Positioned(right: 10, bottom: 10, width: box, height: box, child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFFCDD2), Color(0xFFFFEBEE)]), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red, width: 3)))),
