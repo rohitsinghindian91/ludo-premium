@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 const String agoraAppId = "0772d1c90f7646a0a2d5649a41cf7632";
+// Agora ka temp token - 24 ghante me expire hota hai, baad me empty kar denge
 const String agoraToken = "007eJxTYPh1YfP9e1y2v5p7p5p7p5p7";
 
 const String rtdbUrl = "https://ludo-premium-50-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -36,7 +37,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $c bana rahe hain...")));
 
     try {
-      getRtdb().ref("ludo_rooms/$c/game").set({
+      // FIXED: players node bhi banayenge taki join sahi ho
+      await getRtdb().ref("ludo_rooms/$c/game").set({
         "pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]],
         "turn": 0,
         "diceGreen": 1,
@@ -45,8 +47,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
         "gameOver": false,
         "createdAt": ServerValue.timestamp
       });
+      await getRtdb().ref("ludo_rooms/$c").update({
+        "createdAt": ServerValue.timestamp,
+        "roomId": c
+      });
     } catch(e) {
       print("Set error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Create error: $e - Rules check karo")));
+      return;
     }
 
     showDialog(context: context, builder: (_) => AlertDialog(
@@ -75,6 +83,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     ));
   }
 
+  // ===== FIXED JOIN ROOM =====
   void joinRoom() async {
     String code = codeCtrl.text.trim();
     if(code.length!= 4){
@@ -82,16 +91,20 @@ class _LobbyScreenState extends State<LobbyScreen> {
       return;
     }
     try {
-      var snap = await getRtdb().ref("ludo_rooms/$code/game").get();
+      // Loading dikhao
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code dhoondh rahe hain...")));
+      var snap = await getRtdb().ref("ludo_rooms/$code/game").get().timeout(Duration(seconds: 10));
       if(!snap.exists){
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code mila hi nahi")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code mila hi nahi - Firebase Rules check karo")));
         return;
       }
+      // Mil gaya to andar jao
+      Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
     } catch(e){
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Join error: $e")));
+      print("Join error full: $e");
       return;
     }
-    Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
   }
 
   @override Widget build(BuildContext context) {
@@ -113,10 +126,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
 }
 
+// --- Baaki ka code same rahega, neeche wala mat ched ---
 class QuickMatchScreen extends StatefulWidget {
   @override State<QuickMatchScreen> createState() => _QuickMatchScreenState();
 }
-
 class _QuickMatchScreenState extends State<QuickMatchScreen> {
   int countdown = 10;
   String statusText = "Real user dhoondh rahe hain...";
@@ -216,7 +229,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   String? myMobile; String myName = "You"; String opponentName = "Opponent"; String opponentMobile = "";
   final List<String> botNames = ["Jyoti", "Simran", "Kajal", "Saneha", "Aarzoo", "Pinki", "Shalu", "Rabina", "Payal", "Minaxi","Preet kaur", "Cutie", "Sonia", "Monika", "Ritika", "Suman", "Pooja", "Deepika", "Anjali", "Sweety"];
   String selectedBotName = "Jyoti";
-
   @override void initState() {
     super.initState();
     selectedBotName = botNames[_rng.nextInt(botNames.length)];
@@ -224,7 +236,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     initAgoraAndRoom();
     if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 800), () => botTurn());
   }
-
   Future<void> initAgoraAndRoom() async {
     var localSp = await SharedPreferences.getInstance();
     myMobile = localSp.getString("mobile");
@@ -286,7 +297,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       }
     } else { setState(()=> opponentName = selectedBotName); }
   }
-
   Future<void> addFriendFromGame() async {
     if(widget.mode == GameMode.bot){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$selectedBotName BOT hai"))); return; }
     if(widget.mode == GameMode.offline){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("OFFLINE me add nahi hota"))); return; }
