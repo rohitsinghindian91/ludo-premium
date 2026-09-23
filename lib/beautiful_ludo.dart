@@ -10,16 +10,19 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 const String agoraAppId = "0772d1c90f7646a0a2d5649a41cf7632";
-// Agora ka temp token - 24 ghante me expire hota hai, baad me empty kar denge
-const String agoraToken = "007eJxTYPh1YfP9e1y2v5p7p5p7p5p7";
+const String agoraToken = "";
 
 const String rtdbUrl = "https://ludo-premium-50-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 FirebaseDatabase getRtdb() {
-  return FirebaseDatabase.instanceFor(
-    app: Firebase.app(),
-    databaseURL: rtdbUrl,
-  );
+  try {
+    return FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: rtdbUrl,
+    );
+  } catch (e) {
+    return FirebaseDatabase.instance;
+  }
 }
 
 enum GameMode { online, offline, bot }
@@ -35,9 +38,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void _createRoomWithCodeDialog() async {
     String c = genCode();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $c bana rahe hain...")));
-
     try {
-      // FIXED: players node bhi banayenge taki join sahi ho
       await getRtdb().ref("ludo_rooms/$c/game").set({
         "pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]],
         "turn": 0,
@@ -45,45 +46,39 @@ class _LobbyScreenState extends State<LobbyScreen> {
         "diceRed": 1,
         "canMove": false,
         "gameOver": false,
-        "createdAt": ServerValue.timestamp
-      });
-      await getRtdb().ref("ludo_rooms/$c").update({
-        "createdAt": ServerValue.timestamp,
-        "roomId": c
-      });
+        "createdAt": DateTime.now().millisecondsSinceEpoch,
+        "roomId": c,
+      }).timeout(Duration(seconds: 15));
+      if (!mounted) return;
+      showDialog(context: context, builder: (_) => AlertDialog(
+        backgroundColor: Color(0xFF1E1E2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text("Room Ban Gaya!", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text("Dost ko ye code bhejo:", style: TextStyle(color: Colors.white70, fontSize: 13)),
+          SizedBox(height: 12),
+          Container(padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(12)),
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text(c, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 8, color: Colors.black)),
+              IconButton(icon: Icon(Icons.copy, color: Colors.black), onPressed: (){
+                Clipboard.setData(ClipboardData(text: c));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Code copy: $c")));
+              }),
+            ]),
+          ),
+        ]),
+        actions: [
+          ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: (){
+            Navigator.pop(context);
+            Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
+          }, child: Text("GAME SHURU KARO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))
+        ],
+      ));
     } catch(e) {
-      print("Set error: $e");
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Create error: $e - Rules check karo")));
-      return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi bana: $e"), duration: Duration(seconds: 5)));
     }
-
-    showDialog(context: context, builder: (_) => AlertDialog(
-      backgroundColor: Color(0xFF1E1E2E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text("Room Ban Gaya!", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text("Dost ko ye code bhejo:", style: TextStyle(color: Colors.white70, fontSize: 13)),
-        SizedBox(height: 12),
-        Container(padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(12)),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(c, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 8, color: Colors.black)),
-            IconButton(icon: Icon(Icons.copy, color: Colors.black), onPressed: (){
-              Clipboard.setData(ClipboardData(text: c));
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Code copy: $c")));
-            }),
-          ]),
-        ),
-      ]),
-      actions: [
-        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: (){
-          Navigator.pop(context);
-          Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
-        }, child: Text("GAME SHURU KARO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))
-      ],
-    ));
   }
 
-  // ===== FIXED JOIN ROOM =====
   void joinRoom() async {
     String code = codeCtrl.text.trim();
     if(code.length!= 4){
@@ -91,18 +86,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
       return;
     }
     try {
-      // Loading dikhao
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code dhoondh rahe hain...")));
-      var snap = await getRtdb().ref("ludo_rooms/$code/game").get().timeout(Duration(seconds: 10));
+      var snap = await getRtdb().ref("ludo_rooms/$code/game").get().timeout(Duration(seconds: 15));
       if(!snap.exists){
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code mila hi nahi - Firebase Rules check karo")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code mila hi nahi")));
         return;
       }
-      // Mil gaya to andar jao
       Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
     } catch(e){
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Join error: $e")));
-      print("Join error full: $e");
       return;
     }
   }
@@ -126,10 +118,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
 }
 
-// --- Baaki ka code same rahega, neeche wala mat ched ---
 class QuickMatchScreen extends StatefulWidget {
   @override State<QuickMatchScreen> createState() => _QuickMatchScreenState();
 }
+
 class _QuickMatchScreenState extends State<QuickMatchScreen> {
   int countdown = 10;
   String statusText = "Real user dhoondh rahe hain...";
@@ -229,6 +221,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   String? myMobile; String myName = "You"; String opponentName = "Opponent"; String opponentMobile = "";
   final List<String> botNames = ["Jyoti", "Simran", "Kajal", "Saneha", "Aarzoo", "Pinki", "Shalu", "Rabina", "Payal", "Minaxi","Preet kaur", "Cutie", "Sonia", "Monika", "Ritika", "Suman", "Pooja", "Deepika", "Anjali", "Sweety"];
   String selectedBotName = "Jyoti";
+
   @override void initState() {
     super.initState();
     selectedBotName = botNames[_rng.nextInt(botNames.length)];
@@ -236,6 +229,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     initAgoraAndRoom();
     if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 800), () => botTurn());
   }
+
   Future<void> initAgoraAndRoom() async {
     var localSp = await SharedPreferences.getInstance();
     myMobile = localSp.getString("mobile");
@@ -297,6 +291,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       }
     } else { setState(()=> opponentName = selectedBotName); }
   }
+
   Future<void> addFriendFromGame() async {
     if(widget.mode == GameMode.bot){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$selectedBotName BOT hai"))); return; }
     if(widget.mode == GameMode.offline){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("OFFLINE me add nahi hota"))); return; }
