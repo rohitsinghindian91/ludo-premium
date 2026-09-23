@@ -16,11 +16,11 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCWLEeS-TrsVabQT9rltt5dXN0-omR9qBc', 
-    appId: '1:472725834005:android:d6dde95567e0b44a8e411c', 
-    messagingSenderId: '472725834005', 
-    projectId: 'ludo-premium-50-e427e', 
+    apiKey: 'AIzaSyCWLEeS-TrsVabQT9rltt5dXN0-omR9qBc',
+    appId: '1:472725834005:android:d6dde95567e0b44a8e411c',
+    messagingSenderId: '472725834005',
+    projectId: 'ludo-premium-50-e427e',
     storageBucket: 'ludo-premium-50-e427e.firebasestorage.app',
-    databaseURL: 'https://ludo-premium-50-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL: 'https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app',
   );
 }
