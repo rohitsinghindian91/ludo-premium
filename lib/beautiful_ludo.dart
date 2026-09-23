@@ -78,18 +78,50 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
   int countdown = 10;
   String statusText = "Real user dhoondh rahe hain...";
   bool searching = true;
+  bool botLaunched = false;
   DatabaseReference queueRef = FirebaseDatabase.instance.ref("quick_match_queue");
   String myId = Random().nextInt(999999).toString();
   String? myRoomId;
   String? myQueueKey;
   Timer? _timer;
 
-  @override void initState() { super.initState(); startQuickMatch(); }
-  @override void dispose() { _timer?.cancel(); if(myQueueKey!= null) queueRef.child(myQueueKey!).remove(); super.dispose(); }
+  @override void initState() {
+    super.initState();
+    startQuickMatch();
+  }
+
+  @override void dispose() {
+    _timer?.cancel();
+    if(myQueueKey!= null) {
+      try { queueRef.child(myQueueKey!).remove(); } catch(_){}
+    }
+    super.dispose();
+  }
+
+  void launchBot() {
+    if(botLaunched) return;
+    botLaunched = true;
+    _timer?.cancel();
+    searching = false;
+    if(myQueueKey!= null) {
+      try { queueRef.child(myQueueKey!).remove(); } catch(_){}
+    }
+    if(!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot)));
+  }
 
   Future<void> startQuickMatch() async {
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if(!mounted) { timer.cancel(); return; }
+      if(countdown > 0) {
+        setState((){ countdown--; });
+      } else {
+        launchBot();
+      }
+    });
+
     try {
-      var snap = await queueRef.get();
+      var snap = await queueRef.get().timeout(Duration(seconds: 3));
       String? foundRoomId; String? foundKey;
       if(snap.exists){
         for(var child in snap.children){
@@ -103,23 +135,32 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
         }
       }
       if(foundRoomId!= null && foundKey!= null){
-        if(!mounted) return;
+        if(!mounted || botLaunched) return;
         setState((){ statusText = "Real Dost mil gaya! Join ho rahe hain..."; });
         await queueRef.child(foundKey).update({"status": "matched", "guestId": myId});
         await Future.delayed(Duration(milliseconds: 500));
-        if(!mounted) return;
+        if(!mounted || botLaunched) return;
         _timer?.cancel();
+        botLaunched = true;
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: foundRoomId!, myPlayer: 1, mode: GameMode.online)));
         return;
       }
+
       myRoomId = (Random().nextInt(9000)+1000).toString();
       myQueueKey = queueRef.push().key!;
-      await queueRef.child(myQueueKey!).set({"roomId": myRoomId, "hostId": myId, "status": "waiting", "createdAt": DateTime.now().millisecondsSinceEpoch});
+      await queueRef.child(myQueueKey!).set({
+        "roomId": myRoomId,
+        "hostId": myId,
+        "status": "waiting",
+        "createdAt": DateTime.now().millisecondsSinceEpoch
+      }).timeout(Duration(seconds: 3));
+
       queueRef.child(myQueueKey!).onValue.listen((event) async {
-        if(event.snapshot.value!= null && mounted && searching){
+        if(event.snapshot.value!= null && mounted && searching &&!botLaunched){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
           if(data['status'] == 'matched' && data['guestId']!= null){
             _timer?.cancel();
+            botLaunched = true;
             setState((){ searching = false; statusText = "Real Dost mil gaya!"; });
             await Future.delayed(Duration(milliseconds: 500));
             if(!mounted) return;
@@ -127,23 +168,12 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
           }
         }
       });
-      _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-        if(!mounted) { timer.cancel(); return; }
-        if(countdown > 0) { setState((){ countdown--; }); }
-        else {
-          timer.cancel();
-          if(searching && mounted) {
-            setState((){ searching = false; });
-            queueRef.child(myQueueKey!).remove();
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot)));
-          }
-        }
-      });
+
     } catch(e){
-      _timer?.cancel();
-      if(mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot)));
+      debugPrint("Firebase slow: $e");
     }
   }
+
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       CircularProgressIndicator(color: Colors.orange, strokeWidth: 6),
@@ -355,7 +385,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
               for (int j = 0; j < 5; j++) Positioned(left: getHomePathPos(1, j, s).dx - 7, top: getHomePathPos(1, j, s).dy - 7, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: Colors.red.shade200, shape: BoxShape.circle, border: Border.all(color: Colors.red.shade400)))),
               goti(0, 0, s), goti(0, 1, s), goti(0, 2, s), goti(0, 3, s), goti(1, 0, s), goti(1, 1, s), goti(1, 2, s), goti(1, 3, s)
             ]))),
-          // MIC / SPEAKER KO AB YAHAN SE HATA DIYA - AB KHALI JAGAH PE HAI
           Positioned(top: 15, left: 0, right: 0, child: Center(child: Container(padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)), child: Row(mainAxisSize: MainAxisSize.min, children: [
             GestureDetector(onTap: toggleMic, child: Container(padding: EdgeInsets.all(8), decoration: BoxDecoration(color: isMicOn? Colors.green : Colors.red, shape: BoxShape.circle), child: Icon(isMicOn? Icons.mic : Icons.mic_off, color: Colors.white, size: 18))),
             SizedBox(width: 10),
@@ -376,7 +405,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         ])),
         Container(margin: EdgeInsets.fromLTRB(10, 5, 10, 10), padding: EdgeInsets.symmetric(horizontal: 15, vertical: 12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(20), border: Border.all(color: turn==0? Colors.green : Colors.red, width: 1.5)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.casino, color: turn==0? Colors.green : Colors.red, size: 16), SizedBox(width: 6), Text("${turn == 0? myName : opponentName} KI BAARI ${isMyTurn? "(TAP DICE)" : ""}", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))])),
       ]),
-      // FAB HATA DIYA - AB MIC UPAR HAI, CHAT KHULNE PE BHI SEND BUTTON SAHI DIKHEGA
       floatingActionButton: showChat? null : FloatingActionButton.small(backgroundColor: Colors.amber, onPressed: () => setState(() => showChat =!showChat), child: Icon(Icons.chat, color: Colors.black, size: 20)),
     );
   }
