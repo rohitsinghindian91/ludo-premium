@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -60,11 +59,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-class OtpPage extends StatefulWidget {
-  final String name, mobile, password, referral;
-  const OtpPage({super.key, required this.name, required this.mobile, required this.password, required this.referral});
-  @override State<OtpPage> createState() => _OtpPageState();
-}
+class OtpPage extends StatefulWidget { final String name, mobile, password, referral; const OtpPage({super.key, required this.name, required this.mobile, required this.password, required this.referral}); @override State<OtpPage> createState() => _OtpPageState(); }
 class _OtpPageState extends State<OtpPage> {
   final otpCtrl = TextEditingController(); bool load = false;
   Future<void> verifyOtp() async {
@@ -73,8 +68,6 @@ class _OtpPageState extends State<OtpPage> {
     var doc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
     if (!doc.exists) {
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({"name": widget.name, "mobile": widget.mobile, "password": widget.password, "referralCode": widget.mobile, "referredBy": widget.referral, "wallet": 0, "upi": "", "isPremium": false, "premiumExpiry": null, "premiumDistributed": false, "createdAt": FieldValue.serverTimestamp()});
-    } else {
-      // NAME LOCK - pehle wala naam hi rahega, change nahi hoga
     }
     var sp = await SharedPreferences.getInstance(); await sp.setString("mobile", widget.mobile);
     setState(() => load = false);
@@ -98,42 +91,42 @@ class _HomePageState extends State<HomePage> {
     FirebaseFirestore.instance.collection("users").doc(widget.mobile).snapshots().listen((d) async {
       if (!d.exists) return; var data = d.data()!; if (!mounted) return;
       setState(() { wallet = data["wallet"]?? 0; upi = data["upi"]?? ""; myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; });
-      if(referredBy.isNotEmpty && referredByName.isEmpty){ var refDoc = await FirebaseFirestore.instance.collection("users").doc(referredBy).get(); if(refDoc.exists){ if(mounted) setState(()=> referredByName = refDoc.data()?["name"]?? referredBy); } }
+      if (referredBy.isNotEmpty && referredByName.isEmpty) { var refDoc = await FirebaseFirestore.instance.collection("users").doc(referredBy).get(); if (refDoc.exists) { if (mounted) setState(() => referredByName = refDoc.data()?["name"]?? referredBy); } }
       if (data["isPremium"] == true) {
         if (data["premiumExpiry"]!= null) {
           DateTime exp = (data["premiumExpiry"] as Timestamp).toDate();
-          if (exp.isAfter(DateTime.now())) { setState(() { isPrem = true; expiry = "${exp.day}/${exp.month}/${exp.year}"; }); if(data["premiumDistributed"] == false){ distributePremium(); } }
+          if (exp.isAfter(DateTime.now())) { setState(() { isPrem = true; expiry = "${exp.day}/${exp.month}/${exp.year}"; }); if (data["premiumDistributed"] == false) { distributePremium(); } }
         }
       }
     });
   }
   Future<void> distributePremium() async {
-    try{
+    try {
       var me = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
-      if(!me.exists) return; var data = me.data()!; if(data["premiumDistributed"] == true) return;
+      if (!me.exists) return; var data = me.data()!; if (data["premiumDistributed"] == true) return;
       String l1 = data["referredBy"]?? "";
-      if(l1.isNotEmpty){
+      if (l1.isNotEmpty) {
         var l1Doc = await FirebaseFirestore.instance.collection("users").doc(l1).get();
-        if(l1Doc.exists){
+        if (l1Doc.exists) {
           int w1 = l1Doc.data()?["wallet"]?? 0; await FirebaseFirestore.instance.collection("users").doc(l1).update({"wallet": w1 + 200});
           await FirebaseFirestore.instance.collection("earnings").add({"to": l1, "from": widget.mobile, "amount": 200, "type": "L1 Premium", "time": FieldValue.serverTimestamp()});
           String l2 = l1Doc.data()?["referredBy"]?? "";
-          if(l2.isNotEmpty){
+          if (l2.isNotEmpty) {
             var l2Doc = await FirebaseFirestore.instance.collection("users").doc(l2).get();
-            if(l2Doc.exists){
+            if (l2Doc.exists) {
               int w2 = l2Doc.data()?["wallet"]?? 0; await FirebaseFirestore.instance.collection("users").doc(l2).update({"wallet": w2 + 100});
               await FirebaseFirestore.instance.collection("earnings").add({"to": l2, "from": widget.mobile, "amount": 100, "type": "L2 Premium", "time": FieldValue.serverTimestamp()});
               String l3 = l2Doc.data()?["referredBy"]?? "";
-              if(l3.isNotEmpty){
+              if (l3.isNotEmpty) {
                 var l3Doc = await FirebaseFirestore.instance.collection("users").doc(l3).get();
-                if(l3Doc.exists){ int w3 = l3Doc.data()?["wallet"]?? 0; await FirebaseFirestore.instance.collection("users").doc(l3).update({"wallet": w3 + 50}); await FirebaseFirestore.instance.collection("earnings").add({"to": l3, "from": widget.mobile, "amount": 50, "type": "L3 Premium", "time": FieldValue.serverTimestamp()}); }
+                if (l3Doc.exists) { int w3 = l3Doc.data()?["wallet"]?? 0; await FirebaseFirestore.instance.collection("users").doc(l3).update({"wallet": w3 + 50}); await FirebaseFirestore.instance.collection("earnings").add({"to": l3, "from": widget.mobile, "amount": 50, "type": "L3 Premium", "time": FieldValue.serverTimestamp()}); }
               }
             }
           }
         }
       }
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"premiumDistributed": true});
-    }catch(e){ debugPrint("dist error $e"); }
+    } catch (e) { debugPrint("dist error $e"); }
   }
   void openPremium() { Navigator.push(context, MaterialPageRoute(builder: (_) => PremiumPayScreen(mobile: widget.mobile, onPaid: () {}))); }
   void doLogout() async { var sp = await SharedPreferences.getInstance(); await sp.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false); }
@@ -144,11 +137,7 @@ class _HomePageState extends State<HomePage> {
       const SizedBox(height: 16),
       Container(width: double.infinity, padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: LinearGradient(colors: isPrem? [Colors.amber, Colors.orange] : [Color(0xFF1E293B), Color(0xFF151A2B)]), borderRadius: BorderRadius.circular(16)), child: Text(isPrem? "PREMIUM ACTIVE Till $expiry" : "FREE USER - Buy Premium", style: TextStyle(color: isPrem? Colors.black : Colors.white, fontWeight: FontWeight.bold))),
       const SizedBox(height: 12),
-      Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text("My Refer Code (Locked): $myCode", style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)),
-        Text("Name Locked: $myName", style: const TextStyle(color: Colors.white54, fontSize: 10)),
-        Text(referredBy.isEmpty? "Referred By: Direct (No Refer)" : "Referred By (Locked): ${referredByName.isEmpty? referredBy : referredByName} | Code: $referredBy | Last4: ****${referredBy.length>=4? referredBy.substring(referredBy.length-4) : referredBy}", style: const TextStyle(color: Colors.white54, fontSize: 10)),
-      ])),
+      Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("My Refer Code (Locked): $myCode", style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)), Text("Name Locked: $myName", style: const TextStyle(color: Colors.white54, fontSize: 10)), Text(referredBy.isEmpty? "Referred By: Direct (No Refer)" : "Referred By (Locked): ${referredByName.isEmpty? referredBy : referredByName} | Code: $referredBy | Last4: ****${referredBy.length >= 4? referredBy.substring(referredBy.length - 4) : referredBy}", style: const TextStyle(color: Colors.white54, fontSize: 10)) ])),
       const SizedBox(height: 16),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: () { if (!isPrem) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pehle Premium Lo"))); openPremium(); return; } Navigator.push(context, MaterialPageRoute(builder: (_) => LobbyScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("PLAY LUDO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
       const SizedBox(height: 12),
@@ -159,7 +148,8 @@ class _HomePageState extends State<HomePage> {
       Row(children: [Expanded(child: ElevatedButton(onPressed: () { Share.share("My Code $myCode"); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.white24), child: const Text("SHARE", style: TextStyle(color: Colors.white)))), const SizedBox(width: 8), Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => WalletScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF00BCD4)), child: const Text("UPI SET KARE", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold))))]),
       const SizedBox(height: 12),
       SizedBox(width: double.infinity, child: ElevatedButton(onPressed: isPrem? null : openPremium, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: Text(isPrem? "PREMIUM ACTIVE" : "BUY PREMIUM Rs 500", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 16)))),
-      const SizedBox(height: 12), TextButton(onPressed: openHelp, child: const Text("Help: +447397293594"))
+      const SizedBox(height: 12),
+      TextButton(onPressed: openHelp, child: const Text("Help: +447397293594")),
     ])))));
   }
 }
@@ -173,21 +163,16 @@ class _WalletScreenState extends State<WalletScreen> {
     if (d.exists) { setState(() { wallet = d.data()!["wallet"]?? 0; upiCtrl.text = d.data()!["upi"]?? ""; existingUpi = d.data()!["upi"]?? ""; myPassword = d.data()!["password"]?? ""; loading = false; }); }
   }
   Future<void> saveUpi() async {
-    String newUpi = upiCtrl.text.trim(); if(newUpi.isEmpty){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("UPI dalo"))); return; }
-    if(existingUpi.isEmpty){ await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi}); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("UPI Set Ho Gaya - Locked"))); Navigator.pop(context); return; }
-    if(newUpi == existingUpi){ Navigator.pop(context); return; }
+    String newUpi = upiCtrl.text.trim(); if (newUpi.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI dalo"))); return; }
+    if (existingUpi.isEmpty) { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi}); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Set Ho Gaya - Locked"))); Navigator.pop(context); return; }
+    if (newUpi == existingUpi) { Navigator.pop(context); return; }
     TextEditingController passCtrl = TextEditingController();
-    bool? ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(backgroundColor: Color(0xFF1E1E2E), title: Text("Password Daalo UPI Change Ke Liye", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)), content: TextField(controller: passCtrl, obscureText: true, style: TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "Login Password", hintStyle: TextStyle(color: Colors.white54), filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))), actions: [TextButton(onPressed: ()=> Navigator.pop(context, false), child: Text("Cancel")), ElevatedButton(onPressed: ()=> Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: Text("Verify", style: TextStyle(color: Colors.black)))],));
-    if(ok!= true) return; if(passCtrl.text.trim()!= myPassword){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Password galat hai"))); return; }
-    await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi}); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("UPI Change Ho Gaya"))); Navigator.pop(context);
+    bool? ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(backgroundColor: Color(0xFF1E1E2E), title: const Text("Password Daalo UPI Change Ke Liye", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)), content: TextField(controller: passCtrl, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "Login Password", hintStyle: TextStyle(color: Colors.white54), filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")), ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("Verify", style: TextStyle(color: Colors.black))) ]));
+    if (ok!= true) return; if (passCtrl.text.trim()!= myPassword) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password galat hai"))); return; }
+    await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi}); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Change Ho Gaya"))); Navigator.pop(context);
   }
   @override Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Wallet"), backgroundColor: Colors.amber), body: loading? const Center(child: CircularProgressIndicator()) : Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-      Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontSize: 36, fontWeight: FontWeight.bold)), const SizedBox(height: 20),
-      TextField(controller: upiCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "UPI ID", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
-      const SizedBox(height: 20),
-      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: saveUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SAVE", style: TextStyle(color: Colors.black))))
-    ])));
+    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Wallet"), backgroundColor: Colors.amber), body: loading? const Center(child: CircularProgressIndicator()) : Padding(padding: const EdgeInsets.all(20), child: Column(children: [Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontSize: 36, fontWeight: FontWeight.bold)), const SizedBox(height: 20), TextField(controller: upiCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "UPI ID", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))), const SizedBox(height: 20), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: saveUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SAVE", style: TextStyle(color: Colors.black)))) ])));
   }
 }
 
@@ -202,12 +187,7 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
     String num = "447397293594"; Uri wa = Uri.parse("https://wa.me/$num?text=Check ${widget.mobile}"); await launchUrl(wa, mode: LaunchMode.externalApplication); setState(() { loading = false; });
   }
   @override Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Buy Premium"), backgroundColor: Colors.amber), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-      const Text("Premium Rs 500", style: TextStyle(color: Colors.white, fontSize: 22)), const SizedBox(height: 20),
-      SelectableText(myUpiId, style: const TextStyle(color: Colors.amber, fontSize: 20)), const SizedBox(height: 20),
-      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: payUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("PAY Rs 500"))),
-      const SizedBox(height: 12), loading? const CircularProgressIndicator() : SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: sendSS, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SEND SCREENSHOT", style: TextStyle(color: Colors.black))))
-    ])));
+    return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Buy Premium"), backgroundColor: Colors.amber), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [const Text("Premium Rs 500", style: TextStyle(color: Colors.white, fontSize: 22)), const SizedBox(height: 20), SelectableText(myUpiId, style: const TextStyle(color: Colors.amber, fontSize: 20)), const SizedBox(height: 20), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: payUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("PAY Rs 500"))), const SizedBox(height: 12), loading? const CircularProgressIndicator() : SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: sendSS, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SEND SCREENSHOT", style: TextStyle(color: Colors.black)))) ])));
   }
 }
 
@@ -225,14 +205,14 @@ class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderSt
   Widget buildList(List<DocumentSnapshot> list, String emptyMsg) {
     if (list.isEmpty) { return Center(child: Text(emptyMsg, style: TextStyle(color: Colors.white54))); }
     return ListView.builder(itemCount: list.length, itemBuilder: (ctx, i) {
-      var data = list[i].data() as Map<String, dynamic>; String name = data["name"]?? "User"; String mob = data["mobile"]?? ""; String last4 = mob.length>=4? mob.substring(mob.length-4) : mob; String refCode = data["referralCode"]?? mob; String prem = data["isPremium"]==true? "PREMIUM" : "FREE";
+      var data = list[i].data() as Map<String, dynamic>; String name = data["name"]?? "User"; String mob = data["mobile"]?? ""; String last4 = mob.length >= 4? mob.substring(mob.length - 4) : mob; String refCode = data["referralCode"]?? mob; String prem = data["isPremium"] == true? "PREMIUM" : "FREE";
       return Container(margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ListTile(leading: CircleAvatar(backgroundColor: Colors.amber, child: Text(name.isNotEmpty? name[0].toUpperCase() : "U", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold))), title: Text(name, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)), subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("Code: $refCode | Last4: ****$last4", style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)), Text("Status: $prem", style: TextStyle(color: Colors.white54, fontSize: 9))])));
     });
   }
   Widget buildEarnList() {
     if (earn.isEmpty) { return Center(child: Text("No earning", style: TextStyle(color: Colors.white54))); }
     return ListView.builder(itemCount: earn.length, itemBuilder: (ctx, i) {
-      var d = earn[i].data() as Map; String fromMob = d["from"]?? ""; String last4 = fromMob.length>=4? fromMob.substring(fromMob.length-4) : fromMob;
+      var d = earn[i].data() as Map; String fromMob = d["from"]?? ""; String last4 = fromMob.length >= 4? fromMob.substring(fromMob.length - 4) : fromMob;
       return Container(margin: EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10)), child: ListTile(title: Text("${d["type"]} - Rs ${d["amount"]}", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12)), subtitle: Text("From: ****$last4 | Code: $fromMob", style: TextStyle(color: Colors.white54, fontSize: 10))));
     });
   }
