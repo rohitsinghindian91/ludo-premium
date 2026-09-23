@@ -7,10 +7,20 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'main.dart';
 
 const String agoraAppId = "0772d1c90f7646a0a2d5649a41cf7632";
-const String agoraToken = "[STRIPPED 159 bytes]";
+const String agoraToken = "[STRIPPED 97 bytes]";
+
+const String rtdbUrl = "https://ludo-premium-50-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+FirebaseDatabase getRtdb() {
+  return FirebaseDatabase.instanceFor(
+    app: Firebase.app(),
+    databaseURL: rtdbUrl,
+  );
+}
 
 enum GameMode { online, offline, bot }
 
@@ -25,7 +35,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void _createRoomWithCodeDialog() async {
     String c = genCode();
     try {
-      await FirebaseDatabase.instance.ref("ludo_rooms/$c/game").set({
+      await getRtdb().ref("ludo_rooms/$c/game").set({
         "pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]],
         "turn": 0,
         "diceGreen": 1,
@@ -34,7 +44,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
         "gameOver": false,
         "createdAt": DateTime.now().millisecondsSinceEpoch
       });
-    } catch(e) { debugPrint("Create room error $e"); }
+    } catch(e) {
+      debugPrint("Create room error $e");
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Firebase error: $e")));
+      return;
+    }
 
     showDialog(context: context, builder: (_) => AlertDialog(
       backgroundColor: Color(0xFF1E1E2E),
@@ -69,13 +83,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
       return;
     }
     try {
-      var snap = await FirebaseDatabase.instance.ref("ludo_rooms/$code/game").get();
+      var snap = await getRtdb().ref("ludo_rooms/$code/game").get();
       if(!snap.exists){
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code mila hi nahi")));
         return;
       }
     } catch(e){
       debugPrint("Join check error $e");
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Join error: $e")));
+      return;
     }
     Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
   }
@@ -108,7 +124,7 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
   String statusText = "Real user dhoondh rahe hain...";
   bool searching = true;
   bool botLaunched = false;
-  DatabaseReference queueRef = FirebaseDatabase.instance.ref("quick_match_queue");
+  DatabaseReference queueRef = getRtdb().ref("quick_match_queue");
   String myId = Random().nextInt(999999).toString();
   String? myRoomId;
   String? myQueueKey;
@@ -226,12 +242,11 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       await agoraEngine!.setEnableSpeakerphone(true);
       int myUid = widget.myPlayer + 1;
       try {
-        // TOKEN SET KAR DIYA
         await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: myUid, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication));
         setState(()=> isAgoraJoined = true);
       } catch(e){ debugPrint("Agora error $e"); }
-      roomRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/game");
-      chatRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/chats");
+      roomRef = getRtdb().ref("ludo_rooms/${widget.roomId}/game");
+      chatRef = getRtdb().ref("ludo_rooms/${widget.roomId}/chats");
       roomRef!.onValue.listen((event){
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -245,10 +260,10 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           });
         }
       });
-      var playersRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/players/${widget.myPlayer}");
+      var playersRef = getRtdb().ref("ludo_rooms/${widget.roomId}/players/${widget.myPlayer}");
       if(myMobile!= null) await playersRef.set({"mobile": myMobile, "name": myName, "player": widget.myPlayer, "joinedAt": DateTime.now().millisecondsSinceEpoch});
       else await playersRef.set({"mobile": "guest_${myId}", "name": myName, "player": widget.myPlayer, "joinedAt": DateTime.now().millisecondsSinceEpoch});
-      FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/players/${1 - widget.myPlayer}").onValue.listen((event) async {
+      getRtdb().ref("ludo_rooms/${widget.roomId}/players/${1 - widget.myPlayer}").onValue.listen((event) async {
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
           String? oppMob = data["mobile"]?.toString();
