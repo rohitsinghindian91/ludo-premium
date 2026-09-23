@@ -85,9 +85,7 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
   @override void initState() { super.initState(); startQuickMatch(); }
 
   @override void dispose() {
-    if(myQueueKey!= null){
-      queueRef.child(myQueueKey!).remove();
-    }
+    if(myQueueKey!= null) queueRef.child(myQueueKey!).remove();
     super.dispose();
   }
 
@@ -130,13 +128,10 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
       });
       for(int i=10; i>=0; i--){
         if(!mounted ||!searching) break;
-        setState((){ countdown = i; statusText = "Real user dhoondh rahe hain... $i sec"; });
+        setState((){ countdown = i; });
         await Future.delayed(Duration(seconds: 1));
       }
       if(searching && mounted){
-        setState((){ statusText = "Koi active nahi, BOT ke sath shuru kar rahe hain..."; });
-        await Future.delayed(Duration(milliseconds: 800));
-        if(!mounted) return;
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot)));
       }
     } catch(e){
@@ -145,10 +140,11 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
   }
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      CircularProgressIndicator(color: Colors.orange), SizedBox(height: 20),
-      Text(statusText, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
-      SizedBox(height: 12), Text("$countdown", style: TextStyle(color: Colors.amber, fontSize: 48, fontWeight: FontWeight.w900)),
-      SizedBox(height: 8), Text("10 second tak real user ka wait,\nnahi mila to BOT khelega", style: TextStyle(color: Colors.white54, fontSize: 11), textAlign: TextAlign.center),
+      CircularProgressIndicator(color: Colors.orange, strokeWidth: 6),
+      SizedBox(height: 30),
+      Text(statusText, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16), textAlign: TextAlign.center),
+      SizedBox(height: 20),
+      Text("$countdown", style: TextStyle(color: Colors.amber, fontSize: 72, fontWeight: FontWeight.w900)),
     ])));
   }
 }
@@ -173,11 +169,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   final safe = [0, 10, 20, 30]; final startPos = [0, 20]; final homeEntry = [39, 19];
   DatabaseReference? roomRef; DatabaseReference? chatRef;
   String? myMobile; String myName = "You"; String opponentName = "Opponent"; String opponentMobile = "";
-
-  final List<String> botNames = [
-    "Jyoti", "Simran", "Kajal", "Saneha", "Aarzoo", "Pinki", "Shalu", "Rabina", "Payal", "Minaxi",
-    "Preet kaur", "Cutie", "Sonia", "Monika", "Ritika", "Suman", "Pooja", "Deepika", "Anjali", "Sweety"
-  ];
+  final List<String> botNames = ["Jyoti", "Simran", "Kajal", "Saneha", "Aarzoo", "Pinki", "Shalu", "Rabina", "Payal", "Minaxi","Preet kaur", "Cutie", "Sonia", "Monika", "Ritika", "Suman", "Pooja", "Deepika", "Anjali", "Sweety"];
   String selectedBotName = "Jyoti";
 
   @override void initState() {
@@ -198,7 +190,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         if(mounted) setState((){});
       } catch(e){}
     }
-
     if(widget.mode == GameMode.online){
       await [Permission.microphone].request();
       agoraEngine = createAgoraRtcEngine();
@@ -211,7 +202,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         await agoraEngine!.joinChannel(token: "", channelId: widget.roomId, uid: myUid, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication));
         setState(()=> isAgoraJoined = true);
       } catch(e){ debugPrint("Agora error $e"); }
-
       roomRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/game");
       chatRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/chats");
       var playersRef = FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/players/${widget.myPlayer}");
@@ -220,7 +210,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       } else {
         await playersRef.set({"mobile": "guest_${myId}", "name": myName, "player": widget.myPlayer, "joinedAt": DateTime.now().millisecondsSinceEpoch});
       }
-
       FirebaseDatabase.instance.ref("ludo_rooms/${widget.roomId}/players/${1 - widget.myPlayer}").onValue.listen((event) async {
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -232,16 +221,13 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           } else if(oppMob!= null &&!oppMob.startsWith("guest")){
             try {
               var uDoc = await FirebaseFirestore.instance.collection("users").doc(oppMob).get();
-              if(uDoc.exists && mounted){
-                setState(()=> opponentName = uDoc.data()?["name"]?? "Real User");
-              }
+              if(uDoc.exists && mounted) setState(()=> opponentName = uDoc.data()?["name"]?? "Real User");
             } catch(e){}
           } else {
             setState(()=> opponentName = "Real User");
           }
         }
       });
-
       roomRef!.onValue.listen((event){
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -255,7 +241,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           });
         }
       });
-
       chatRef!.onChildAdded.listen((event){
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -263,7 +248,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           setState((){ chatMessages.add({"player": player, "msg": msg, "time": data['time']}); });
         }
       });
-
       if(widget.myPlayer == 0){
         roomRef!.get().then((snap){ if(!snap.exists){ syncRoom(); } });
       }
@@ -273,7 +257,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   }
 
   String get myId => Random().nextInt(999999).toString();
-
   Future<void> addFriendFromGame() async {
     if(widget.mode == GameMode.bot){
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$selectedBotName BOT hai, add nahi hogi 😅")));
@@ -289,7 +272,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     }
     await sendFriendRequest(opponentMobile, opponentName);
   }
-
   Future<void> sendFriendRequest(String toMobile, String toName) async {
     if(myMobile==null){
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login karo pehle")));
@@ -321,17 +303,8 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       setState(() { chatMessages.add({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); });
     }
   }
-
-  void toggleMic() async {
-    setState(() => isMicOn =!isMicOn);
-    if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isMicOn? "Mic ON" : "Mic OFF"), duration: Duration(milliseconds: 500)));
-  }
-  void toggleSpeaker() async {
-    setState(() => isSpeakerOn =!isSpeakerOn);
-    if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.setEnableSpeakerphone(isSpeakerOn);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isSpeakerOn? "Speaker ON" : "Speaker OFF"), duration: Duration(milliseconds: 500)));
-  }
+  void toggleMic() async { setState(() => isMicOn =!isMicOn); if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
+  void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); }
   void syncRoom(){ if(widget.mode == GameMode.online && roomRef!= null){ roomRef!.set({"pos": pos, "turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver}); } }
 
   void roll() {
@@ -346,7 +319,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       if (!any) { Future.delayed(Duration(milliseconds: 800), () { if (!mounted || gameOver) return; setState(() { turn = 1 - turn; canMove = false; if (d!= 6) consecutiveSixes = 0; }); syncRoom(); if (widget.mode == GameMode.bot && turn == 1) botTurn(); }); }
     });
   }
-
   void botTurn() { if (gameOver ||!mounted) return; if (widget.mode!= GameMode.bot) return; if (turn!= 1) return; rollBot(); }
   void rollBot() {
     setState(() => isRolling = true); _diceController.forward(from: 0);
@@ -364,7 +336,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     if (bestIdx == -1) { int maxPos = -2; for (int i = 0; i < 4; i++) { if (!isValidMove(1, i, diceRed)) continue; if (pos[1][i] > maxPos) { maxPos = pos[1][i]; bestIdx = i; } } }
     if (bestIdx!= -1) moveGoti(bestIdx);
   }
-
   void moveGoti(int idx) {
     if (!canMove || gameOver) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (!isValidMove(turn, idx, dice)) return;
     bool gotCut = false, isWin = false;
@@ -383,7 +354,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   Widget emptyDot() => SizedBox(width: 10, height: 10);
   Widget buildDiceFace(int v) { Widget d = dot(), e = emptyDot(); List<Widget> r1 = [e, e, e], r2 = [e, e, e], r3 = [e, e, e]; if (v == 1) r2 = [e, d, e]; else if (v == 2) { r1 = [d, e, e]; r3 = [e, e, d]; } else if (v == 3) { r1 = [d, e, e]; r2 = [e, d, e]; r3 = [e, e, d]; } else if (v == 4) { r1 = [d, e, d]; r3 = [d, e, d]; } else if (v == 5) { r1 = [d, e, d]; r2 = [e, d, e]; r3 = [d, e, d]; } else if (v == 6) { r1 = [d, e, d]; r2 = [d, e, d]; r3 = [d, e, d]; } return Container(width: 68, height: 68, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)), child: Padding(padding: EdgeInsets.all(8), child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r1), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r2), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r3)]))); }
   Widget diceNearHome(int p, int val) { bool isTurn = turn == p &&!canMove &&!gameOver; bool canTap = isTurn &&!isRolling && isMyTurn; if (widget.mode == GameMode.bot && p == 1) canTap = false; Color col = p == 0? Colors.green : Colors.red; bool rolling = isRolling && turn == p; return GestureDetector(onTap: canTap? roll : null, child: AnimatedBuilder(animation: _diceController, builder: (c, child) { double a = rolling? _diceController.value * 4 * pi : 0; return Transform.rotate(angle: a, child: child); }, child: AnimatedContainer(duration: Duration(milliseconds: 200), width: 85, height: 85, decoration: BoxDecoration(color: isTurn? col.withOpacity(0.20) : Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: isTurn? col : Colors.black12, width: isTurn? 3 : 1.5)), child: Center(child: rolling? buildDiceFace(_rng.nextInt(6) + 1) : buildDiceFace(val))))); }
-  Widget goti(int p, int t, double s) { int v = pos[p][t]; double boxSize = s * 0.14, pad = s * 0.02; Offset o; if (v == -1) { if (p == 0) { double bx = 10 + pad, by = 10 + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } else { double bx = s - 10 - boxSize + pad, by = s - 10 - boxSize + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } } else if (v == 45) { o = Offset(s / 2 + (t % 2 == 0? -8 : 8), s / 2 + (t < 2? -8 : 8)); } else if (v >= 40) { o = getHomePathPos(p, v - 40, s); } else { double r = s * 0.25, ang = (v / 40) * 2 * pi - pi / 2; o = Offset(s / 2 + r * cos(ang), s / 2 + r * sin(ang)); } bool act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver && isMyTurn; if (widget.mode == GameMode.offline) act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver; return Positioned(left: o.dx - 11, top: o.dy - 11, child: GestureDetector(onTap: act? () => moveGoti(t) : null, child: Container(width: act? 30 : 22, height: act? 30 : 22, decoration: BoxDecoration(color: p == 0? Colors.green : Colors.red, shape: BoxShape.circle, border: Border.all(color: act? Colors.yellow : Colors.white, width: 2), boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 2)])))); }
+  Widget goti(int p, int t, double s) { int v = pos[p][t]; double boxSize = s * 0.14, pad = s * 0.02; Offset o; if (v == -1) { if (p == 0) { double bx = 10 + pad, by = 10 + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } else { double bx = s - 10 - boxSize + pad, by = s - 10 - boxSize + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } } else if (v == 45) { o = Offset(s / 2 + (t % 2 == 0? -8 : 8), s / 2 + (t < 2? -8 : 8)); } else if (v >= 40) { o = getHomePathPos(p, v - 40, s); } else { double r = s * 0.25, ang = (v / 40) * 2 * pi - pi / 2; o = Offset(s / 2 + r * cos(ang), s / 2 + r * sin(ang)); } bool act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver && isMyTurn; if (widget.mode == GameMode.offline) act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver; return Positioned(left: o.dx - 11, top: o.dy - 11, child: GestureDetector(onTap: act? () => moveGoti(t) : null, child: Container(width: act? 28 : 20, height: act? 28 : 20, decoration: BoxDecoration(color: p == 0? Colors.green : Colors.red, shape: BoxShape.circle, border: Border.all(color: act? Colors.yellow : Colors.white, width: act? 2.5 : 1.5))))); }
 
   @override Widget build(BuildContext context) {
     double s = (MediaQuery.of(context).size.width < 400? MediaQuery.of(context).size.width : 400) - 20; double box = s * 0.14;
@@ -404,33 +375,57 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         Expanded(child: Stack(children: [
           Center(child: Container(width: s, height: s, decoration: BoxDecoration(
               gradient: LinearGradient(colors: [Color(0xFFFFF9C4), Color(0xFFE1F5FE), Color(0xFFFCE4EC)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-              borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.amber, width: 4), boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.4), blurRadius: 15, spreadRadius: 1)]),
+              borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.amber, width: 4)),
             child: Stack(clipBehavior: Clip.none, children: [
-              Center(child: Container(padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8), decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.black, Color(0xFF333333)]), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.amber, width: 1.5), boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 5)]), child: Text("🥰premium plan kesa lga🥰", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.amber), textAlign: TextAlign.center))),
+              // PREMIUM TEXT HATA DIYA - YAHAN SE
               Positioned(left: s*0.23, top: s*0.23, width: s*0.54, height: s*0.54, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)]), border: Border.all(color: Colors.white, width: 2)))),
               Positioned(left: 10, top: 10, width: box, height: box, child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFC8E6C9), Color(0xFFE8F5E9)]), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green, width: 3)))),
               Positioned(right: 10, bottom: 10, width: box, height: box, child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFFCDD2), Color(0xFFFFEBEE)]), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red, width: 3)))),
               Positioned(left: 8, top: box + 8, child: diceNearHome(0, diceGreen)),
               Positioned(right: 8, bottom: box + 8, child: diceNearHome(1, diceRed)),
-              for (int i = 0; i < 40; i++) Positioned(left: s / 2 + s * 0.25 * cos((i / 40) * 2 * pi - pi / 2) - 7, top: s / 2 + s * 0.25 * sin((i / 40) * 2 * pi - pi / 2) - 7, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: safe.contains(i)? Color(0xFFFFD700) : Colors.white, shape: BoxShape.circle, border: Border.all(color: safe.contains(i)? Colors.orange : Colors.black26, width: safe.contains(i)? 1.5 : 1), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 1)]))),
+              for (int i = 0; i < 40; i++) Positioned(left: s / 2 + s * 0.25 * cos((i / 40) * 2 * pi - pi / 2) - 7, top: s / 2 + s * 0.25 * sin((i / 40) * 2 * pi - pi / 2) - 7, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: safe.contains(i)? Color(0xFFFFD700) : Colors.white, shape: BoxShape.circle, border: Border.all(color: safe.contains(i)? Colors.orange : Colors.black26, width: safe.contains(i)? 1.5 : 1)))),
               for (int j = 0; j < 5; j++) Positioned(left: getHomePathPos(0, j, s).dx - 7, top: getHomePathPos(0, j, s).dy - 7, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: Colors.green.shade200, shape: BoxShape.circle, border: Border.all(color: Colors.green.shade400)))),
               for (int j = 0; j < 5; j++) Positioned(left: getHomePathPos(1, j, s).dx - 7, top: getHomePathPos(1, j, s).dy - 7, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: Colors.red.shade200, shape: BoxShape.circle, border: Border.all(color: Colors.red.shade400)))),
               goti(0, 0, s), goti(0, 1, s), goti(0, 2, s), goti(0, 3, s), goti(1, 0, s), goti(1, 1, s), goti(1, 2, s), goti(1, 3, s)
             ]))),
-          if (showChat) Positioned(bottom: 0, left: 0, right: 0, child: Container(height: 320, decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)), border: Border.all(color: Colors.amber.withOpacity(0.5))), child: Column(children: [
+          if (showChat) Positioned(bottom: 0, left: 0, right: 0, child: Container(height: 380, decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)), border: Border.all(color: Colors.amber.withOpacity(0.5))), child: Column(children: [
             Container(padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("CHAT - $myName vs $opponentName", style: TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.bold)), GestureDetector(onTap: ()=> setState(()=> showChat=false), child: Container(padding: EdgeInsets.all(4), decoration: BoxDecoration(color: Colors.black, shape: BoxShape.circle), child: Icon(Icons.close, color: Colors.white, size: 16)))])),
             Expanded(child: ListView.builder(padding: EdgeInsets.all(10), itemCount: chatMessages.length, itemBuilder: (c, i) { var m = chatMessages[i]; bool isMe = m['player'] == myName; return Align(alignment: isMe? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: EdgeInsets.symmetric(vertical: 4), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8), constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7), decoration: BoxDecoration(color: isMe? Colors.green : Colors.white24, borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12), bottomLeft: isMe? Radius.circular(12) : Radius.circular(0), bottomRight: isMe? Radius.circular(0) : Radius.circular(12))), child: Text("${m['player']}: ${m['msg']}", style: TextStyle(fontSize: 13, color: Colors.white)))); })),
             Divider(height: 1, color: Colors.white10),
-            Container(padding: EdgeInsets.fromLTRB(10, 8, 10, 10 + MediaQuery.of(context).viewInsets.bottom * 0.1), color: Color(0xFF0A0E1A), child: Row(children: [
-              Expanded(child: TextField(controller: chatCtrl, textInputAction: TextInputAction.send, onSubmitted: (_) => sendMessage(), style: TextStyle(color: Colors.white, fontSize: 14), decoration: InputDecoration(hintText: "Type message...", hintStyle: TextStyle(color: Colors.white54), filled: true, fillColor: Colors.white10, border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none), contentPadding: EdgeInsets.symmetric(horizontal: 18, vertical: 12)))),
-              SizedBox(width: 8),
-              GestureDetector(onTap: sendMessage, child: Container(padding: EdgeInsets.all(13), decoration: BoxDecoration(color: Colors.amber, shape: BoxShape.circle), child: Icon(Icons.send, color: Colors.black, size: 20))),
-            ])),
+            Container(
+              padding: EdgeInsets.fromLTRB(10, 8, 10, MediaQuery.of(context).viewInsets.bottom + 10),
+              color: Color(0xFF0A0E1A),
+              child: Row(children: [
+                Expanded(child: TextField(
+                  controller: chatCtrl,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => sendMessage(),
+                  style: TextStyle(color: Colors.white, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: "Type message...",
+                    hintStyle: TextStyle(color: Colors.white54),
+                    filled: true,
+                    fillColor: Color(0xFF2A2A3E),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 18, vertical: 14)
+                  )
+                )),
+                SizedBox(width: 10),
+                GestureDetector(
+                  onTap: sendMessage,
+                  child: Container(
+                    padding: EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
+                    child: Icon(Icons.send, color: Colors.black, size: 22)
+                  )
+                ),
+              ])
+            ),
           ])))
         ])),
         Container(margin: EdgeInsets.fromLTRB(10, 5, 10, 10), padding: EdgeInsets.symmetric(horizontal: 15, vertical: 12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(20), border: Border.all(color: turn==0? Colors.green : Colors.red, width: 1.5)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.casino, color: turn==0? Colors.green : Colors.red, size: 16), SizedBox(width: 6), Text("${turn == 0? myName : opponentName} KI BAARI ${isMyTurn? "(TAP DICE)" : ""}", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))])),
       ]),
-      floatingActionButton: Column(mainAxisSize: MainAxisSize.min, children: [
+      floatingActionButton: showChat? null : Column(mainAxisSize: MainAxisSize.min, children: [
         FloatingActionButton.small(heroTag: "mic", backgroundColor: isMicOn? Colors.green : Colors.red, onPressed: toggleMic, child: Icon(isMicOn? Icons.mic : Icons.mic_off, color: Colors.white, size: 20)),
         SizedBox(height: 8),
         FloatingActionButton.small(heroTag: "speaker", backgroundColor: isSpeakerOn? Colors.green : Colors.red, onPressed: toggleSpeaker, child: Icon(isSpeakerOn? Icons.volume_up : Icons.volume_off, color: Colors.white, size: 20)),
