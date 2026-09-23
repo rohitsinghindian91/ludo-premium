@@ -12,17 +12,15 @@ import 'package:firebase_core/firebase_core.dart';
 const String agoraAppId = "0772d1c90f7646a0a2d5649a41cf7632";
 const String agoraToken = "";
 
-const String rtdbUrl = "https://ludo-premium-50-default-rtdb.asia-southeast1.firebasedatabase.app";
+const String rtdbUrl = "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 FirebaseDatabase getRtdb() {
-  try {
-    return FirebaseDatabase.instanceFor(
-      app: Firebase.app(),
-      databaseURL: rtdbUrl,
-    );
-  } catch (e) {
-    return FirebaseDatabase.instance;
-  }
+  final db = FirebaseDatabase.instanceFor(
+    app: Firebase.app(),
+    databaseURL: rtdbUrl,
+  );
+  db.goOnline();
+  return db;
 }
 
 enum GameMode { online, offline, bot }
