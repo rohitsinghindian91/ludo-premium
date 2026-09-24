@@ -11,10 +11,8 @@ import 'package:firebase_core/firebase_core.dart';
 
 const String agoraAppId = "68178816ba6d47c6864cc5d584f3e2b8";
 const String agoraToken = "";
-
 const String rtdbUrl = "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app";
 
-// FIX: Single instance
 FirebaseDatabase? _rtdbInstance;
 FirebaseDatabase getRtdb() {
   _rtdbInstance??= FirebaseDatabase.instanceFor(
@@ -49,6 +47,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
         "createdAt": ServerValue.timestamp,
         "roomId": c,
       });
+      final prefs = await SharedPreferences.getInstance();
+      String? mobile = prefs.getString("mobile");
+      await getRtdb().ref("ludo_rooms/$c/players/0").set({
+        "mobile": mobile?? "guest_${Random().nextInt(999999)}",
+        "player": 0,
+        "joinedAt": ServerValue.timestamp
+      });
+
       if (!mounted) return;
       showDialog(context: context, builder: (_) => AlertDialog(
         backgroundColor: Color(0xFF1E1E2E),
@@ -221,21 +227,21 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   String? myMobile; String myName = "You"; String opponentName = "Opponent"; String opponentMobile = "";
   final List<String> botNames = ["Jyoti", "Simran", "Kajal", "Saneha", "Aarzoo", "Pinki", "Shalu", "Rabina", "Payal", "Minaxi","Preet kaur", "Cutie", "Sonia", "Monika", "Ritika", "Suman", "Pooja", "Deepika", "Anjali", "Sweety"];
   String selectedBotName = "Jyoti";
-
   @override void initState() {
-    super.initState();
     selectedBotName = botNames[_rng.nextInt(botNames.length)];
     _diceController = AnimationController(vsync: this, duration: Duration(milliseconds: 800));
     initAgoraAndRoom();
     if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 800), () => botTurn());
   }
-
   Future<void> initAgoraAndRoom() async {
-    var localSp = await SharedPreferences.getInstance();
-    myMobile = localSp.getString("mobile");
-    if(myMobile!= null){
-      try { var doc = await FirebaseFirestore.instance.collection("users").doc(myMobile).get(); myName = doc.data()?["name"]?? "You"; if(mounted) setState((){}); } catch(e){}
-    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      myMobile = prefs.getString("mobile");
+      if(myMobile!= null){
+        try { var doc = await FirebaseFirestore.instance.collection("users").doc(myMobile).get(); myName = doc.data()?["name"]?? "You"; if(mounted) setState((){}); } catch(e){}
+      }
+    } catch(e){ debugPrint("prefs error $e"); }
+
     if(widget.mode == GameMode.online){
       await [Permission.microphone].request();
       agoraEngine = createAgoraRtcEngine();
@@ -248,10 +254,8 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: myUid, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication));
         setState(()=> isAgoraJoined = true);
       } catch(e){ debugPrint("Agora error $e"); }
-
       roomRef = getRtdb().ref("ludo_rooms/${widget.roomId}/game");
       chatRef = getRtdb().ref("ludo_rooms/${widget.roomId}/chats");
-
       roomRef!.onValue.listen((event){
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -280,7 +284,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           else setState(()=> opponentName = "Real User");
         }
       });
-
       chatRef!.onChildAdded.listen((event){
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -288,7 +291,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           setState((){ chatMessages.add({"player": player, "msg": msg, "time": data['time']}); });
         }
       });
-
       if(widget.myPlayer == 0){
         Future.delayed(Duration(milliseconds: 300), (){
           roomRef!.get().then((snap){ if(!snap.exists){ syncRoom(); } });
@@ -296,7 +298,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       }
     } else { setState(()=> opponentName = selectedBotName); }
   }
-
   Future<void> addFriendFromGame() async {
     if(widget.mode == GameMode.bot){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$selectedBotName BOT hai"))); return; }
     if(widget.mode == GameMode.offline){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("OFFLINE me add nahi hota"))); return; }
