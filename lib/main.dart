@@ -10,19 +10,17 @@ import 'beautiful_ludo.dart';
 import 'plan_screen.dart';
 import 'friends_screen.dart';
 
-late SharedPreferences sp;
+late SharedPreferences prefs;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
+  prefs = await SharedPreferences.getInstance();
   var db = FirebaseDatabase.instanceFor(
     app: Firebase.app(),
     databaseURL: "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app",
   );
   db.goOnline();
-
-  sp = await SharedPreferences.getInstance();
   runApp(const MyApp());
 }
 
@@ -30,11 +28,7 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(),
-      home: const Splash(),
-    );
+    return MaterialApp(debugShowCheckedModeBanner: false, theme: ThemeData.dark(), home: const Splash(),);
   }
 }
 
@@ -48,7 +42,7 @@ class _SplashState extends State<Splash> {
   void initState() { super.initState(); checkUser(); }
 
   Future<void> checkUser() async {
-    var m = sp.getString("mobile");
+    var m = prefs.getString("mobile");
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     if (m!= null && m.isNotEmpty) {
@@ -150,10 +144,11 @@ class _OtpPageState extends State<OtpPage> {
         "isPremium": false, "premiumExpiry": null, "premiumDistributed": false, "createdAt": FieldValue.serverTimestamp(),
       });
     }
-    await sp.setString("mobile", widget.mobile);
+    await prefs.setString("mobile", widget.mobile);
+    await prefs.setString("name", widget.name);
     setState(() => load = false);
     if (!mounted) return;
-    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => HomeScreen(mobile: widget.mobile)), (r)=>false);
+    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => HomeScreen(mobile: widget.mobile)), (r) => false);
   }
 
   @override Widget build(BuildContext context) {
@@ -183,7 +178,6 @@ class _HomeScreenState extends State<HomeScreen> {
       if (data["isPremium"] == true && data["premiumExpiry"]!= null) { DateTime exp = (data["premiumExpiry"] as Timestamp).toDate(); if (exp.isAfter(DateTime.now())) { setState(() { isPrem = true; expiry = "${exp.day}/${exp.month}/${exp.year}"; }); if (data["premiumDistributed"] == false) { distributePremium(); } } }
     });
   }
-
   Future<void> distributePremium() async {
     try {
       var me = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get(); if (!me.exists) return; var data = me.data()!; if (data["premiumDistributed"] == true) return; String l1 = data["referredBy"]?? "";
@@ -203,11 +197,9 @@ class _HomeScreenState extends State<HomeScreen> {
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"premiumDistributed": true});
     } catch (e) { debugPrint("dist error $e"); }
   }
-
   void openPremium() { Navigator.push(context, MaterialPageRoute(builder: (_) => PremiumPayScreen(mobile: widget.mobile, onPaid: (){}))); }
-  void doLogout() async { await sp.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r)=>false); }
+  void doLogout() async { await prefs.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r)=>false); }
   void openHelp() async { Uri url = Uri.parse("https://wa.me/447397293594?text=Help ${widget.mobile}"); await launchUrl(url, mode: LaunchMode.externalApplication); }
-
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
       Row(children: [const Icon(Icons.casino, color: Colors.amber), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
@@ -229,8 +221,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+// Baki WalletScreen, PremiumPayScreen, MyTeamScreen same as pehle
 class WalletScreen extends StatefulWidget { final String mobile; const WalletScreen({super.key, required this.mobile}); @override State<WalletScreen> createState() => _WalletScreenState(); }
-
 class _WalletScreenState extends State<WalletScreen> {
   final upiCtrl = TextEditingController(); int wallet = 0; bool loading = true; String existingUpi = ""; String myPassword = "";
   @override void initState() { super.initState(); loadWallet(); }
@@ -246,7 +238,6 @@ class _WalletScreenState extends State<WalletScreen> {
 }
 
 class PremiumPayScreen extends StatefulWidget { final String mobile; final VoidCallback onPaid; const PremiumPayScreen({super.key, required this.mobile, required this.onPaid}); @override State<PremiumPayScreen> createState() => _PremiumPayScreenState(); }
-
 class _PremiumPayScreenState extends State<PremiumPayScreen> {
   final String myUpiId = "kumar131@fam"; bool loading = false;
   Future<void> payUpi() async { String url = "upi://pay?pa=$myUpiId&pn=LUDO&am=500&cu=INR"; await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication); }
@@ -259,7 +250,6 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
 }
 
 class MyTeamScreen extends StatefulWidget { final String mobile; const MyTeamScreen({super.key, required this.mobile}); @override State<MyTeamScreen> createState() => _MyTeamScreenState(); }
-
 class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderStateMixin {
   late TabController tabCtrl; List<DocumentSnapshot> l1 = []; List<DocumentSnapshot> l2 = []; List<DocumentSnapshot> l3 = []; List<DocumentSnapshot> earn = []; bool loading = true;
   @override void initState() { super.initState(); tabCtrl = TabController(length: 4, vsync: this); fetchTeam(); }
