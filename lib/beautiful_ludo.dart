@@ -9,7 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 
-const String agoraAppId = "0772d1c90f7646a0a2d5649a41cf7632";
+const String agoraAppId = "68178816ba6d47c6864cc5d584f3e2b8";
 const String agoraToken = "";
 
 const String rtdbUrl = "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app";
