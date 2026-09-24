@@ -98,6 +98,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code mila hi nahi - Rules check karo")));
         return;
       }
+      // FINAL FIX: Join karte hi players/1 yahi bana do, warna contact nahi hota
+      final prefs = await SharedPreferences.getInstance();
+      String? mobile = prefs.getString("mobile");
+      await getRtdb().ref("ludo_rooms/$code/players/1").set({
+        "mobile": mobile?? "guest_${Random().nextInt(999999)}",
+        "name": "Player2",
+        "player": 1,
+        "joinedAt": ServerValue.timestamp
+      });
       Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
     } catch(e){
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Join error: $e")));
