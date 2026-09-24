@@ -14,13 +14,15 @@ const String agoraToken = "";
 
 const String rtdbUrl = "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app";
 
+// FIX: Single instance
+FirebaseDatabase? _rtdbInstance;
 FirebaseDatabase getRtdb() {
-  final db = FirebaseDatabase.instanceFor(
+  _rtdbInstance??= FirebaseDatabase.instanceFor(
     app: Firebase.app(),
     databaseURL: rtdbUrl,
   );
-  db.goOnline();
-  return db;
+  _rtdbInstance!.goOnline();
+  return _rtdbInstance!;
 }
 
 enum GameMode { online, offline, bot }
@@ -44,9 +46,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
         "diceRed": 1,
         "canMove": false,
         "gameOver": false,
-        "createdAt": DateTime.now().millisecondsSinceEpoch,
+        "createdAt": ServerValue.timestamp,
         "roomId": c,
-      }).timeout(Duration(seconds: 15));
+      });
       if (!mounted) return;
       showDialog(context: context, builder: (_) => AlertDialog(
         backgroundColor: Color(0xFF1E1E2E),
@@ -85,9 +87,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
     }
     try {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code dhoondh rahe hain...")));
-      var snap = await getRtdb().ref("ludo_rooms/$code/game").get().timeout(Duration(seconds: 15));
+      var snap = await getRtdb().ref("ludo_rooms/$code/game").get();
       if(!snap.exists){
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code mila hi nahi")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code mila hi nahi - Rules check karo")));
         return;
       }
       Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
@@ -144,7 +146,7 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
       if(countdown > 0) { setState((){ countdown--; }); } else { launchBot(); }
     });
     try {
-      var snap = await queueRef.get().timeout(Duration(seconds: 3));
+      var snap = await queueRef.get();
       String? foundRoomId; String? foundKey;
       if(snap.exists){
         for(var child in snap.children){
@@ -170,7 +172,7 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
       }
       myRoomId = (Random().nextInt(9000)+1000).toString();
       myQueueKey = queueRef.push().key!;
-      await queueRef.child(myQueueKey!).set({"roomId": myRoomId, "hostId": myId, "status": "waiting", "createdAt": DateTime.now().millisecondsSinceEpoch}).timeout(Duration(seconds: 3));
+      await queueRef.child(myQueueKey!).set({"roomId": myRoomId, "hostId": myId, "status": "waiting", "createdAt": ServerValue.timestamp});
       queueRef.child(myQueueKey!).onValue.listen((event) async {
         if(event.snapshot.value!= null && mounted && searching &&!botLaunched){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -246,8 +248,10 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: myUid, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication));
         setState(()=> isAgoraJoined = true);
       } catch(e){ debugPrint("Agora error $e"); }
+
       roomRef = getRtdb().ref("ludo_rooms/${widget.roomId}/game");
       chatRef = getRtdb().ref("ludo_rooms/${widget.roomId}/chats");
+
       roomRef!.onValue.listen((event){
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -262,8 +266,9 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         }
       });
       var playersRef = getRtdb().ref("ludo_rooms/${widget.roomId}/players/${widget.myPlayer}");
-      if(myMobile!= null) await playersRef.set({"mobile": myMobile, "name": myName, "player": widget.myPlayer, "joinedAt": DateTime.now().millisecondsSinceEpoch});
-      else await playersRef.set({"mobile": "guest_${Random().nextInt(999999)}", "name": myName, "player": widget.myPlayer, "joinedAt": DateTime.now().millisecondsSinceEpoch});
+      if(myMobile!= null) await playersRef.set({"mobile": myMobile, "name": myName, "player": widget.myPlayer, "joinedAt": ServerValue.timestamp});
+      else await playersRef.set({"mobile": "guest_${Random().nextInt(999999)}", "name": myName, "player": widget.myPlayer, "joinedAt": ServerValue.timestamp});
+
       getRtdb().ref("ludo_rooms/${widget.roomId}/players/${1 - widget.myPlayer}").onValue.listen((event) async {
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -275,6 +280,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           else setState(()=> opponentName = "Real User");
         }
       });
+
       chatRef!.onChildAdded.listen((event){
         if(event.snapshot.value!= null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -282,6 +288,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           setState((){ chatMessages.add({"player": player, "msg": msg, "time": data['time']}); });
         }
       });
+
       if(widget.myPlayer == 0){
         Future.delayed(Duration(milliseconds: 300), (){
           roomRef!.get().then((snap){ if(!snap.exists){ syncRoom(); } });
@@ -314,12 +321,12 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     if (chatCtrl.text.trim().isEmpty) return;
     String name = myName; String text = chatCtrl.text.trim(); chatCtrl.clear();
     if(widget.mode == GameMode.online && chatRef!= null) {
-      try { await chatRef!.push().set({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); } catch(e){}
+      await chatRef!.push().set({"player": name, "msg": text, "time": ServerValue.timestamp});
     } else setState(() { chatMessages.add({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); });
   }
   void toggleMic() async { setState(() => isMicOn =!isMicOn); if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
   void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); }
-  void syncRoom(){ if(widget.mode == GameMode.online && roomRef!= null){ roomRef!.set({"pos": pos, "turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver}); } }
+  void syncRoom(){ if(widget.mode == GameMode.online && roomRef!= null){ roomRef!.update({"pos": pos, "turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver}); } }
   void roll() {
     if (canMove || gameOver || isRolling ||!isMyTurn) return;
     if (widget.mode == GameMode.bot && turn == 1) return;
