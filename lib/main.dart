@@ -14,14 +14,17 @@ late SharedPreferences prefs;
 FirebaseDatabase? _mainRtdb;
 
 FirebaseDatabase getMainRtdb() {
-  _mainRtdb??= FirebaseDatabase.instanceFor(
-    app: Firebase.app(),
-    databaseURL: "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app",
-  );
-  _mainRtdb!.goOnline();
-  try {
-    _mainRtdb!.setPersistenceEnabled(true);
-  } catch (_) {}
+  if (_mainRtdb == null) {
+    _mainRtdb = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app",
+    );
+    try {
+      _mainRtdb!.setPersistenceEnabled(true);
+      _mainRtdb!.setPersistenceCacheSizeBytes(10000000);
+    } catch (_) {}
+    _mainRtdb!.goOnline();
+  }
   return _mainRtdb!;
 }
 
@@ -29,7 +32,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   prefs = await SharedPreferences.getInstance();
-  getMainRtdb(); // online + persistence
+  getMainRtdb();
   runApp(const MyApp());
 }
 
