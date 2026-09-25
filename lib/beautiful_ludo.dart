@@ -25,7 +25,6 @@ FirebaseDatabase getRtdb() {
 
 late SharedPreferences ludoPrefs;
 bool isPrefsReady = false;
-
 Future<void> ensurePrefs() async {
   if (!isPrefsReady) {
     ludoPrefs = await SharedPreferences.getInstance();
@@ -65,7 +64,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
       String? myName = ludoPrefs.getString("name");
       await getRtdb().ref("$c/players/0").set({
         "mobile": mobile?? "guest_${Random().nextInt(999999)}",
-        "name": myName?? "devanath", "player": 0, "joinedAt": ServerValue.timestamp,
+        "name": myName?? "devanath",
+        "player": 0, "joinedAt": ServerValue.timestamp,
       });
       if (!mounted) return;
       showDialog(context: context, builder: (_) => AlertDialog(
@@ -78,19 +78,19 @@ class _LobbyScreenState extends State<LobbyScreen> {
           Container(padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(12)),
             child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text(c, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 8, color: Colors.black)),
-              IconButton(icon: Icon(Icons.copy, color: Colors.black), onPressed: () {
+              IconButton(icon: Icon(Icons.copy, color: Colors.black), onPressed: (){
                 Clipboard.setData(ClipboardData(text: c));
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Code copy: $c")));
               }),
             ]),
           ),
         ]),
-        actions: [ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: () {
+        actions: [ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: (){
           Navigator.pop(context);
           Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
         }, child: Text("GAME SHURU KARO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))],
       ));
-    } catch(e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi bana: $e"), duration: Duration(seconds: 5))); }
+    } catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi bana: $e"), duration: Duration(seconds: 5))); }
   }
   void joinRoom() async {
     await ensurePrefs();
@@ -104,7 +104,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
       String? myName = ludoPrefs.getString("name");
       await getRtdb().ref("$code/players/1").set({
         "mobile": mobile?? "guest_${Random().nextInt(999999)}",
-        "name": myName?? "vedanath", "player": 1, "joinedAt": ServerValue.timestamp,
+        "name": myName?? "vedanath",
+        "player": 1, "joinedAt": ServerValue.timestamp,
       });
       Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
     } catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Join error: $e"))); }
@@ -187,7 +188,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   final safe = [0, 10, 20, 30]; final startPos = [0, 20]; final homeEntry = [39, 19];
   DatabaseReference? roomRef; DatabaseReference? chatRef;
   String? myMobile; String myName = "You"; String opponentName = "Opponent"; String opponentMobile = "";
-  final List<String> botNames = ["Jyoti", "Simran", "Kajal", "Pooja", "Anjali", "Sweety"];
+  final List<String> botNames = ["Jyoti", "Simran", "Kajal", "Saneha", "Aarzoo", "Pinki", "Shalu", "Rabina", "Payal", "Minaxi","Preet kaur", "Cutie", "Sonia", "Monika", "Ritika", "Suman", "Pooja", "Deepika", "Anjali", "Sweety"];
   String selectedBotName = "Jyoti";
   @override void initState() {
     selectedBotName = botNames[_rng.nextInt(botNames.length)];
@@ -195,12 +196,14 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     initAgoraAndRoom();
     if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 800), () => botTurn());
   }
+
   Future<void> initAgoraAndRoom() async {
     try {
       await ensurePrefs();
       myMobile = ludoPrefs.getString("mobile");
       myName = ludoPrefs.getString("name")?? "You";
-    } catch(e){ debugPrint("prefs error $e"); }
+    } catch(e){}
+
     if(widget.mode == GameMode.online){
       await [Permission.microphone].request();
       agoraEngine = createAgoraRtcEngine();
@@ -209,19 +212,49 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       await agoraEngine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await agoraEngine!.setEnableSpeakerphone(true);
       await agoraEngine!.setDefaultAudioRouteToSpeakerphone(true);
+
+      agoraEngine!.registerEventHandler(RtcEngineEventHandler(
+        onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+          setState(()=> isAgoraJoined = true);
+        },
+        onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+          agoraEngine!.setEnableSpeakerphone(true);
+          agoraEngine!.muteAllRemoteAudioStreams(false);
+        },
+        onUserMuteAudio: (RtcConnection connection, int remoteUid, bool muted) {},
+        onError: (ErrorCodeType err, String msg) {},
+      ));
+
       await agoraEngine!.adjustPlaybackSignalVolume(400);
+      await agoraEngine!.adjustRecordingSignalVolume(400);
       int myUid = widget.myPlayer == 0? 1 : 2;
       try {
-        await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: myUid, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication));
+        await agoraEngine!.joinChannel(
+          token: agoraToken,
+          channelId: widget.roomId,
+          uid: myUid,
+          options: ChannelMediaOptions(
+            clientRoleType: ClientRoleType.clientRoleBroadcaster,
+            channelProfile: ChannelProfileType.channelProfileCommunication,
+            autoSubscribeAudio: true,
+            publishMicrophoneTrack: true,
+          )
+        );
+        await agoraEngine!.muteLocalAudioStream(false);
+        await agoraEngine!.muteAllRemoteAudioStreams(false);
         setState(()=> isAgoraJoined = true);
-      } catch(e){ debugPrint("Agora error $e"); }
+      } catch(e){}
+
       roomRef = getRtdb().ref("${widget.roomId}/game");
       chatRef = getRtdb().ref("${widget.roomId}/chats");
+
       roomRef!.onValue.listen((event){
         if(event.snapshot.value!=null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
           setState((){
-            if(data['pos']!=null){ try{ var raw = data['pos'] as List; pos = List<List<int>>.from(raw.map((e)=> List<int>.from((e as List).map((x)=> x as int)))); } catch(_){} }
+            if(data['pos']!=null) {
+              try { var raw = data['pos'] as List; pos = List<List<int>>.from(raw.map((e)=> List<int>.from((e as List).map((x)=> x as int)))); } catch(_){}
+            }
             if(data['turn']!=null) turn = data['turn'] as int;
             if(data['diceGreen']!=null) diceGreen = data['diceGreen'] as int;
             if(data['diceRed']!=null) diceRed = data['diceRed'] as int;
@@ -230,35 +263,105 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           });
         }
       });
+
+      Future<void> fetchOpponent() async {
+        try {
+          var oppSnap = await getRtdb().ref("${widget.roomId}/players/${1 - widget.myPlayer}").get();
+          if(oppSnap.exists && mounted){
+            var data = Map<String,dynamic>.from(oppSnap.value as Map);
+            String? oppMob = data["mobile"]?.toString();
+            String? oppName = data["name"]?.toString();
+            if(oppMob!=null) opponentMobile = oppMob;
+            if(oppName!=null && oppName.isNotEmpty){
+              setState(()=> opponentName = oppName);
+            }
+          }
+        } catch(e){}
+      }
+
       getRtdb().ref("${widget.roomId}/players/${1 - widget.myPlayer}").onValue.listen((event) async {
         if(event.snapshot.value!=null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
           String? oppMob = data["mobile"]?.toString();
           String? oppName = data["name"]?.toString();
           if(oppMob!=null) opponentMobile = oppMob;
-          if(oppName!=null && oppName.isNotEmpty) { setState(()=> opponentName = oppName); } else { setState(()=> opponentName = "Real User"); }
+          if(oppName!=null && oppName.isNotEmpty) {
+            setState(()=> opponentName = oppName);
+          }
         }
       });
+
+      Future.delayed(Duration(seconds: 1), ()=> fetchOpponent());
+      Future.delayed(Duration(seconds: 3), ()=> fetchOpponent());
+
       chatRef!.onChildAdded.listen((event){
         if(event.snapshot.value!=null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
           String player = data['player']?? "UNK"; String msg = data['msg']?? "";
-          setState(()=> chatMessages.add({"player": player, "msg": msg, "time": data['time']}));
+          bool exists = chatMessages.any((m)=> m['player']==player && m['msg']==msg);
+          if(!exists){
+            setState(()=> chatMessages.add({"player": player, "msg": msg, "time": data['time']}));
+          }
         }
       });
-      if(widget.myPlayer == 0){ Future.delayed(Duration(milliseconds: 300), (){ roomRef!.get().then((snap){ if(!snap.exists){ syncRoom(); } }); }); }
+
+      chatRef!.onValue.listen((event){
+        if(event.snapshot.value!=null && mounted){
+          try {
+            var all = Map<String,dynamic>.from(event.snapshot.value as Map);
+            List<Map<String,dynamic>> temp = [];
+            all.forEach((k,v){
+              var d = Map<String,dynamic>.from(v as Map);
+              temp.add({"player": d['player']??"UNK", "msg": d['msg']??"", "time": d['time']});
+            });
+            temp.sort((a,b)=> (a['time']??0).toString().compareTo((b['time']??0).toString()));
+            setState(()=> chatMessages = temp);
+          } catch(e){}
+        }
+      });
+
+      if(widget.myPlayer == 0){
+        Future.delayed(Duration(milliseconds: 500), (){
+          roomRef!.get().then((snap){ if(!snap.exists){ syncRoom(); } });
+        });
+      }
     } else { setState(()=> opponentName = selectedBotName); }
+  }
+
+  Future<void> addFriendFromGame() async {
+    if(widget.mode == GameMode.bot){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$selectedBotName BOT hai"))); return; }
+    if(widget.mode == GameMode.offline){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("OFFLINE me add nahi hota"))); return; }
+    if(opponentMobile.isEmpty){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Opponent abhi connect nahi hua"))); return; }
+    if(opponentMobile.startsWith("guest")){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ye Guest user hai"))); return; }
+    await sendFriendRequest(opponentMobile, opponentName);
+  }
+  Future<void> sendFriendRequest(String toMobile, String toName) async {
+    var doc = await FirebaseFirestore.instance.collection("users").doc(toMobile).get();
+    if(!doc.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$toName nahi mila"))); return; }
+    var q = await FirebaseFirestore.instance.collection("friend_requests").where("from", isEqualTo: myMobile).where("to", isEqualTo: toMobile).where("status", isEqualTo: "pending").get();
+    if(q.docs.isNotEmpty){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$toName ko pehle se bhej rakhi hai"))); return; }
+    var fr = await FirebaseFirestore.instance.collection("users").doc(myMobile!).collection("friends").doc(toMobile).get();
+    if(fr.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$toName pehle se friend hai"))); return; }
+    await FirebaseFirestore.instance.collection("friend_requests").add({"from": myMobile, "to": toMobile, "fromName": myName, "toName": toName, "status": "pending", "time": FieldValue.serverTimestamp(), "fromGame": widget.roomId});
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$toName ko friend request bhej di")));
   }
   @override void dispose() { _diceController.dispose(); chatCtrl.dispose(); if(isAgoraJoined && agoraEngine!=null){ agoraEngine!.leaveChannel(); agoraEngine!.release(); } super.dispose(); }
   int get dice => turn == 0? diceGreen : diceRed;
   bool get isMyTurn { if (widget.mode == GameMode.offline) return true; if (widget.mode == GameMode.bot) return turn == 0; return turn == widget.myPlayer; }
   bool isValidMove(int p, int idx, int d) { int cur = pos[p][idx]; if (cur == 45) return false; if (cur == -1) return d == 6; if (cur >= 40) return cur + d <= 45; int dist = (homeEntry[p] - cur + 40) % 40; if (d == dist + 1) return true; if (d > dist + 1) return false; return true; }
-  void sendMessage() async { if (chatCtrl.text.trim().isEmpty) return; String name = myName; String text = chatCtrl.text.trim(); chatCtrl.clear(); if(widget.mode == GameMode.online && chatRef!= null) { await chatRef!.push().set({"player": name, "msg": text, "time": ServerValue.timestamp}); } else setState(() { chatMessages.add({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); }); }
+  void sendMessage() async {
+    if (chatCtrl.text.trim().isEmpty) return;
+    String name = myName; String text = chatCtrl.text.trim(); chatCtrl.clear();
+    if(widget.mode == GameMode.online && chatRef!= null) {
+      await chatRef!.push().set({"player": name, "msg": text, "time": ServerValue.timestamp});
+    } else setState(() { chatMessages.add({"player": name, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); });
+  }
   void toggleMic() async { setState(() => isMicOn =!isMicOn); if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
   void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); if(isAgoraJoined && agoraEngine!=null) { await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); await agoraEngine!.setDefaultAudioRouteToSpeakerphone(isSpeakerOn); } }
   void syncRoom(){ if(widget.mode == GameMode.online && roomRef!= null){ roomRef!.update({"pos": pos, "turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver}); } }
   void roll() {
-    if (canMove || gameOver || isRolling ||!isMyTurn) return; if (widget.mode == GameMode.bot && turn == 1) return;
+    if (canMove || gameOver || isRolling ||!isMyTurn) return;
+    if (widget.mode == GameMode.bot && turn == 1) return;
     setState(() => isRolling = true); _diceController.forward(from: 0);
     Future.delayed(Duration(milliseconds: 800), () {
       if (!mounted) return; int d = _rng.nextInt(6) + 1;
@@ -291,7 +394,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   Widget goti(int p, int t, double s) { int v = pos[p][t]; double boxSize = s * 0.14, pad = s * 0.02; Offset o; if (v == -1) { if (p == 0) { double bx = 10 + pad, by = 10 + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } else { double bx = s - 10 - boxSize + pad, by = s - 10 - boxSize + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } } else if (v == 45) { o = Offset(s / 2 + (t % 2 == 0? -8 : 8), s / 2 + (t < 2? -8 : 8)); } else if (v >= 40) { o = getHomePathPos(p, v - 40, s); } else { double r = s * 0.25, ang = (v / 40) * 2 * pi - pi / 2; o = Offset(s / 2 + r * cos(ang), s / 2 + r * sin(ang)); } bool act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver && isMyTurn; if (widget.mode == GameMode.offline) act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver; return Positioned(left: o.dx - 11, top: o.dy - 11, child: GestureDetector(onTap: act? () => moveGoti(t) : null, child: Container(width: act? 28 : 20, height: act? 28 : 20, decoration: BoxDecoration(color: p == 0? Colors.green : Colors.red, shape: BoxShape.circle, border: Border.all(color: act? Colors.yellow : Colors.white, width: act? 2.5 : 1.5))))); }
   @override Widget build(BuildContext context) {
     double s = (MediaQuery.of(context).size.width < 400? MediaQuery.of(context).size.width : 400) - 20; double box = s * 0.14;
-    return Scaffold(backgroundColor: Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text(widget.mode == GameMode.offline? "OFFLINE - $myName" : widget.mode == GameMode.bot? "$myName vs $selectedBotName" : "ROOM ${widget.roomId} - $myName vs $opponentName", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)), actions: [if(widget.mode == GameMode.online) IconButton(icon: Icon(Icons.copy, color: Colors.white70, size: 18), onPressed: (){ Clipboard.setData(ClipboardData(text: widget.roomId)); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room code copied: ${widget.roomId}"))); }), IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent, size: 22), onPressed: () async { if(opponentMobile.isEmpty){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Opponent connect nahi hua"))); return; } ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$opponentName ko request bheji"))); }), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber, size: 22), onPressed: () => setState(() => showChat =!showChat))]),
+    return Scaffold(backgroundColor: Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text(widget.mode == GameMode.offline? "OFFLINE - $myName" : widget.mode == GameMode.bot? "$myName vs $selectedBotName" : "ROOM ${widget.roomId} - $myName vs $opponentName", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)), actions: [if(widget.mode == GameMode.online) IconButton(icon: Icon(Icons.copy, color: Colors.white70, size: 18), onPressed: (){ Clipboard.setData(ClipboardData(text: widget.roomId)); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room code copied: ${widget.roomId}"))); }), IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent, size: 22), onPressed: addFriendFromGame), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber, size: 22), onPressed: () => setState(() => showChat =!showChat))]),
       body: Column(children: [
         Container(margin: EdgeInsets.symmetric(horizontal: 8, vertical: 6), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Turn: ${turn == 0? myName : opponentName}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)), Text(isMyTurn? "YOUR TURN - TAP DICE" : "WAIT - $opponentName", style: TextStyle(fontSize: 11, color: isMyTurn? Colors.greenAccent : Colors.white54, fontWeight: FontWeight.bold))])),
         Expanded(child: Stack(children: [
