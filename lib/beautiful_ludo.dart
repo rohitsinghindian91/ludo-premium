@@ -41,23 +41,55 @@ Future<void> ensurePrefs() async {
 
 enum GameMode { online, offline, bot }
 
-// LobbyScreen aur QuickMatchScreen same rakhe hain - neeche se LudoGame ka important part fix hai
-class LobbyScreen extends StatefulWidget { @override State<LobbyScreen> createState() => _LobbyScreenState(); }
+class LobbyScreen extends StatefulWidget {
+  @override
+  State<LobbyScreen> createState() => _LobbyScreenState();
+}
+
 class _LobbyScreenState extends State<LobbyScreen> {
   final codeCtrl = TextEditingController();
   String genCode() => (Random().nextInt(9000) + 1000).toString();
-  @override void initState() { super.initState(); ensurePrefs(); }
+  @override
+  void initState() { super.initState(); ensurePrefs(); }
   void _createRoomWithCodeDialog() async {
     await ensurePrefs();
     String c = genCode();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $c bana rahe hain...")));
     try {
-      await getRtdb().ref("$c/game").set({"pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]], "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "createdAt": ServerValue.timestamp, "roomId": c});
+      await getRtdb().ref("$c/game").set({
+        "pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]],
+        "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false,
+        "createdAt": ServerValue.timestamp, "roomId": c,
+      });
       String? mobile = ludoPrefs.getString("mobile");
       String? myName = ludoPrefs.getString("name");
-      await getRtdb().ref("$c/players/0").set({"mobile": mobile?? "guest_${Random().nextInt(999999)}", "name": myName?? "devanath", "player": 0, "joinedAt": ServerValue.timestamp});
+      await getRtdb().ref("$c/players/0").set({
+        "mobile": mobile?? "guest_${Random().nextInt(999999)}",
+        "name": myName?? "devanath", "player": 0, "joinedAt": ServerValue.timestamp,
+      });
       if (!mounted) return;
-      showDialog(context: context, builder: (_) => AlertDialog(backgroundColor: Color(0xFF1E1E2E), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), title: Text("Room Ban Gaya!", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)), content: Column(mainAxisSize: MainAxisSize.min, children: [Text("Dost ko ye code bhejo:", style: TextStyle(color: Colors.white70, fontSize: 13)), SizedBox(height: 12), Container(padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(12)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(c, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 8, color: Colors.black)), IconButton(icon: Icon(Icons.copy, color: Colors.black), onPressed: () { Clipboard.setData(ClipboardData(text: c)); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Code copy: $c"))); })]))]), actions: [ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online))); }, child: Text("GAME SHURU KARO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))) ]));
+      showDialog(context: context, builder: (_) => AlertDialog(
+        backgroundColor: Color(0xFF1E1E2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text("Room Ban Gaya!", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text("Dost ko ye code bhejo:", style: TextStyle(color: Colors.white70, fontSize: 13)),
+          SizedBox(height: 12),
+          Container(padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(12)),
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text(c, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 8, color: Colors.black)),
+              IconButton(icon: Icon(Icons.copy, color: Colors.black), onPressed: () {
+                Clipboard.setData(ClipboardData(text: c));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Code copy: $c")));
+              }),
+            ]),
+          ),
+        ]),
+        actions: [ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: () {
+          Navigator.pop(context);
+          Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
+        }, child: Text("GAME SHURU KARO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))],
+      ));
     } catch(e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi bana: $e"), duration: Duration(seconds: 5))); }
   }
   void joinRoom() async {
@@ -70,18 +102,46 @@ class _LobbyScreenState extends State<LobbyScreen> {
       if(!snap.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room $code mila hi nahi"))); return; }
       String? mobile = ludoPrefs.getString("mobile");
       String? myName = ludoPrefs.getString("name");
-      await getRtdb().ref("$code/players/1").set({"mobile": mobile?? "guest_${Random().nextInt(999999)}", "name": myName?? "vedanath", "player": 1, "joinedAt": ServerValue.timestamp});
+      await getRtdb().ref("$code/players/1").set({
+        "mobile": mobile?? "guest_${Random().nextInt(999999)}",
+        "name": myName?? "vedanath", "player": 1, "joinedAt": ServerValue.timestamp,
+      });
       Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
     } catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Join error: $e"))); }
   }
-  @override Widget build(BuildContext context) {
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Padding(padding: EdgeInsets.all(20), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
-      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: _createRoomWithCodeDialog, child: Text("CREATE ROOM - ONLINE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)))),
+      Icon(Icons.casino, size: 60, color: Colors.amber),
+      Text("LUDO PREMIUM", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.amber)),
+      SizedBox(height: 30),
+      SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        icon: Icon(Icons.people),
+        label: Text("OFFLINE - 1 PHONE 2 PLAYER", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "OFFLINE", myPlayer: 0, mode: GameMode.offline))))),
       SizedBox(height: 10),
-      TextField(controller: codeCtrl, maxLength: 4, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: TextStyle(letterSpacing: 8, fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white), decoration: InputDecoration(counterText: "", hintText: "CODE", hintStyle: TextStyle(color: Colors.white30), filled: true, fillColor: Color(0xFF1E1E2E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
+      SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        icon: Icon(Icons.smart_toy),
+        label: Text("DOST KE SATH KHELO (BOT)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => QuickMatchScreen())))),
+      SizedBox(height: 20), Divider(color: Colors.white24), SizedBox(height: 10),
+      Text("ONLINE MODE", style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold)),
+      SizedBox(height: 10),
+      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        onPressed: _createRoomWithCodeDialog,
+        child: Text("CREATE ROOM - ONLINE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)))),
+      SizedBox(height: 10),
+      TextField(controller: codeCtrl, maxLength: 4, keyboardType: TextInputType.number, textAlign: TextAlign.center,
+        style: TextStyle(letterSpacing: 8, fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+        decoration: InputDecoration(counterText: "", hintText: "CODE", hintStyle: TextStyle(color: Colors.white30), filled: true, fillColor: Color(0xFF1E1E2E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
       SizedBox(height: 8),
-      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: joinRoom, child: Text("JOIN ROOM - ONLINE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)))),
+      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        onPressed: joinRoom,
+        child: Text("JOIN ROOM - ONLINE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)))),
     ]))));
   }
 }
@@ -89,7 +149,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
 class QuickMatchScreen extends StatefulWidget { @override State<QuickMatchScreen> createState() => _QuickMatchScreenState(); }
 class _QuickMatchScreenState extends State<QuickMatchScreen> {
   int countdown = 10; String statusText = "Real user dhoondh rahe hain..."; bool searching = true; bool botLaunched = false;
-  DatabaseReference queueRef = getRtdb().ref("quick_match_queue"); String myId = Random().nextInt(999999).toString(); String? myRoomId; String? myQueueKey; Timer? _timer;
+  DatabaseReference queueRef = getRtdb().ref("quick_match_queue"); String myId = Random().nextInt(999999).toString();
+  String? myRoomId; String? myQueueKey; Timer? _timer;
   @override void initState() { super.initState(); startQuickMatch(); }
   @override void dispose() { _timer?.cancel(); if(myQueueKey!=null){ try{ queueRef.child(myQueueKey!).remove(); }catch(_){} } super.dispose(); }
   void launchBot() { if(botLaunched) return; botLaunched = true; _timer?.cancel(); searching = false; if(myQueueKey!=null){ try{ queueRef.child(myQueueKey!).remove(); }catch(_){} } if(!mounted) return; Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot))); }
@@ -126,7 +187,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   final safe = [0, 10, 20, 30]; final startPos = [0, 20]; final homeEntry = [39, 19];
   DatabaseReference? roomRef; DatabaseReference? chatRef;
   String? myMobile; String myName = "You"; String opponentName = "Opponent"; String opponentMobile = "";
-  final List<String> botNames = ["Jyoti", "Simran", "Kajal", "Pooja", "Anjali"];
+  final List<String> botNames = ["Jyoti", "Simran", "Kajal", "Pooja", "Anjali", "Sweety"];
   String selectedBotName = "Jyoti";
   @override void initState() {
     selectedBotName = botNames[_rng.nextInt(botNames.length)];
@@ -149,7 +210,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       await agoraEngine!.setEnableSpeakerphone(true);
       await agoraEngine!.setDefaultAudioRouteToSpeakerphone(true);
       await agoraEngine!.adjustPlaybackSignalVolume(400);
-      int myUid = widget.myPlayer == 0? 1 : 2; // FIX - alag uid
+      int myUid = widget.myPlayer == 0? 1 : 2;
       try {
         await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: myUid, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication));
         setState(()=> isAgoraJoined = true);
