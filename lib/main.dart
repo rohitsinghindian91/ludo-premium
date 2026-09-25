@@ -11,16 +11,25 @@ import 'plan_screen.dart';
 import 'friends_screen.dart';
 
 late SharedPreferences prefs;
+FirebaseDatabase? _mainRtdb;
+
+FirebaseDatabase getMainRtdb() {
+  _mainRtdb??= FirebaseDatabase.instanceFor(
+    app: Firebase.app(),
+    databaseURL: "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  );
+  _mainRtdb!.goOnline();
+  try {
+    _mainRtdb!.setPersistenceEnabled(true);
+  } catch (_) {}
+  return _mainRtdb!;
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   prefs = await SharedPreferences.getInstance();
-  var db = FirebaseDatabase.instanceFor(
-    app: Firebase.app(),
-    databaseURL: "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app",
-  );
-  db.goOnline();
+  getMainRtdb(); // online + persistence
   runApp(const MyApp());
 }
 
@@ -40,7 +49,6 @@ class Splash extends StatefulWidget {
 class _SplashState extends State<Splash> {
   @override
   void initState() { super.initState(); checkUser(); }
-
   Future<void> checkUser() async {
     var m = prefs.getString("mobile");
     await Future.delayed(const Duration(milliseconds: 600));
@@ -51,7 +59,6 @@ class _SplashState extends State<Splash> {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
@@ -221,7 +228,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// Baki WalletScreen, PremiumPayScreen, MyTeamScreen same as pehle
 class WalletScreen extends StatefulWidget { final String mobile; const WalletScreen({super.key, required this.mobile}); @override State<WalletScreen> createState() => _WalletScreenState(); }
 class _WalletScreenState extends State<WalletScreen> {
   final upiCtrl = TextEditingController(); int wallet = 0; bool loading = true; String existingUpi = ""; String myPassword = "";
