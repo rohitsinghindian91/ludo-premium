@@ -2,37 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'beautiful_ludo.dart';
 import 'plan_screen.dart';
 import 'friends_screen.dart';
+import 'rtdb.dart';
 
 late SharedPreferences prefs;
-FirebaseDatabase? _mainRtdb;
-
-FirebaseDatabase getMainRtdb() {
-  if (_mainRtdb == null) {
-    _mainRtdb = FirebaseDatabase.instanceFor(
-      app: Firebase.app(),
-      databaseURL: "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app",
-    );
-    try {
-      _mainRtdb!.setPersistenceEnabled(true);
-      _mainRtdb!.setPersistenceCacheSizeBytes(10000000);
-    } catch (_) {}
-    _mainRtdb!.goOnline();
-  }
-  return _mainRtdb!;
-}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   prefs = await SharedPreferences.getInstance();
-  getMainRtdb();
+  getRtdb();
   runApp(const MyApp());
 }
 
@@ -161,7 +145,8 @@ class _OtpPageState extends State<OtpPage> {
     Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => HomeScreen(mobile: widget.mobile)), (r) => false);
   }
 
-  @override Widget build(BuildContext context) {
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: const Color(0xFF0A0E1A), title: const Text("OTP Verify")), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
       const Text("OTP 1234 hai", style: TextStyle(color: Colors.white54)), const SizedBox(height: 20),
       TextField(controller: otpCtrl, keyboardType: TextInputType.number, maxLength: 4, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 32, letterSpacing: 12, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: const Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
