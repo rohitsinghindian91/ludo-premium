@@ -15,17 +15,17 @@ const String rtdbUrl = "https://ludo-premium-50-e427e-default-rtdb.asia-southeas
 
 FirebaseDatabase? _rtdbInstance;
 FirebaseDatabase getRtdb() {
-  _rtdbInstance??= FirebaseDatabase.instanceFor(
-    app: Firebase.app(),
-    databaseURL: rtdbUrl,
-  );
-  _rtdbInstance!.goOnline();
-  try {
-    _rtdbInstance!.setPersistenceEnabled(true);
-  } catch (_) {}
-  try {
-    _rtdbInstance!.setPersistenceCacheSizeBytes(10000000);
-  } catch (_) {}
+  if (_rtdbInstance == null) {
+    _rtdbInstance = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: rtdbUrl,
+    );
+    try {
+      _rtdbInstance!.setPersistenceEnabled(true);
+      _rtdbInstance!.setPersistenceCacheSizeBytes(10000000);
+    } catch (_) {}
+    _rtdbInstance!.goOnline();
+  }
   return _rtdbInstance!;
 }
 
@@ -259,11 +259,12 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
 
       roomRef = getRtdb().ref("${widget.roomId}/game");
       chatRef = getRtdb().ref("${widget.roomId}/chats");
+      DatabaseReference oppRef = getRtdb().ref("${widget.roomId}/players/${1 - widget.myPlayer}");
 
       await roomRef!.keepSynced(true);
       await chatRef!.keepSynced(true);
       await getRtdb().ref("${widget.roomId}/players").keepSynced(true);
-      await getRtdb().ref("${widget.roomId}/players/${1 - widget.myPlayer}").keepSynced(true);
+      await oppRef.keepSynced(true);
 
       roomRef!.onValue.listen((event){
         if(event.snapshot.value!=null && mounted){
@@ -281,8 +282,8 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         }
       });
 
-      // OPPONENT SYNC FIX
-      getRtdb().ref("${widget.roomId}/players/${1 - widget.myPlayer}").onValue.listen((event){
+      // OPPONENT SYNC - FINAL FIX
+      oppRef.onValue.listen((event){
         if(event.snapshot.value!=null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
           setState((){
@@ -291,22 +292,39 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           });
         }
       });
+      oppRef.get().then((snap){
+        if(snap.exists && mounted){
+          var data = Map<String,dynamic>.from(snap.value as Map);
+          setState((){
+            opponentName = data["name"]?.toString()?? opponentName;
+            opponentMobile = data["mobile"]?.toString()?? opponentMobile;
+          });
+        }
+      });
 
-      // CHAT FIX - only onChildAdded
+      // CHAT SYNC - FINAL FIX
+      chatRef!.get().then((snap){
+        if(snap.exists && mounted){
+          List<Map<String,dynamic>> temp = [];
+          for(var c in snap.children){
+            var data = Map<String,dynamic>.from(c.value as Map);
+            temp.add({"player": data['player'], "msg": data['msg'], "time": data['time']});
+          }
+          setState(()=> chatMessages = temp);
+        }
+      });
       chatRef!.onChildAdded.listen((event){
         if(event.snapshot.value!=null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
-          String player = data['player']?? "UNK";
-          String msg = data['msg']?? "";
-          bool exists = chatMessages.any((m)=> m['player']==player && m['msg']==msg && m['time']==data['time']);
+          bool exists = chatMessages.any((m)=> m['msg']==data['msg'] && m['time']==data['time']);
           if(!exists){
-            setState(()=> chatMessages.add({"player": player, "msg": msg, "time": data['time']}));
+            setState(()=> chatMessages.add({"player": data['player'], "msg": data['msg'], "time": data['time']}));
           }
         }
       });
 
       if(widget.myPlayer == 0){
-        Future.delayed(Duration(milliseconds: 500), (){
+        Future.delayed(Duration(milliseconds: 800), (){
           roomRef!.get().then((snap){ if(!snap.exists){ syncRoom(); } });
         });
       }
@@ -316,7 +334,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   Future<void> addFriendFromGame() async {
     if(widget.mode == GameMode.bot){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$selectedBotName BOT hai"))); return; }
     if(widget.mode == GameMode.offline){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("OFFLINE me add nahi hota"))); return; }
-    if(opponentMobile.isEmpty){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Opponent abhi connect nahi hua - thoda wait karo"))); return; }
+    if(opponentMobile.isEmpty){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Opponent abhi connect nahi hua - thoda wait karo, naam: $opponentName"))); return; }
     if(opponentMobile.startsWith("guest")){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ye Guest user hai"))); return; }
     await sendFriendRequest(opponentMobile, opponentName);
   }
@@ -339,7 +357,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     String text = chatCtrl.text.trim(); chatCtrl.clear();
     if(widget.mode == GameMode.online && chatRef!= null) {
       getRtdb().goOnline();
-      await chatRef!.push().set({"player": myName, "msg": text, "time": ServerValue.timestamp});
+      await chatRef!.push().set({"player": myName, "msg": text, "time": ServerValue.timestamp, "mobile": myMobile});
     } else setState(() { chatMessages.add({"player": myName, "msg": text, "time": DateTime.now().millisecondsSinceEpoch}); });
   }
   void toggleMic() async { setState(() => isMicOn =!isMicOn); if(isAgoraJoined && agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
@@ -380,7 +398,6 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   Widget goti(int p, int t, double s) { int v = pos[p][t]; double boxSize = s * 0.14, pad = s * 0.02; Offset o; if (v == -1) { if (p == 0) { double bx = 10 + pad, by = 10 + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } else { double bx = s - 10 - boxSize + pad, by = s - 10 - boxSize + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } } else if (v == 45) { o = Offset(s / 2 + (t % 2 == 0? -8 : 8), s / 2 + (t < 2? -8 : 8)); } else if (v >= 40) { o = getHomePathPos(p, v - 40, s); } else { double r = s * 0.25, ang = (v / 40) * 2 * pi - pi / 2; o = Offset(s / 2 + r * cos(ang), s / 2 + r * sin(ang)); } bool act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver && isMyTurn; if (widget.mode == GameMode.offline) act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver; return Positioned(left: o.dx - 11, top: o.dy - 11, child: GestureDetector(onTap: act? () => moveGoti(t) : null, child: Container(width: act? 28 : 20, height: act? 28 : 20, decoration: BoxDecoration(color: p == 0? Colors.green : Colors.red, shape: BoxShape.circle, border: Border.all(color: act? Colors.yellow : Colors.white, width: act? 2.5 : 1.5))))); }
   @override Widget build(BuildContext context) {
     double s = (MediaQuery.of(context).size.width < 400? MediaQuery.of(context).size.width : 400) - 20; double box = s * 0.14;
-    // TURN NAME FIX
     String turnName;
     if(widget.mode == GameMode.online){
       turnName = (turn == widget.myPlayer)? myName : opponentName;
