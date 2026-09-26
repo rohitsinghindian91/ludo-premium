@@ -48,7 +48,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Padding(padding: EdgeInsets.all(20), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - PLAN G DEBUG", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
+      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - PLAN H FINAL", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.people), label: Text("OFFLINE - 1 PHONE 2 PLAYER"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "OFFLINE", myPlayer: 0, mode: GameMode.offline))))),
       SizedBox(height: 10),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.smart_toy), label: Text("DOST KE SATH KHELO (BOT)"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => QuickMatchScreen())))),
@@ -95,50 +95,29 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       agoraEngine!.registerEventHandler(RtcEngineEventHandler(onJoinChannelSuccess: (c,e){ setState(()=> isAgoraJoined = true); }));
       try { await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)); } catch(_){}
       roomRef = getRtdb().ref("${widget.roomId}/game"); chatRef = getRtdb().ref("${widget.roomId}/chats");
-      roomRef!.keepSynced(true);
-      getRtdb().ref("${widget.roomId}/players").keepSynced(true);
 
-      Future<void> loadOpponent() async {
-        try{
-          var allSnap = await getRtdb().ref("${widget.roomId}/players").get();
-          if(allSnap.exists && allSnap.value!= null){
-            var map = allSnap.value as Map;
-            map.forEach((k,v){
-              if(v is Map){
-                String name = v["name"]?.toString()?? "";
-                if(name.isNotEmpty && k.toString()!= "p${widget.myPlayer}"){
-                  if(mounted){
-                    setState((){
-                      opponentName = name;
-                      opponentMobile = v["mobile"]?.toString()?? "";
-                    });
-                  }
-                }
-              }
+      // FINAL OPPONENT FIX - Direct p0/p1
+      if(widget.myPlayer == 0){
+        getRtdb().ref("${widget.roomId}/players/p1").onValue.listen((e){
+          if(e.snapshot.value!= null && mounted){
+            var m = e.snapshot.value as Map;
+            setState((){
+              opponentName = m["name"]?.toString()?? "Opponent";
+              opponentMobile = m["mobile"]?.toString()?? "";
             });
           }
-        }catch(e){ debugPrint("loadOpp $e"); }
-      }
-
-      await loadOpponent();
-
-      getRtdb().ref("${widget.roomId}/players").onValue.listen((e){
-        if(e.snapshot.value == null) return;
-        var map = e.snapshot.value as Map;
-        map.forEach((k,v){
-          if(v is Map){
-            String name = v["name"]?.toString()?? "";
-            if(name.isNotEmpty && k.toString()!= "p${widget.myPlayer}"){
-              if(mounted){
-                setState((){
-                  opponentName = name;
-                  opponentMobile = v["mobile"]?.toString()?? "";
-                });
-              }
-            }
+        });
+      } else {
+        getRtdb().ref("${widget.roomId}/players/p0").onValue.listen((e){
+          if(e.snapshot.value!= null && mounted){
+            var m = e.snapshot.value as Map;
+            setState((){
+              opponentName = m["name"]?.toString()?? "Opponent";
+              opponentMobile = m["mobile"]?.toString()?? "";
+            });
           }
         });
-      });
+      }
 
       roomRef!.onValue.listen((event){
         if(event.snapshot.value!=null && mounted){
@@ -175,7 +154,15 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   void sendMessage() async { if (chatCtrl.text.trim().isEmpty) return; String t = chatCtrl.text.trim(); chatCtrl.clear(); if(widget.mode == GameMode.online && chatRef!= null){ getRtdb().goOnline(); await chatRef!.push().set({"player": myName, "msg": t, "time": ServerValue.timestamp}); } else { setState(()=> chatMessages.add({"player": myName, "msg": t})); } }
   void toggleMic() async { setState(() => isMicOn =!isMicOn); if(agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
   void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); if(agoraEngine!=null){ await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); } }
-  void syncRoom(){ if(widget.mode == GameMode.online && roomRef!= null){ getRtdb().goOnline(); roomRef!.update({"pos": pos, "turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver}); } }
+
+  // FINAL SYNC FIX - set ki jagah update nahi
+  void syncRoom(){
+    if(widget.mode == GameMode.online && roomRef!= null){
+      getRtdb().goOnline();
+      roomRef!.set({"pos": pos, "turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver, "roomId": widget.roomId});
+    }
+  }
+
   void roll() {
     if (gameOver || isRolling) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (canMove) return;
     setState(() => isRolling = true); _diceController.forward(from: 0);
@@ -200,10 +187,9 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   @override Widget build(BuildContext context) {
     double s = (MediaQuery.of(context).size.width < 400? MediaQuery.of(context).size.width : 400) - 20; double box = s * 0.14;
     String turnName = (widget.mode == GameMode.online)? (turn == widget.myPlayer? myName : opponentName) : (turn == 0? myName : opponentName);
-    return Scaffold(backgroundColor: Color(0xFF0A0E1A),
-      appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text("R${widget.roomId} M${widget.myPlayer} T$turn - $myName vs $opponentName [${isMyTurn? "ME":"OPP"}]", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)), actions: [IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent), onPressed: () async { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$opponentName : $opponentMobile"))); }), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber), onPressed: () => setState(() => showChat =!showChat))]),
+    return Scaffold(backgroundColor: Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text(widget.mode == GameMode.offline? "OFFLINE - $myName" : widget.mode == GameMode.bot? "$myName vs $selectedBotName" : "ROOM ${widget.roomId} - $myName vs $opponentName", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)), actions: [IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent), onPressed: () async { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$opponentName : $opponentMobile"))); }), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber), onPressed: () => setState(() => showChat =!showChat))]),
       body: Column(children: [
-        Container(margin: EdgeInsets.symmetric(horizontal: 8, vertical: 6), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Turn: $turnName (T:$turn M:${widget.myPlayer})", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white)), Text(isMyTurn? "YOUR TURN" : "WAIT - $opponentName", style: TextStyle(fontSize: 11, color: isMyTurn? Colors.greenAccent : Colors.white54, fontWeight: FontWeight.bold))])),
+        Container(margin: EdgeInsets.symmetric(horizontal: 8, vertical: 6), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Turn: $turnName", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)), Text(isMyTurn? "YOUR TURN - TAP DICE" : "WAIT - $opponentName", style: TextStyle(fontSize: 11, color: isMyTurn? Colors.greenAccent : Colors.white54, fontWeight: FontWeight.bold))])),
         Expanded(child: Stack(children: [
           Center(child: Container(width: s, height: s, decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFFF9C4), Color(0xFFE1F5FE), Color(0xFFFCE4EC)], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.amber, width: 4)), child: Stack(clipBehavior: Clip.none, children: [
             Positioned(left: s*0.23, top: s*0.23, width: s*0.54, height: s*0.54, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)]), border: Border.all(color: Colors.white, width: 2)))),
