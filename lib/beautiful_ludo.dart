@@ -85,7 +85,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
       Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - PLAN F FINAL", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.people), label: Text("OFFLINE - 1 PHONE 2 PLAYER"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "OFFLINE", myPlayer: 0, mode: GameMode.offline))))),
       SizedBox(height: 10),
-      SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.smart_toy), label: Text("DOST KE SATH KHELO (BOT)"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => QuickMatchScreen())))),
+      SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.smart_toy), label: Text("DOST KE SATH KHELO"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => QuickMatchScreen())))),
       SizedBox(height: 20), Divider(color: Colors.white24), SizedBox(height: 10),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: _createRoomWithCodeDialog, child: Text("CREATE ROOM - ONLINE"))),
       SizedBox(height: 10),
@@ -98,12 +98,116 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
 class QuickMatchScreen extends StatefulWidget { @override State<QuickMatchScreen> createState() => _QuickMatchScreenState(); }
 class _QuickMatchScreenState extends State<QuickMatchScreen> {
-  int countdown = 10; bool botLaunched = false; Timer? _timer;
+  int countdown = 10; bool botLaunched = false; bool matched = false;
+  Timer? _timer; DatabaseReference? _myEntry; StreamSubscription? _queueSub;
+  String _status = "RANDOM PLAYER DHOONDH RAHE HAIN...";
+
   @override void initState() { super.initState(); startQuickMatch(); }
-  @override void dispose() { _timer?.cancel(); super.dispose(); }
-  void launchBot() { if(botLaunched) return; botLaunched = true; _timer?.cancel(); Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot))); }
-  Future<void> startQuickMatch() async { _timer = Timer.periodic(Duration(seconds: 1), (t){ if(countdown>0) setState(()=> countdown--); else launchBot(); }); }
-  @override Widget build(BuildContext context){ return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [CircularProgressIndicator(color: Colors.orange), Text("$countdown", style: TextStyle(color: Colors.amber, fontSize: 72, fontWeight: FontWeight.w900))]))); }
+
+  @override void dispose() { _timer?.cancel(); _queueSub?.cancel(); try{ _myEntry?.remove(); }catch(_){} super.dispose(); }
+
+  Future<void> startQuickMatch() async {
+    await ensurePrefs();
+    await [Permission.microphone].request(); // match hua to voice turant ready
+    String? mobile = ludoPrefs.getString("mobile");
+    String myName = await getLockedName();
+    getRtdb().goOnline();
+    _myEntry = getRtdb().ref("quick_queue").push();
+    await _myEntry!.set({"mobile": mobile?? "guest", "name": myName, "time": ServerValue.timestamp});
+    _myEntry!.onDisconnect().remove();
+
+    _queueSub = getRtdb().ref("quick_queue").onValue.listen((ev) async {
+      if (matched || botLaunched ||!mounted || _myEntry == null) return;
+      if (ev.snapshot.value == null) return;
+      try {
+        var all = Map<String, dynamic>.from(ev.snapshot.value as Map);
+        String myKey = _myEntry!.key!;
+        int now = DateTime.now().millisecondsSinceEpoch;
+        List<String> keys = [];
+        all.forEach((k, v) {
+          String ks = k.toString(); bool keep = true;
+          if (ks!= myKey) {
+            try {
+              var m = Map<String, dynamic>.from(v as Map);
+              if (m["room"]!= null) keep = false; // already matched - bahar
+              else if (m["mobile"]?.toString() == mobile) keep = false; // khud se match nahi
+              else {
+                var tv = m["time"]; var nm = m["name"];
+                if (tv == null || nm == null) keep = false;
+                else { int t = int.tryParse(tv.toString())?? 0; if (t > 0 && now - t > 60000) keep = false; }
+              }
+            } catch (_) { keep = false; }
+          }
+          if (keep) keys.add(ks);
+        });
+        keys.sort();
+        if (keys.length >= 2 && keys[0] == myKey) {
+          // MAIN HOST HU - room banao, guest ko bhejo, khud khelo
+          matched = true; _timer?.cancel(); await _queueSub?.cancel();
+          String c = (Random().nextInt(9000) + 1000).toString();
+          var other = Map<String, dynamic>.from(all[keys[1]] as Map);
+          await getRtdb().ref(c).set({
+            "game": {"pos": {"0": {"0": -1, "1": -1, "2": -1, "3": -1}, "1": {"0": -1, "1": -1, "2": -1, "3": -1}}, "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "createdAt": ServerValue.timestamp, "roomId": c},
+            "players": {
+              "p0": {"mobile": mobile?? "guest", "name": myName, "player": 0, "joinedAt": ServerValue.timestamp},
+              "p1": {"mobile": other["mobile"]?.toString()?? "guest", "name": other["name"]?.toString()?? "Player", "player": 1, "joinedAt": ServerValue.timestamp}
+            },
+            "chats": {"init": {"player": "System", "msg": "Quick Match", "time": ServerValue.timestamp}}
+          });
+          await getRtdb().ref("quick_queue/${keys[1]}").update({"room": c, "role": 1});
+          try { await _myEntry!.remove(); } catch (_) {}
+          if (!mounted) return;
+          setState(() => _status = "PLAYER MIL GAYA!");
+          await Future.delayed(Duration(milliseconds: 600));
+          if (!mounted) return;
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
+          return;
+        }
+        var me = all[myKey];
+        if (me is Map && me["room"]!= null) {
+          // GUEST HU - host ne room bana diya
+          matched = true; _timer?.cancel(); await _queueSub?.cancel();
+          String c = me["room"].toString();
+          int role = int.tryParse(me["role"].toString())?? 1;
+          try { await _myEntry!.remove(); } catch (_) {}
+          if (!mounted) return;
+          setState(() => _status = "PLAYER MIL GAYA!");
+          await Future.delayed(Duration(milliseconds: 600));
+          if (!mounted) return;
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: role, mode: GameMode.online)));
+        }
+      } catch (_) {}
+    });
+
+    _timer = Timer.periodic(Duration(seconds: 1), (t) {
+      if (matched || botLaunched) return;
+      if (countdown > 0) { if (mounted) setState(() => countdown--); }
+      else launchBot();
+    });
+  }
+
+  void launchBot() async {
+    if (botLaunched || matched) return;
+    botLaunched = true;
+    _timer?.cancel(); await _queueSub?.cancel();
+    try { await _myEntry?.remove(); } catch (_) {}
+    if (!mounted) return;
+    setState(() => _status = "DHUNDH LIYA!"); // bot mila - random naam wala khelna shuru karega
+    await Future.delayed(Duration(milliseconds: 800));
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "BOT", myPlayer: 0, mode: GameMode.bot)));
+  }
+
+  @override Widget build(BuildContext context) {
+    return Scaffold(backgroundColor: Color(0xFF0A0E1A),
+      body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        CircularProgressIndicator(color: Colors.orange),
+        SizedBox(height: 16),
+        Text("$countdown", style: TextStyle(color: Colors.amber, fontSize: 72, fontWeight: FontWeight.w900)),
+        SizedBox(height: 8),
+        Padding(padding: EdgeInsets.symmetric(horizontal: 30), child: Text(_status, textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold))),
+      ])));
+  }
 }
 
 class LudoGame extends StatefulWidget {
@@ -124,15 +228,8 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   Future<void> initAgoraAndRoom() async {
     await ensurePrefs(); myMobile = ludoPrefs.getString("mobile"); myName = await getLockedName(); // LOCKED permanent naam
     if(widget.mode == GameMode.online){
-      getRtdb().goOnline(); await [Permission.microphone].request();
-      try{
-        agoraEngine = createAgoraRtcEngine();
-        await agoraEngine!.initialize(RtcEngineContext(appId: agoraAppId));
-        await agoraEngine!.enableAudio();
-        await agoraEngine!.setEnableSpeakerphone(true);
-        agoraEngine!.registerEventHandler(RtcEngineEventHandler(onJoinChannelSuccess: (c,e){ if(mounted) setState(()=> isAgoraJoined = true); }));
-        await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true));
-      }catch(_){}
+      initVoice(); // BINA AWAIT - voice background me judegi, fail/hang ho to bhi game nahi rukega
+      getRtdb().goOnline();
       roomRef = getRtdb().ref(widget.roomId); chatRef = getRtdb().ref("${widget.roomId}/chats");
       roomRef!.keepSynced(true);
 
@@ -194,8 +291,34 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   bool get isMyTurn { if (widget.mode == GameMode.offline) return true; if (widget.mode == GameMode.bot) return turn == 0; return turn == widget.myPlayer; }
   bool isValidMove(int p, int idx, int d) { int cur = pos[p][idx]; if (cur == 45) return false; if (cur == -1) return d == 6; if (cur >= 40) return cur + d <= 45; int dist = (homeEntry[p] - cur + 40) % 40; if (d == dist + 1) return true; if (d > dist + 1) return false; return true; }
   void sendMessage() async { if (chatCtrl.text.trim().isEmpty) return; String t = chatCtrl.text.trim(); chatCtrl.clear(); if(widget.mode == GameMode.online && chatRef!= null){ getRtdb().goOnline(); await chatRef!.push().set({"player": myName, "msg": t, "time": ServerValue.timestamp}); } else { setState(()=> chatMessages.add({"player": myName, "msg": t})); } }
-  void toggleMic() async { setState(() => isMicOn =!isMicOn); if(agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
-  void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); if(agoraEngine!=null){ await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); } }
+  void toggleMic() async { setState(() => isMicOn =!isMicOn); try{ if(agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }catch(_){} }
+  void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); try{ if(agoraEngine!=null){ await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); } }catch(_){} }
+
+  // VOICE bilkul alag function - fail ho ya hang ho, game pe ZERO asar. Har step pe timeout.
+  Future<void> initVoice() async {
+    try{
+      await [Permission.microphone].request().timeout(const Duration(seconds: 10));
+      agoraEngine = createAgoraRtcEngine();
+      await agoraEngine!.initialize(RtcEngineContext(appId: agoraAppId)).timeout(const Duration(seconds: 10));
+      await agoraEngine!.enableAudio().timeout(const Duration(seconds: 10));
+      agoraEngine!.registerEventHandler(RtcEngineEventHandler(
+        onJoinChannelSuccess: (c,e){
+          if(mounted) setState(()=> isAgoraJoined = true);
+          agoraEngine!.setEnableSpeakerphone(true); // join ke BAAD speaker on
+        },
+        onUserJoined: (c, uid, elapsed){
+          agoraEngine!.setEnableSpeakerphone(true); // saamne wala jude to speaker pakka on
+          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Voice connected!"), duration: Duration(seconds: 1)));
+        },
+        onUserOffline: (c, uid, reason){
+          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Voice disconnected"), duration: Duration(seconds: 1)));
+        },
+      ));
+      await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)).timeout(const Duration(seconds: 15));
+    }catch(e){
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Voice failed - game chal raha hai"), duration: Duration(seconds: 2)));
+    }
+  }
   void syncRoom(){ if(widget.mode == GameMode.online){ getRtdb().goOnline(); getRtdb().ref("${widget.roomId}/game/pos").set({"0": {"0": pos[0][0], "1": pos[0][1], "2": pos[0][2], "3": pos[0][3]}, "1": {"0": pos[1][0], "1": pos[1][1], "2": pos[1][2], "3": pos[1][3]}}); getRtdb().ref("${widget.roomId}/game").update({"turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver}); } }
   void roll() {
     if (gameOver || isRolling) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (canMove) return;
