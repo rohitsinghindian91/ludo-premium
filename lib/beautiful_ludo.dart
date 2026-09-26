@@ -45,11 +45,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
   void joinRoom() async {
     await ensurePrefs(); getRtdb().goOnline();
-    String code = codeCtrl.text.trim(); 
+    String code = codeCtrl.text.trim();
     if(code.length!=4){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("4 digit code dalo"))); return; }
-    var snap = await getRtdb().ref("$code/game").get(); 
+    var snap = await getRtdb().ref("$code/game").get();
     if(!snap.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi mila"))); return; }
-    String? mobile = ludoPrefs.getString("mobile"); 
+    String? mobile = ludoPrefs.getString("mobile");
     String? myName = ludoPrefs.getString("name");
     await getRtdb().ref("$code/players/1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1, "joinedAt": ServerValue.timestamp});
     await getRtdb().ref("$code/game").keepSynced(true);
@@ -59,8 +59,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Padding(padding: EdgeInsets.all(20), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.casino, size: 60, color: Colors.amber), 
-      Text("LUDO PREMIUM", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.amber)), 
+      Icon(Icons.casino, size: 60, color: Colors.amber),
+      Text("LUDO PREMIUM", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.amber)),
       SizedBox(height: 30),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.people), label: Text("OFFLINE - 1 PHONE 2 PLAYER"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "OFFLINE", myPlayer: 0, mode: GameMode.offline))))),
       SizedBox(height: 10),
@@ -110,16 +110,39 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       try { await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)); } catch(_){}
       roomRef = getRtdb().ref("${widget.roomId}/game"); chatRef = getRtdb().ref("${widget.roomId}/chats"); playersRef = getRtdb().ref("${widget.roomId}/players");
       await roomRef!.keepSynced(true); await chatRef!.keepSynced(true); await playersRef!.keepSynced(true);
+
+      // FIXED - List aur Map dono handle
       playersRef!.onValue.listen((event){
-        if(event.snapshot.value!=null && mounted){
-          var all = Map<String,dynamic>.from(event.snapshot.value as Map);
+        if(event.snapshot.value==null ||!mounted) return;
+        try{
+          var val = event.snapshot.value;
+          Map<String,dynamic>? oppData;
           int opp = 1 - widget.myPlayer;
-          if(all.containsKey("$opp")){
-            var d = Map<String,dynamic>.from(all["$opp"] as Map);
-            setState((){ opponentName = d["name"]?.toString()??"Opponent"; opponentMobile = d["mobile"]?.toString()??""; });
+          if(val is List){
+            if(opp < val.length && val[opp]!=null){
+              var item = val[opp];
+              if(item is Map){
+                oppData = Map<String,dynamic>.from(item);
+              }
+            }
+          } else if(val is Map){
+            var all = Map<String,dynamic>.from(val as Map);
+            dynamic rawOpp = all["$opp"]?? all[opp];
+            if(rawOpp is Map){
+              oppData = Map<String,dynamic>.from(rawOpp);
+            }
           }
+          if(oppData!=null){
+            setState((){
+              opponentName = oppData!["name"]?.toString()?? "Opponent";
+              opponentMobile = oppData["mobile"]?.toString()?? "";
+            });
+          }
+        }catch(e){
+          debugPrint("players parse $e");
         }
       });
+
       roomRef!.onValue.listen((event){
         if(event.snapshot.value!=null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -182,7 +205,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
             Positioned(left: s*0.23, top: s*0.23, width: s*0.54, height: s*0.54, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)]), border: Border.all(color: Colors.white, width: 2)))),
             Positioned(left: 10, top: 10, width: box, height: box, child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFC8E6C9), Color(0xFFE8F5E9)]), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green, width: 3)))),
             Positioned(right: 10, bottom: 10, width: box, height: box, child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFFCDD2), Color(0xFFFFEBEE)]), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red, width: 3)))),
-            Positioned(left: 8, top: box + 8, child: diceNearHome(0, diceGreen)), 
+            Positioned(left: 8, top: box + 8, child: diceNearHome(0, diceGreen)),
             Positioned(right: 8, bottom: box + 8, child: diceNearHome(1, diceRed)),
             for (int i = 0; i < 40; i++) Positioned(left: s / 2 + s * 0.25 * cos((i / 40) * 2 * pi - pi / 2) - 7, top: s / 2 + s * 0.25 * sin((i / 40) * 2 * pi - pi / 2) - 7, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: safe.contains(i)? Color(0xFFFFD700) : Colors.white, shape: BoxShape.circle, border: Border.all(color: safe.contains(i)? Colors.orange : Colors.black26)))),
             for (int j = 0; j < 5; j++) Positioned(left: getHomePathPos(0, j, s).dx - 8, top: getHomePathPos(0, j, s).dy - 8, child: Container(width: 16, height: 16, decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)))),
