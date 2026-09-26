@@ -15,6 +15,11 @@ Future<void> ensurePrefs() async {
   if (!isPrefsReady) {
     ludoPrefs = await SharedPreferences.getInstance();
     isPrefsReady = true;
+    var mainPrefs = await SharedPreferences.getInstance();
+    String? realName = mainPrefs.getString("name");
+    String? realMobile = mainPrefs.getString("mobile");
+    if (realName!= null) await ludoPrefs.setString("name", realName);
+    if (realMobile!= null) await ludoPrefs.setString("mobile", realMobile);
     if (ludoPrefs.getString("name") == null) await ludoPrefs.setString("name", "Player${Random().nextInt(9000)}");
     if (ludoPrefs.getString("mobile") == null) await ludoPrefs.setString("mobile", "guest_${Random().nextInt(999999)}");
   }
@@ -26,36 +31,51 @@ class _LobbyScreenState extends State<LobbyScreen> {
   final codeCtrl = TextEditingController();
   String genCode() => (Random().nextInt(9000) + 1000).toString();
   @override void initState() { super.initState(); ensurePrefs(); getRtdb().goOnline(); }
+
   void _createRoomWithCodeDialog() async {
     await ensurePrefs(); getRtdb().goOnline();
     String c = genCode();
-    await getRtdb().ref("$c/game").set({"pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]], "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "roomId": c});
-    String? mobile = ludoPrefs.getString("mobile"); String? myName = ludoPrefs.getString("name");
-    await getRtdb().ref("$c/players/p0").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 0});
+    String? mobile = ludoPrefs.getString("mobile");
+    String? myName = ludoPrefs.getString("name");
+    await getRtdb().ref(c).set({
+      "game": {
+        "pos": {
+          "0": {"0": -1, "1": -1, "2": -1, "3": -1},
+          "1": {"0": -1, "1": -1, "2": -1, "3": -1}
+        },
+        "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "roomId": c
+      },
+      "players": {
+        "p0": {"mobile": mobile?? "guest", "name": myName?? "Player", "player": 0},
+        "p1": {"mobile": "", "name": "Opponent", "player": 1}
+      }
+    });
     Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
   }
+
   void joinRoom() async {
     await ensurePrefs(); getRtdb().goOnline();
     String code = codeCtrl.text.trim();
-    if(code.length!=4){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("4 digit code dalo"))); return; }
-    var snap = await getRtdb().ref("$code/game").get();
-    if(!snap.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi mila"))); return; }
-    String? mobile = ludoPrefs.getString("mobile"); String? myName = ludoPrefs.getString("name");
-    await getRtdb().ref("$code/players/p1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1});
+    if (code.length!= 4) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("4 digit code dalo"))); return; }
+    var snap = await getRtdb().ref("$code").get();
+    if (!snap.exists) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi mila"))); return; }
+    String? mobile = ludoPrefs.getString("mobile");
+    String? myName = ludoPrefs.getString("name");
+    await getRtdb().ref("$code/players/p1").set({"mobile": mobile?? "guest", "name": myName?? "Player", "player": 1});
     Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
   }
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Padding(padding: EdgeInsets.all(20), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - FINAL", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
+      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - CONTACT FIX", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.people), label: Text("OFFLINE - 1 PHONE 2 PLAYER"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "OFFLINE", myPlayer: 0, mode: GameMode.offline))))),
       SizedBox(height: 10),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.smart_toy), label: Text("DOST KE SATH KHELO (BOT)"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => QuickMatchScreen())))),
       SizedBox(height: 20), Divider(color: Colors.white24), SizedBox(height: 10),
-      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: _createRoomWithCodeDialog, child: Text("CREATE ROOM - ONLINE"))),
+      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: _createRoomWithCodeDialog, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text("CREATE ROOM - ONLINE"))),
       SizedBox(height: 10),
       TextField(controller: codeCtrl, maxLength: 4, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: TextStyle(letterSpacing: 8, fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white), decoration: InputDecoration(counterText: "", hintText: "CODE", filled: true, fillColor: Color(0xFF1E1E2E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
       SizedBox(height: 8),
-      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: joinRoom, child: Text("JOIN ROOM - ONLINE"))),
+      SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: joinRoom, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: Text("JOIN ROOM - ONLINE", style: TextStyle(color: Colors.black)))),
     ]))));
   }
 }
@@ -92,30 +112,27 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       agoraEngine = createAgoraRtcEngine(); await agoraEngine!.initialize(RtcEngineContext(appId: agoraAppId)); await agoraEngine!.enableAudio(); await agoraEngine!.setEnableSpeakerphone(true);
       agoraEngine!.registerEventHandler(RtcEngineEventHandler(onJoinChannelSuccess: (c,e){ setState(()=> isAgoraJoined = true); }));
       try { await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)); } catch(_){}
-      roomRef = getRtdb().ref("${widget.roomId}/game"); chatRef = getRtdb().ref("${widget.roomId}/chats");
-
-      // FINAL OPPONENT - Direct
-      if(widget.myPlayer == 0){
-        getRtdb().ref("${widget.roomId}/players/p1/name").onValue.listen((e){
-          if(e.snapshot.value!= null && mounted) setState(()=> opponentName = e.snapshot.value.toString());
-        });
-        getRtdb().ref("${widget.roomId}/players/p1/mobile").onValue.listen((e){
-          if(e.snapshot.value!= null && mounted) setState(()=> opponentMobile = e.snapshot.value.toString());
-        });
-      } else {
-        getRtdb().ref("${widget.roomId}/players/p0/name").onValue.listen((e){
-          if(e.snapshot.value!= null && mounted) setState(()=> opponentName = e.snapshot.value.toString());
-        });
-        getRtdb().ref("${widget.roomId}/players/p0/mobile").onValue.listen((e){
-          if(e.snapshot.value!= null && mounted) setState(()=> opponentMobile = e.snapshot.value.toString());
-        });
-      }
-
+      roomRef = getRtdb().ref(widget.roomId);
+      chatRef = getRtdb().ref("${widget.roomId}/chats");
+      getRtdb().ref("${widget.roomId}/players").onValue.listen((e){
+        if(e.snapshot.value!= null && mounted){
+          var p = Map<String,dynamic>.from(e.snapshot.value as Map);
+          setState((){
+            if(widget.myPlayer == 0){
+              opponentName = p["p1"]?["name"]?.toString()?? "Opponent";
+              opponentMobile = p["p1"]?["mobile"]?.toString()?? "";
+            } else {
+              opponentName = p["p0"]?["name"]?.toString()?? "Opponent";
+              opponentMobile = p["p0"]?["mobile"]?.toString()?? "";
+            }
+          });
+        }
+      });
       roomRef!.onValue.listen((event){
         if(event.snapshot.value!=null && mounted){
-          var data = Map<String,dynamic>.from(event.snapshot.value as Map);
+          var allData = event.snapshot.value as Map;
+          var data = allData["game"]!= null? Map<String,dynamic>.from(allData["game"] as Map) : Map<String,dynamic>.from(allData as Map);
           setState((){
-            // FINAL POS PARSE - Map or List both
             if(data['pos']!=null){
               try{
                 var raw = data['pos'];
@@ -170,7 +187,17 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   void sendMessage() async { if (chatCtrl.text.trim().isEmpty) return; String t = chatCtrl.text.trim(); chatCtrl.clear(); if(widget.mode == GameMode.online && chatRef!= null){ getRtdb().goOnline(); await chatRef!.push().set({"player": myName, "msg": t, "time": ServerValue.timestamp}); } else { setState(()=> chatMessages.add({"player": myName, "msg": t})); } }
   void toggleMic() async { setState(() => isMicOn =!isMicOn); if(agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
   void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); if(agoraEngine!=null){ await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); } }
-  Future<void> syncRoom() async { if(widget.mode == GameMode.online && roomRef!= null){ getRtdb().goOnline(); await roomRef!.set({"pos": pos, "turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver, "roomId": widget.roomId}); } }
+  Future<void> syncRoom() async {
+    if(widget.mode == GameMode.online && roomRef!= null){
+      getRtdb().goOnline();
+      await getRtdb().ref("${widget.roomId}/game/pos").set({"0": {"0": pos[0][0], "1": pos[0][1], "2": pos[0][2], "3": pos[0][3]}, "1": {"0": pos[1][0], "1": pos[1][1], "2": pos[1][2], "3": pos[1][3]}});
+      await getRtdb().ref("${widget.roomId}/game/turn").set(turn);
+      await getRtdb().ref("${widget.roomId}/game/diceGreen").set(diceGreen);
+      await getRtdb().ref("${widget.roomId}/game/diceRed").set(diceRed);
+      await getRtdb().ref("${widget.roomId}/game/canMove").set(canMove);
+      await getRtdb().ref("${widget.roomId}/game/gameOver").set(gameOver);
+    }
+  }
   void roll() async {
     if (gameOver || isRolling) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (canMove) return;
     setState(() => isRolling = true); _diceController.forward(from: 0);
