@@ -36,7 +36,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     try {
       await getRtdb().ref("$c/game").set({"pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]], "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "createdAt": ServerValue.timestamp, "roomId": c});
       String? mobile = ludoPrefs.getString("mobile"); String? myName = ludoPrefs.getString("name");
-      await getRtdb().ref("$c/players/0").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 0, "joinedAt": ServerValue.timestamp});
+      await getRtdb().ref("$c/players/p0").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 0, "joinedAt": ServerValue.timestamp});
       await getRtdb().ref("$c/game").keepSynced(true);
       await getRtdb().ref("$c/players").keepSynced(true);
       await getRtdb().ref("$c/chats").keepSynced(true);
@@ -51,7 +51,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     if(!snap.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi mila"))); return; }
     String? mobile = ludoPrefs.getString("mobile");
     String? myName = ludoPrefs.getString("name");
-    await getRtdb().ref("$code/players/1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1, "joinedAt": ServerValue.timestamp});
+    await getRtdb().ref("$code/players/p1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1, "joinedAt": ServerValue.timestamp});
     await getRtdb().ref("$code/game").keepSynced(true);
     await getRtdb().ref("$code/players").keepSynced(true);
     await getRtdb().ref("$code/chats").keepSynced(true);
@@ -111,25 +111,25 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       roomRef = getRtdb().ref("${widget.roomId}/game"); chatRef = getRtdb().ref("${widget.roomId}/chats"); playersRef = getRtdb().ref("${widget.roomId}/players");
       await roomRef!.keepSynced(true); await chatRef!.keepSynced(true); await playersRef!.keepSynced(true);
 
-      // FIXED - List aur Map dono handle
       playersRef!.onValue.listen((event){
         if(event.snapshot.value==null ||!mounted) return;
         try{
           var val = event.snapshot.value;
           Map<String,dynamic>? oppData;
-          int opp = 1 - widget.myPlayer;
-          if(val is List){
-            if(opp < val.length && val[opp]!=null){
-              var item = val[opp];
-              if(item is Map){
-                oppData = Map<String,dynamic>.from(item);
-              }
-            }
-          } else if(val is Map){
+          String oppKey = "p${1 - widget.myPlayer}";
+          if(val is Map){
             var all = Map<String,dynamic>.from(val as Map);
-            dynamic rawOpp = all["$opp"]?? all[opp];
-            if(rawOpp is Map){
-              oppData = Map<String,dynamic>.from(rawOpp);
+            if(all.containsKey(oppKey) && all[oppKey] is Map){
+              oppData = Map<String,dynamic>.from(all[oppKey] as Map);
+            } else if(all.containsKey("${1-widget.myPlayer}") && all["${1-widget.myPlayer}"] is Map){
+              oppData = Map<String,dynamic>.from(all["${1-widget.myPlayer}"] as Map);
+            } else if(all.containsKey(1-widget.myPlayer) && all[1-widget.myPlayer] is Map){
+              oppData = Map<String,dynamic>.from(all[1-widget.myPlayer] as Map);
+            }
+          } else if(val is List){
+            int opp = 1 - widget.myPlayer;
+            if(opp < val.length && val[opp]!=null && val[opp] is Map){
+              oppData = Map<String,dynamic>.from(val[opp] as Map);
             }
           }
           if(oppData!=null){
