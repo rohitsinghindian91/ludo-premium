@@ -26,7 +26,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
   final codeCtrl = TextEditingController();
   String genCode() => (Random().nextInt(9000) + 1000).toString();
   @override void initState() { super.initState(); ensurePrefs(); getRtdb().goOnline(); }
-  
   void _createRoomWithCodeDialog() async {
     await ensurePrefs(); getRtdb().goOnline();
     String c = genCode();
@@ -37,7 +36,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
       Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
     } catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error $e"))); }
   }
-  
   void joinRoom() async {
     await ensurePrefs(); getRtdb().goOnline();
     String code = codeCtrl.text.trim();
@@ -48,10 +46,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
     await getRtdb().ref("$code/players/p1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1, "joinedAt": ServerValue.timestamp});
     Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
   }
-
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Padding(padding: EdgeInsets.all(20), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - PLAN F FINAL", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
+      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - PLAN G DEBUG", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.people), label: Text("OFFLINE - 1 PHONE 2 PLAYER"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "OFFLINE", myPlayer: 0, mode: GameMode.offline))))),
       SizedBox(height: 10),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.smart_toy), label: Text("DOST KE SATH KHELO (BOT)"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => QuickMatchScreen())))),
@@ -101,36 +98,46 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       roomRef!.keepSynced(true);
       getRtdb().ref("${widget.roomId}/players").keepSynced(true);
 
-      void setOpp(Map<dynamic,dynamic> m){
-        if(!mounted) return;
-        String n = m["name"]?.toString() ?? "";
-        if(n.isNotEmpty && n != "Opponent" && n != myName){
-          setState((){
-            opponentName = n;
-            opponentMobile = m["mobile"]?.toString() ?? "";
-          });
-        }
+      Future<void> loadOpponent() async {
+        try{
+          var allSnap = await getRtdb().ref("${widget.roomId}/players").get();
+          if(allSnap.exists && allSnap.value!= null){
+            var map = allSnap.value as Map;
+            map.forEach((k,v){
+              if(v is Map){
+                String name = v["name"]?.toString()?? "";
+                if(name.isNotEmpty && k.toString()!= "p${widget.myPlayer}"){
+                  if(mounted){
+                    setState((){
+                      opponentName = name;
+                      opponentMobile = v["mobile"]?.toString()?? "";
+                    });
+                  }
+                }
+              }
+            });
+          }
+        }catch(e){ debugPrint("loadOpp $e"); }
       }
 
-      try{
-        var snap = await getRtdb().ref("${widget.roomId}/players/p${1-widget.myPlayer}").get();
-        if(snap.exists && snap.value != null) setOpp(snap.value as Map);
-      }catch(_){}
+      await loadOpponent();
 
-      getRtdb().ref("${widget.roomId}/players/p${1-widget.myPlayer}").onValue.listen((e){
-        if(e.snapshot.value != null) setOpp(e.snapshot.value as Map);
-      });
-
-      getRtdb().ref("${widget.roomId}/players").onValue.listen((event){
-        if(event.snapshot.value==null) return;
-        var val = event.snapshot.value;
-        if(val is Map){
-          val.forEach((k,v){
-            if(v is Map && k.toString() == "p${1-widget.myPlayer}"){
-              setOpp(v);
+      getRtdb().ref("${widget.roomId}/players").onValue.listen((e){
+        if(e.snapshot.value == null) return;
+        var map = e.snapshot.value as Map;
+        map.forEach((k,v){
+          if(v is Map){
+            String name = v["name"]?.toString()?? "";
+            if(name.isNotEmpty && k.toString()!= "p${widget.myPlayer}"){
+              if(mounted){
+                setState((){
+                  opponentName = name;
+                  opponentMobile = v["mobile"]?.toString()?? "";
+                });
+              }
             }
-          });
-        }
+          }
+        });
       });
 
       roomRef!.onValue.listen((event){
@@ -138,11 +145,17 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
           setState((){
             if(data['pos']!=null){ try { var raw = data['pos'] as List; pos = List<List<int>>.from(raw.map((e)=> List<int>.from((e as List).map((x)=> x as int)))); } catch(_){} }
-            if(data['turn']!=null) turn = data['turn'] as int;
-            if(data['diceGreen']!=null) diceGreen = data['diceGreen'] as int;
-            if(data['diceRed']!=null) diceRed = data['diceRed'] as int;
-            if(data['canMove']!=null) canMove = data['canMove'] as bool;
-            if(data['gameOver']!=null) gameOver = data['gameOver'] as bool;
+            if(data['turn']!=null) turn = int.tryParse(data['turn'].toString())?? 0;
+            if(data['diceGreen']!=null) diceGreen = int.tryParse(data['diceGreen'].toString())?? 1;
+            if(data['diceRed']!=null) diceRed = int.tryParse(data['diceRed'].toString())?? 1;
+            if(data['canMove']!=null){
+              if(data['canMove'] is bool) canMove = data['canMove'] as bool;
+              else canMove = data['canMove'].toString() == "true";
+            }
+            if(data['gameOver']!=null){
+              if(data['gameOver'] is bool) gameOver = data['gameOver'] as bool;
+              else gameOver = data['gameOver'].toString() == "true";
+            }
           });
         }
       });
@@ -187,9 +200,10 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   @override Widget build(BuildContext context) {
     double s = (MediaQuery.of(context).size.width < 400? MediaQuery.of(context).size.width : 400) - 20; double box = s * 0.14;
     String turnName = (widget.mode == GameMode.online)? (turn == widget.myPlayer? myName : opponentName) : (turn == 0? myName : opponentName);
-    return Scaffold(backgroundColor: Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text(widget.mode == GameMode.offline? "OFFLINE - $myName" : widget.mode == GameMode.bot? "$myName vs $selectedBotName" : "ROOM ${widget.roomId} - $myName vs $opponentName", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)), actions: [IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent), onPressed: () async { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$opponentName : $opponentMobile"))); }), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber), onPressed: () => setState(() => showChat =!showChat))]),
+    return Scaffold(backgroundColor: Color(0xFF0A0E1A),
+      appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text("R${widget.roomId} M${widget.myPlayer} T$turn - $myName vs $opponentName [${isMyTurn? "ME":"OPP"}]", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)), actions: [IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent), onPressed: () async { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$opponentName : $opponentMobile"))); }), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber), onPressed: () => setState(() => showChat =!showChat))]),
       body: Column(children: [
-        Container(margin: EdgeInsets.symmetric(horizontal: 8, vertical: 6), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Turn: $turnName", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)), Text(isMyTurn? "YOUR TURN - TAP DICE" : "WAIT - $opponentName", style: TextStyle(fontSize: 11, color: isMyTurn? Colors.greenAccent : Colors.white54, fontWeight: FontWeight.bold))])),
+        Container(margin: EdgeInsets.symmetric(horizontal: 8, vertical: 6), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Turn: $turnName (T:$turn M:${widget.myPlayer})", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white)), Text(isMyTurn? "YOUR TURN" : "WAIT - $opponentName", style: TextStyle(fontSize: 11, color: isMyTurn? Colors.greenAccent : Colors.white54, fontWeight: FontWeight.bold))])),
         Expanded(child: Stack(children: [
           Center(child: Container(width: s, height: s, decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFFF9C4), Color(0xFFE1F5FE), Color(0xFFFCE4EC)], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.amber, width: 4)), child: Stack(clipBehavior: Clip.none, children: [
             Positioned(left: s*0.23, top: s*0.23, width: s*0.54, height: s*0.54, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)]), border: Border.all(color: Colors.white, width: 2)))),
