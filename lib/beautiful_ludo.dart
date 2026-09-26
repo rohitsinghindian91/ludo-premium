@@ -186,7 +186,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           setState(()=> chatMessages = msgs);
         }
       });
-    } else { setState(()=>{ p0Name = myName; p1Name = widget.mode == GameMode.bot? selectedBotName : "Dost"; }); }
+    } else { setState((){ p0Name = myName; p1Name = widget.mode == GameMode.bot? selectedBotName : "Dost"; }); }
   }
 
   @override void dispose() { _diceController.dispose(); chatCtrl.dispose(); if(isAgoraJoined && agoraEngine!=null){ agoraEngine!.leaveChannel(); agoraEngine!.release(); } super.dispose(); }
