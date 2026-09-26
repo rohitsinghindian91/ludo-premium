@@ -20,6 +20,7 @@ Future<void> ensurePrefs() async {
   }
 }
 enum GameMode { online, offline, bot }
+
 class LobbyScreen extends StatefulWidget { @override State<LobbyScreen> createState() => _LobbyScreenState(); }
 class _LobbyScreenState extends State<LobbyScreen> {
   final codeCtrl = TextEditingController();
@@ -32,6 +33,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
       await getRtdb().ref("$c/game").set({"pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]], "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "createdAt": ServerValue.timestamp, "roomId": c});
       String? mobile = ludoPrefs.getString("mobile"); String? myName = ludoPrefs.getString("name");
       await getRtdb().ref("$c/players/p0").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 0, "joinedAt": ServerValue.timestamp});
+      await getRtdb().ref("$c/players/0").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 0, "joinedAt": ServerValue.timestamp});
       Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
     } catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error $e"))); }
   }
@@ -43,11 +45,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
     if(!snap.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi mila"))); return; }
     String? mobile = ludoPrefs.getString("mobile"); String? myName = ludoPrefs.getString("name");
     await getRtdb().ref("$code/players/p1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1, "joinedAt": ServerValue.timestamp});
+    await getRtdb().ref("$code/players/1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1, "joinedAt": ServerValue.timestamp});
     Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
   }
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Padding(padding: EdgeInsets.all(20), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - PLAN D", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
+      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - PLAN E", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.people), label: Text("OFFLINE - 1 PHONE 2 PLAYER"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "OFFLINE", myPlayer: 0, mode: GameMode.offline))))),
       SizedBox(height: 10),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.smart_toy), label: Text("DOST KE SATH KHELO (BOT)"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => QuickMatchScreen())))),
@@ -60,6 +63,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     ]))));
   }
 }
+
 class QuickMatchScreen extends StatefulWidget { @override State<QuickMatchScreen> createState() => _QuickMatchScreenState(); }
 class _QuickMatchScreenState extends State<QuickMatchScreen> {
   int countdown = 10; bool botLaunched = false; Timer? _timer;
@@ -69,11 +73,13 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
   Future<void> startQuickMatch() async { _timer = Timer.periodic(Duration(seconds: 1), (t){ if(countdown>0) setState(()=> countdown--); else launchBot(); }); }
   @override Widget build(BuildContext context){ return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [CircularProgressIndicator(color: Colors.orange), Text("$countdown", style: TextStyle(color: Colors.amber, fontSize: 72, fontWeight: FontWeight.w900))]))); }
 }
+
 class LudoGame extends StatefulWidget {
   final String roomId; final int myPlayer; final GameMode mode;
   const LudoGame({super.key, required this.roomId, required this.myPlayer, required this.mode});
   @override State<LudoGame> createState() => _LudoGameState();
 }
+
 class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin {
   final _rng = Random(); int diceGreen = 1, diceRed = 1, turn = 0, consecutiveSixes = 0; bool canMove = false, gameOver = false, isRolling = false, showChat = false; bool isMicOn = true, isSpeakerOn = true; bool isAgoraJoined = false; RtcEngine? agoraEngine;
   List<List<int>> pos = [[-1,-1,-1,-1], [-1,-1,-1,-1]]; List<Map<String, dynamic>> chatMessages = []; TextEditingController chatCtrl = TextEditingController();
@@ -82,6 +88,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   String? myMobile; String myName = "You"; String opponentName = "Opponent"; String opponentMobile = "";
   final List<String> botNames = ["Jyoti","Simran","Kajal","Pinki","Sonia","Ritika","Anjali","Sweety","Pooja","Deepika"]; String selectedBotName = "Jyoti";
   @override void initState() { selectedBotName = botNames[_rng.nextInt(botNames.length)]; _diceController = AnimationController(vsync: this, duration: Duration(milliseconds: 800)); initAgoraAndRoom(); if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 800), () => botTurn()); }
+
   Future<void> initAgoraAndRoom() async {
     await ensurePrefs(); myMobile = ludoPrefs.getString("mobile"); myName = ludoPrefs.getString("name")?? "You";
     if(widget.mode == GameMode.online){
@@ -90,18 +97,43 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       agoraEngine!.registerEventHandler(RtcEngineEventHandler(onJoinChannelSuccess: (c,e){ setState(()=> isAgoraJoined = true); }));
       try { await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)); } catch(_){}
       roomRef = getRtdb().ref("${widget.roomId}/game"); chatRef = getRtdb().ref("${widget.roomId}/chats");
-      // FINAL FIX - DIRECT OPPONENT NODE SE NAAM
-      String oppPath = "${widget.roomId}/players/p${1 - widget.myPlayer}";
-      getRtdb().ref(oppPath).onValue.listen((event){
-        if(event.snapshot.value==null ||!mounted) return;
+
+      void handleOpp(dynamic val){
+        if(val==null ||!mounted) return;
         try{
-          var m = Map<String,dynamic>.from(event.snapshot.value as Map);
-          setState((){
-            opponentName = m["name"]?.toString()?? "Opponent";
-            opponentMobile = m["mobile"]?.toString()?? "";
-          });
-        }catch(e){}
+          var m = Map<String,dynamic>.from(val as Map);
+          String n = m["name"]?.toString()??"";
+          if(n.isNotEmpty && n!="Opponent"){
+            setState((){
+              opponentName = n;
+              opponentMobile = m["mobile"]?.toString()??"";
+            });
+          }
+        }catch(e){ debugPrint("handleOpp $e"); }
+      }
+
+      // PLAN E - 4 path suno
+      getRtdb().ref("${widget.roomId}/players/p${1 - widget.myPlayer}").onValue.listen((e){ if(e.snapshot.value!=null) handleOpp(e.snapshot.value); });
+      getRtdb().ref("${widget.roomId}/players/${1 - widget.myPlayer}").onValue.listen((e){ if(e.snapshot.value!=null) handleOpp(e.snapshot.value); });
+
+      getRtdb().ref("${widget.roomId}/players").onValue.listen((event){
+        if(event.snapshot.value==null) return;
+        var val = event.snapshot.value;
+        try{
+          if(val is Map){
+            var all = Map<String,dynamic>.from(val as Map);
+            String oppP = "p${1 - widget.myPlayer}";
+            if(all[oppP]!=null) handleOpp(all[oppP]);
+            String oppN = "${1 - widget.myPlayer}";
+            if(all[oppN]!=null) handleOpp(all[oppN]);
+            if(all.containsKey(1-widget.myPlayer) && all[1-widget.myPlayer]!=null) handleOpp(all[1-widget.myPlayer]);
+          } else if(val is List){
+            int opp = 1 - widget.myPlayer;
+            if(opp < val.length && val[opp]!=null) handleOpp(val[opp]);
+          }
+        }catch(e){ debugPrint("players parse $e"); }
       });
+
       roomRef!.onValue.listen((event){
         if(event.snapshot.value!=null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
@@ -123,6 +155,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       });
     } else { setState(()=> opponentName = selectedBotName); }
   }
+
   @override void dispose() { _diceController.dispose(); chatCtrl.dispose(); if(isAgoraJoined && agoraEngine!=null){ agoraEngine!.leaveChannel(); agoraEngine!.release(); } super.dispose(); }
   int get dice => turn == 0? diceGreen : diceRed;
   bool get isMyTurn { if (widget.mode == GameMode.offline) return true; if (widget.mode == GameMode.bot) return turn == 0; return turn == widget.myPlayer; }
