@@ -10,16 +10,23 @@ import 'rtdb.dart';
 
 // LOCKED NAME HELPER - Firestore users/<mobile>/name se permanent naam lega
 // (pehli registration wala naam, jo kabhi nahi badalta - jaise janvi sharma)
+// FIX: pehle phone me saved naam check hota hai (turant, bina net wait),
+// aur Firestore se zyada se zyada 4 sec wait - taaki opponent connection kabhi na ruke
 Future<String> getLockedName() async {
   await ensurePrefs();
-  String loginName = ludoPrefs.getString("name") ?? "You";
+  String loginName = ludoPrefs.getString("name")?? "You";
+  String? cached = ludoPrefs.getString("locked_name");
+  if (cached!= null && cached.isNotEmpty) return cached; // turant mil gaya, net nahi chahiye
   String? mobile = ludoPrefs.getString("mobile");
   if (mobile == null || mobile.isEmpty) return loginName;
   try {
-    var doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
+    var doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get().timeout(const Duration(seconds: 4));
     if (doc.exists) {
-      String locked = doc.data()?["name"]?.toString() ?? "";
-      if (locked.isNotEmpty && locked != "WAITING" && locked != "Opponent") return locked;
+      String locked = doc.data()?["name"]?.toString()?? "";
+      if (locked.isNotEmpty && locked!= "WAITING" && locked!= "Opponent") {
+        await ludoPrefs.setString("locked_name", locked); // agli baar ke liye save
+        return locked;
+      }
     }
   } catch (_) {}
   return loginName;
@@ -49,21 +56,27 @@ class _LobbyScreenState extends State<LobbyScreen> {
     await ensurePrefs(); getRtdb().goOnline();
     String c = genCode();
     try {
-      await getRtdb().ref("$c/game").set({"pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]], "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "createdAt": ServerValue.timestamp, "roomId": c});
       String? mobile = ludoPrefs.getString("mobile"); String? myName = await getLockedName(); // LOCKED naam
-      await getRtdb().ref("$c/players/p0").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 0, "joinedAt": ServerValue.timestamp});
+      await getRtdb().ref(c).set({
+        "game": {"pos": {"0": {"0": -1, "1": -1, "2": -1, "3": -1}, "1": {"0": -1, "1": -1, "2": -1, "3": -1}}, "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "createdAt": ServerValue.timestamp, "roomId": c},
+        "players": {"p0": {"mobile": mobile??"guest", "name": myName??"Player", "player": 0, "joinedAt": ServerValue.timestamp}, "p1": {"mobile": "", "name": "WAITING", "player": 1}},
+        "chats": {"init": {"player": "System", "msg": "Room Created", "time": ServerValue.timestamp}}
+      });
+      if(!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room ready! Code: $c")));
       Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
-    } catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error $e"))); }
+    } catch(e){ if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error $e"))); }
   }
 
   void joinRoom() async {
     await ensurePrefs(); getRtdb().goOnline();
     String code = codeCtrl.text.trim();
     if(code.length!=4){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("4 digit code dalo"))); return; }
-    var snap = await getRtdb().ref("$code/game").get();
+    var snap = await getRtdb().ref(code).get();
     if(!snap.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi mila"))); return; }
     String? mobile = ludoPrefs.getString("mobile"); String? myName = await getLockedName(); // LOCKED naam
     await getRtdb().ref("$code/players/p1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1, "joinedAt": ServerValue.timestamp});
+    if(!mounted) return;
     Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
   }
 
@@ -104,7 +117,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   List<List<int>> pos = [[-1,-1,-1,-1], [-1,-1,-1,-1]]; List<Map<String, dynamic>> chatMessages = []; TextEditingController chatCtrl = TextEditingController();
   late AnimationController _diceController; final safe = [0, 10, 20, 30]; final startPos = [0, 20]; final homeEntry = [39, 19];
   DatabaseReference? roomRef; DatabaseReference? chatRef;
-  String? myMobile; String myName = "You"; String opponentName = "Opponent"; String opponentMobile = "";
+  String? myMobile; String myName = "You"; String p0Name = "Player0"; String p1Name = "Player1";
   final List<String> botNames = ["Jyoti","Simran","Kajal","Pinki","Sonia","Ritika","Anjali","Sweety","Pooja","Deepika"]; String selectedBotName = "Jyoti";
   @override void initState() { selectedBotName = botNames[_rng.nextInt(botNames.length)]; _diceController = AnimationController(vsync: this, duration: Duration(milliseconds: 800)); initAgoraAndRoom(); if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 800), () => botTurn()); }
 
@@ -112,65 +125,68 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
     await ensurePrefs(); myMobile = ludoPrefs.getString("mobile"); myName = await getLockedName(); // LOCKED permanent naam
     if(widget.mode == GameMode.online){
       getRtdb().goOnline(); await [Permission.microphone].request();
-      agoraEngine = createAgoraRtcEngine(); await agoraEngine!.initialize(RtcEngineContext(appId: agoraAppId)); await agoraEngine!.enableAudio(); await agoraEngine!.setEnableSpeakerphone(true);
-      agoraEngine!.registerEventHandler(RtcEngineEventHandler(onJoinChannelSuccess: (c,e){ setState(()=> isAgoraJoined = true); }));
-      try { await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)); } catch(_){}
-      roomRef = getRtdb().ref("${widget.roomId}/game"); chatRef = getRtdb().ref("${widget.roomId}/chats");
-      roomRef!.keepSynced(true);
-      getRtdb().ref("${widget.roomId}/players").keepSynced(true);
-
-      void setOpp(Map<dynamic,dynamic> m){
-        if(!mounted) return;
-        String n = m["name"]?.toString() ?? "";
-        if(n.isNotEmpty && n != "Opponent" && n != myName && n != "WAITING"){
-          setState((){
-            opponentName = n;
-            opponentMobile = m["mobile"]?.toString() ?? "";
-          });
-        }
-      }
-
       try{
-        var snap = await getRtdb().ref("${widget.roomId}/players/p${1-widget.myPlayer}").get();
-        if(snap.exists && snap.value != null) setOpp(snap.value as Map);
+        agoraEngine = createAgoraRtcEngine();
+        await agoraEngine!.initialize(RtcEngineContext(appId: agoraAppId));
+        await agoraEngine!.enableAudio();
+        await agoraEngine!.setEnableSpeakerphone(true);
+        agoraEngine!.registerEventHandler(RtcEngineEventHandler(onJoinChannelSuccess: (c,e){ if(mounted) setState(()=> isAgoraJoined = true); }));
+        await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true));
       }catch(_){}
+      roomRef = getRtdb().ref(widget.roomId); chatRef = getRtdb().ref("${widget.roomId}/chats");
+      roomRef!.keepSynced(true);
 
-      getRtdb().ref("${widget.roomId}/players/p${1-widget.myPlayer}").onValue.listen((e){
-        if(e.snapshot.value != null) setOpp(e.snapshot.value as Map);
-      });
-
-      getRtdb().ref("${widget.roomId}/players").onValue.listen((event){
-        if(event.snapshot.value==null) return;
-        var val = event.snapshot.value;
-        if(val is Map){
-          val.forEach((k,v){
-            if(v is Map && k.toString() == "p${1-widget.myPlayer}"){
-              setOpp(v);
-            }
-          });
-        }
-      });
-
+      // PURANI WORKING FILE WALA CONNECTION LOGIC: poore room pe EK listener - game + players ek saath
       roomRef!.onValue.listen((event){
-        if(event.snapshot.value!=null && mounted){
-          var data = Map<String,dynamic>.from(event.snapshot.value as Map);
-          setState((){
-            if(data['pos']!=null){ try { var raw = data['pos'] as List; pos = List<List<int>>.from(raw.map((e)=> List<int>.from((e as List).map((x)=> x as int)))); } catch(_){} }
-            if(data['turn']!=null) turn = data['turn'] as int;
-            if(data['diceGreen']!=null) diceGreen = data['diceGreen'] as int;
-            if(data['diceRed']!=null) diceRed = data['diceRed'] as int;
-            if(data['canMove']!=null) canMove = data['canMove'] as bool;
-            if(data['gameOver']!=null) gameOver = data['gameOver'] as bool;
+        if(event.snapshot.value==null ||!mounted) return;
+        var all = event.snapshot.value as Map;
+        var gameData = all["game"]!=null? Map<String,dynamic>.from(all["game"] as Map) : <String,dynamic>{};
+        var playersData = all["players"]!=null? Map<String,dynamic>.from(all["players"] as Map) : null;
+        setState((){
+          if(playersData!=null){
+            var p0 = playersData["p0"]!=null? Map<String,dynamic>.from(playersData["p0"] as Map) : null;
+            var p1 = playersData["p1"]!=null? Map<String,dynamic>.from(playersData["p1"] as Map) : null;
+            if(p0!=null && p0["name"]!=null && p0["name"].toString().isNotEmpty && p0["name"].toString()!="WAITING") p0Name = p0["name"].toString();
+            if(p1!=null && p1["name"]!=null && p1["name"].toString().isNotEmpty && p1["name"].toString()!="WAITING") p1Name = p1["name"].toString();
+          }
+          if(gameData['pos']!=null){
+            try{
+              var raw = gameData['pos'];
+              if(raw is Map){
+                List<List<int>> newPos = [[-1,-1,-1,-1],[-1,-1,-1,-1]];
+                raw.forEach((pk,pv){
+                  int pp = int.tryParse(pk.toString())?? 0;
+                  if(pp>=0 && pp<2 && pv is Map){
+                    pv.forEach((k,v){
+                      int idx = int.tryParse(k.toString())?? 0;
+                      if(idx>=0 && idx<4) newPos[pp][idx] = int.tryParse(v.toString())?? -1;
+                    });
+                  }
+                });
+                pos = newPos;
+              } else if(raw is List){
+                pos = List<List<int>>.from(raw.map((e)=> List<int>.from((e as List).map((x)=> x as int))));
+              }
+            }catch(_){}
+          }
+          if(gameData['turn']!=null) turn = int.tryParse(gameData['turn'].toString())?? 0;
+          if(gameData['diceGreen']!=null) diceGreen = int.tryParse(gameData['diceGreen'].toString())?? 1;
+          if(gameData['diceRed']!=null) diceRed = int.tryParse(gameData['diceRed'].toString())?? 1;
+          if(gameData['canMove']!=null) canMove = gameData['canMove'].toString() == "true";
+          if(gameData['gameOver']!=null) gameOver = gameData['gameOver'].toString() == "true";
+        });
+      });
+      chatRef!.onValue.listen((e){
+        if(e.snapshot.value!=null && mounted){
+          var allc = Map<String,dynamic>.from(e.snapshot.value as Map);
+          List<Map<String,dynamic>> msgs = [];
+          allc.forEach((k,v){
+            try{ var m = Map<String,dynamic>.from(v as Map); if(m['player']!="System") msgs.add({"player": m['player'], "msg": m['msg']}); }catch(_){}
           });
+          setState(()=> chatMessages = msgs);
         }
       });
-      chatRef!.onChildAdded.listen((event){
-        if(event.snapshot.value!=null && mounted){
-          var data = Map<String,dynamic>.from(event.snapshot.value as Map);
-          setState(()=> chatMessages.add({"player": data['player'], "msg": data['msg']}));
-        }
-      });
-    } else { setState(()=> opponentName = selectedBotName); }
+    } else { setState(()=>{ p0Name = myName; p1Name = widget.mode == GameMode.bot? selectedBotName : "Dost"; }); }
   }
 
   @override void dispose() { _diceController.dispose(); chatCtrl.dispose(); if(isAgoraJoined && agoraEngine!=null){ agoraEngine!.leaveChannel(); agoraEngine!.release(); } super.dispose(); }
@@ -180,7 +196,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   void sendMessage() async { if (chatCtrl.text.trim().isEmpty) return; String t = chatCtrl.text.trim(); chatCtrl.clear(); if(widget.mode == GameMode.online && chatRef!= null){ getRtdb().goOnline(); await chatRef!.push().set({"player": myName, "msg": t, "time": ServerValue.timestamp}); } else { setState(()=> chatMessages.add({"player": myName, "msg": t})); } }
   void toggleMic() async { setState(() => isMicOn =!isMicOn); if(agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
   void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); if(agoraEngine!=null){ await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); } }
-  void syncRoom(){ if(widget.mode == GameMode.online && roomRef!= null){ getRtdb().goOnline(); roomRef!.update({"pos": pos, "turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver}); } }
+  void syncRoom(){ if(widget.mode == GameMode.online){ getRtdb().goOnline(); getRtdb().ref("${widget.roomId}/game/pos").set({"0": {"0": pos[0][0], "1": pos[0][1], "2": pos[0][2], "3": pos[0][3]}, "1": {"0": pos[1][0], "1": pos[1][1], "2": pos[1][2], "3": pos[1][3]}}); getRtdb().ref("${widget.roomId}/game").update({"turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver}); } }
   void roll() {
     if (gameOver || isRolling) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (canMove) return;
     setState(() => isRolling = true); _diceController.forward(from: 0);
@@ -204,10 +220,10 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   Widget goti(int p, int t, double s) { int v = pos[p][t]; double boxSize = s * 0.14, pad = s * 0.02; Offset o; if (v == -1) { if (p == 0) { double bx = 10 + pad, by = 10 + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } else { double bx = s - 10 - boxSize + pad, by = s - 10 - boxSize + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } } else if (v == 45) { o = Offset(s / 2 + (t % 2 == 0? -8 : 8), s / 2 + (t < 2? -8 : 8)); } else if (v >= 40) { o = getHomePathPos(p, v - 40, s); } else { double r = s * 0.25, ang = (v / 40) * 2 * pi - pi / 2; o = Offset(s / 2 + r * cos(ang), s / 2 + r * sin(ang)); } bool act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver && isMyTurn; return Positioned(left: o.dx - 11, top: o.dy - 11, child: GestureDetector(onTap: act? () => moveGoti(t) : null, child: Container(width: act? 28 : 20, height: act? 28 : 20, decoration: BoxDecoration(color: p == 0? Colors.green : Colors.red, shape: BoxShape.circle, border: Border.all(color: act? Colors.yellow : Colors.white, width: act? 2.5 : 1.5))))); }
   @override Widget build(BuildContext context) {
     double s = (MediaQuery.of(context).size.width < 400? MediaQuery.of(context).size.width : 400) - 20; double box = s * 0.14;
-    String turnName = (widget.mode == GameMode.online)? (turn == widget.myPlayer? myName : opponentName) : (turn == 0? myName : opponentName);
-    return Scaffold(backgroundColor: Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text(widget.mode == GameMode.offline? "OFFLINE - $myName" : widget.mode == GameMode.bot? "$myName vs $selectedBotName" : "ROOM ${widget.roomId} - $myName vs $opponentName", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)), actions: [IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent), onPressed: () async { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$opponentName : $opponentMobile"))); }), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber), onPressed: () => setState(() => showChat =!showChat))]),
+    String turnName = widget.mode == GameMode.online? (turn == 0? p0Name : p1Name) : (turn == 0? myName : p1Name);
+    return Scaffold(backgroundColor: Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text(widget.mode == GameMode.offline? "OFFLINE - $myName" : widget.mode == GameMode.bot? "$myName vs $p1Name" : "ROOM ${widget.roomId} - $p0Name vs $p1Name", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)), actions: [IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent), onPressed: () async { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$p0Name vs $p1Name"))); }), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber), onPressed: () => setState(() => showChat =!showChat))]),
       body: Column(children: [
-        Container(margin: EdgeInsets.symmetric(horizontal: 8, vertical: 6), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Turn: $turnName", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)), Text(isMyTurn? "YOUR TURN - TAP DICE" : "WAIT - $opponentName", style: TextStyle(fontSize: 11, color: isMyTurn? Colors.greenAccent : Colors.white54, fontWeight: FontWeight.bold))])),
+        Container(margin: EdgeInsets.symmetric(horizontal: 8, vertical: 6), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Turn: $turnName", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)), Text(isMyTurn? "YOUR TURN - TAP DICE" : "WAIT - $turnName", style: TextStyle(fontSize: 11, color: isMyTurn? Colors.greenAccent : Colors.white54, fontWeight: FontWeight.bold))])),
         Expanded(child: Stack(children: [
           Center(child: Container(width: s, height: s, decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFFF9C4), Color(0xFFE1F5FE), Color(0xFFFCE4EC)], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.amber, width: 4)), child: Stack(clipBehavior: Clip.none, children: [
             Positioned(left: s*0.23, top: s*0.23, width: s*0.54, height: s*0.54, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)]), border: Border.all(color: Colors.white, width: 2)))),
@@ -226,7 +242,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
             GestureDetector(onTap: toggleSpeaker, child: Container(padding: EdgeInsets.all(8), decoration: BoxDecoration(color: isSpeakerOn? Colors.green : Colors.red, shape: BoxShape.circle), child: Icon(isSpeakerOn? Icons.volume_up : Icons.volume_off, color: Colors.white, size: 18))),
           ])))),
           if (showChat) Positioned(bottom: 0, left: 0, right: 0, child: Container(height: 380, decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)), border: Border.all(color: Colors.amber.withOpacity(0.5))), child: Column(children: [
-            Container(padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("CHAT - $myName vs $opponentName", style: TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.bold)), GestureDetector(onTap: ()=> setState(()=> showChat=false), child: Container(padding: EdgeInsets.all(4), decoration: BoxDecoration(color: Colors.black, shape: BoxShape.circle), child: Icon(Icons.close, color: Colors.white, size: 16)))])),
+            Container(padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("CHAT - $p0Name vs $p1Name", style: TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.bold)), GestureDetector(onTap: ()=> setState(()=> showChat=false), child: Container(padding: EdgeInsets.all(4), decoration: BoxDecoration(color: Colors.black, shape: BoxShape.circle), child: Icon(Icons.close, color: Colors.white, size: 16)))])),
             Expanded(child: ListView.builder(padding: EdgeInsets.all(10), itemCount: chatMessages.length, itemBuilder: (c, i) { var m = chatMessages[i]; bool isMe = m['player'] == myName; return Align(alignment: isMe? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: EdgeInsets.symmetric(vertical: 4), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8), decoration: BoxDecoration(color: isMe? Colors.green : Colors.white24, borderRadius: BorderRadius.circular(12)), child: Text("${m['player']}: ${m['msg']}", style: TextStyle(fontSize: 13, color: Colors.white)))); })),
             Container(padding: EdgeInsets.fromLTRB(10, 8, 10, MediaQuery.of(context).viewInsets.bottom + 10), color: Color(0xFF0A0E1A), child: Row(children: [
               Expanded(child: TextField(controller: chatCtrl, onSubmitted: (_) => sendMessage(), style: TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "Type message...", filled: true, fillColor: Color(0xFF2A2A3E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none), contentPadding: EdgeInsets.symmetric(horizontal: 18, vertical: 14)))),
