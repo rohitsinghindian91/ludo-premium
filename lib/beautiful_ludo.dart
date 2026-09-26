@@ -26,6 +26,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   final codeCtrl = TextEditingController();
   String genCode() => (Random().nextInt(9000) + 1000).toString();
   @override void initState() { super.initState(); ensurePrefs(); getRtdb().goOnline(); }
+  
   void _createRoomWithCodeDialog() async {
     await ensurePrefs(); getRtdb().goOnline();
     String c = genCode();
@@ -33,10 +34,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
       await getRtdb().ref("$c/game").set({"pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]], "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "createdAt": ServerValue.timestamp, "roomId": c});
       String? mobile = ludoPrefs.getString("mobile"); String? myName = ludoPrefs.getString("name");
       await getRtdb().ref("$c/players/p0").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 0, "joinedAt": ServerValue.timestamp});
-      await getRtdb().ref("$c/players/0").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 0, "joinedAt": ServerValue.timestamp});
       Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
     } catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error $e"))); }
   }
+  
   void joinRoom() async {
     await ensurePrefs(); getRtdb().goOnline();
     String code = codeCtrl.text.trim();
@@ -45,12 +46,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
     if(!snap.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi mila"))); return; }
     String? mobile = ludoPrefs.getString("mobile"); String? myName = ludoPrefs.getString("name");
     await getRtdb().ref("$code/players/p1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1, "joinedAt": ServerValue.timestamp});
-    await getRtdb().ref("$code/players/1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1, "joinedAt": ServerValue.timestamp});
     Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
   }
+
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Padding(padding: EdgeInsets.all(20), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - PLAN E", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
+      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - PLAN F FINAL", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.people), label: Text("OFFLINE - 1 PHONE 2 PLAYER"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "OFFLINE", myPlayer: 0, mode: GameMode.offline))))),
       SizedBox(height: 10),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.smart_toy), label: Text("DOST KE SATH KHELO (BOT)"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => QuickMatchScreen())))),
@@ -97,41 +98,39 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       agoraEngine!.registerEventHandler(RtcEngineEventHandler(onJoinChannelSuccess: (c,e){ setState(()=> isAgoraJoined = true); }));
       try { await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)); } catch(_){}
       roomRef = getRtdb().ref("${widget.roomId}/game"); chatRef = getRtdb().ref("${widget.roomId}/chats");
+      roomRef!.keepSynced(true);
+      getRtdb().ref("${widget.roomId}/players").keepSynced(true);
 
-      void handleOpp(dynamic val){
-        if(val==null ||!mounted) return;
-        try{
-          var m = Map<String,dynamic>.from(val as Map);
-          String n = m["name"]?.toString()??"";
-          if(n.isNotEmpty && n!="Opponent"){
-            setState((){
-              opponentName = n;
-              opponentMobile = m["mobile"]?.toString()??"";
-            });
-          }
-        }catch(e){ debugPrint("handleOpp $e"); }
+      void setOpp(Map<dynamic,dynamic> m){
+        if(!mounted) return;
+        String n = m["name"]?.toString() ?? "";
+        if(n.isNotEmpty && n != "Opponent" && n != myName){
+          setState((){
+            opponentName = n;
+            opponentMobile = m["mobile"]?.toString() ?? "";
+          });
+        }
       }
 
-      // PLAN E - 4 path suno
-      getRtdb().ref("${widget.roomId}/players/p${1 - widget.myPlayer}").onValue.listen((e){ if(e.snapshot.value!=null) handleOpp(e.snapshot.value); });
-      getRtdb().ref("${widget.roomId}/players/${1 - widget.myPlayer}").onValue.listen((e){ if(e.snapshot.value!=null) handleOpp(e.snapshot.value); });
+      try{
+        var snap = await getRtdb().ref("${widget.roomId}/players/p${1-widget.myPlayer}").get();
+        if(snap.exists && snap.value != null) setOpp(snap.value as Map);
+      }catch(_){}
+
+      getRtdb().ref("${widget.roomId}/players/p${1-widget.myPlayer}").onValue.listen((e){
+        if(e.snapshot.value != null) setOpp(e.snapshot.value as Map);
+      });
 
       getRtdb().ref("${widget.roomId}/players").onValue.listen((event){
         if(event.snapshot.value==null) return;
         var val = event.snapshot.value;
-        try{
-          if(val is Map){
-            var all = Map<String,dynamic>.from(val as Map);
-            String oppP = "p${1 - widget.myPlayer}";
-            if(all[oppP]!=null) handleOpp(all[oppP]);
-            String oppN = "${1 - widget.myPlayer}";
-            if(all[oppN]!=null) handleOpp(all[oppN]);
-            if(all.containsKey(1-widget.myPlayer) && all[1-widget.myPlayer]!=null) handleOpp(all[1-widget.myPlayer]);
-          } else if(val is List){
-            int opp = 1 - widget.myPlayer;
-            if(opp < val.length && val[opp]!=null) handleOpp(val[opp]);
-          }
-        }catch(e){ debugPrint("players parse $e"); }
+        if(val is Map){
+          val.forEach((k,v){
+            if(v is Map && k.toString() == "p${1-widget.myPlayer}"){
+              setOpp(v);
+            }
+          });
+        }
       });
 
       roomRef!.onValue.listen((event){
