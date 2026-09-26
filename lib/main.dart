@@ -140,6 +140,11 @@ class _OtpPageState extends State<OtpPage> {
     }
     await prefs.setString("mobile", widget.mobile);
     await prefs.setString("name", widget.name);
+    // FIX FOR LUDO - ye 2 line add ki hai, baki kuch change nahi
+    var ludoPrefs = await SharedPreferences.getInstance();
+    await ludoPrefs.setString("mobile", widget.mobile);
+    await ludoPrefs.setString("name", widget.name);
+
     setState(() => load = false);
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => HomeScreen(mobile: widget.mobile)), (r) => false);
