@@ -7,10 +7,23 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
-import 'rtdb.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 const String agoraAppId = "68178816ba6d47c6864cc5d584f3e2b8";
 const String agoraToken = "";
+
+// YAHI WALA CONTACT FIX - screenshot wali file jaisa, par bina duplicate persistence ke
+FirebaseDatabase? _rtdbInstance;
+FirebaseDatabase getRtdb() {
+  if (_rtdbInstance == null) {
+    _rtdbInstance = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app",
+    );
+    try { _rtdbInstance!.goOnline(); } catch (_) {}
+  }
+  return _rtdbInstance!;
+}
 
 late SharedPreferences ludoPrefs;
 bool isPrefsReady = false;
@@ -103,6 +116,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       roomRef = getRtdb().ref("${widget.roomId}/game"); chatRef = getRtdb().ref("${widget.roomId}/chats"); playersRef = getRtdb().ref("${widget.roomId}/players");
       await roomRef!.keepSynced(true); await chatRef!.keepSynced(true); await playersRef!.keepSynced(true);
 
+      // FINAL CONTACT LOGIC - screenshot wali file jaisa
       var firstSnap = await playersRef!.get();
       if(firstSnap.exists && mounted){
         var all = Map<String,dynamic>.from(firstSnap.value as Map);
