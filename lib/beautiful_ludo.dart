@@ -29,12 +29,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void _createRoomWithCodeDialog() async {
     await ensurePrefs(); getRtdb().goOnline();
     String c = genCode();
-    try {
-      await getRtdb().ref("$c/game").set({"pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]], "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "createdAt": ServerValue.timestamp, "roomId": c});
-      String? mobile = ludoPrefs.getString("mobile"); String? myName = ludoPrefs.getString("name");
-      await getRtdb().ref("$c/players/p0").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 0, "joinedAt": ServerValue.timestamp});
-      Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
-    } catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error $e"))); }
+    await getRtdb().ref("$c/game").set({"pos": [[-1,-1,-1,-1], [-1,-1,-1,-1]], "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "roomId": c});
+    String? mobile = ludoPrefs.getString("mobile"); String? myName = ludoPrefs.getString("name");
+    await getRtdb().ref("$c/players/p0").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 0});
+    Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: c, myPlayer: 0, mode: GameMode.online)));
   }
   void joinRoom() async {
     await ensurePrefs(); getRtdb().goOnline();
@@ -43,12 +41,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
     var snap = await getRtdb().ref("$code/game").get();
     if(!snap.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi mila"))); return; }
     String? mobile = ludoPrefs.getString("mobile"); String? myName = ludoPrefs.getString("name");
-    await getRtdb().ref("$code/players/p1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1, "joinedAt": ServerValue.timestamp});
+    await getRtdb().ref("$code/players/p1").set({"mobile": mobile??"guest", "name": myName??"Player", "player": 1});
     Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
   }
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), body: Center(child: Padding(padding: EdgeInsets.all(20), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - PLAN H FINAL", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
+      Icon(Icons.casino, size: 60, color: Colors.amber), Text("LUDO PREMIUM - FINAL", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.amber)), SizedBox(height: 30),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.people), label: Text("OFFLINE - 1 PHONE 2 PLAYER"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: "OFFLINE", myPlayer: 0, mode: GameMode.offline))))),
       SizedBox(height: 10),
       SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(icon: Icon(Icons.smart_toy), label: Text("DOST KE SATH KHELO (BOT)"), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => QuickMatchScreen())))),
@@ -96,26 +94,20 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       try { await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)); } catch(_){}
       roomRef = getRtdb().ref("${widget.roomId}/game"); chatRef = getRtdb().ref("${widget.roomId}/chats");
 
-      // FINAL OPPONENT FIX - Direct p0/p1
+      // FINAL OPPONENT - Direct
       if(widget.myPlayer == 0){
-        getRtdb().ref("${widget.roomId}/players/p1").onValue.listen((e){
-          if(e.snapshot.value!= null && mounted){
-            var m = e.snapshot.value as Map;
-            setState((){
-              opponentName = m["name"]?.toString()?? "Opponent";
-              opponentMobile = m["mobile"]?.toString()?? "";
-            });
-          }
+        getRtdb().ref("${widget.roomId}/players/p1/name").onValue.listen((e){
+          if(e.snapshot.value!= null && mounted) setState(()=> opponentName = e.snapshot.value.toString());
+        });
+        getRtdb().ref("${widget.roomId}/players/p1/mobile").onValue.listen((e){
+          if(e.snapshot.value!= null && mounted) setState(()=> opponentMobile = e.snapshot.value.toString());
         });
       } else {
-        getRtdb().ref("${widget.roomId}/players/p0").onValue.listen((e){
-          if(e.snapshot.value!= null && mounted){
-            var m = e.snapshot.value as Map;
-            setState((){
-              opponentName = m["name"]?.toString()?? "Opponent";
-              opponentMobile = m["mobile"]?.toString()?? "";
-            });
-          }
+        getRtdb().ref("${widget.roomId}/players/p0/name").onValue.listen((e){
+          if(e.snapshot.value!= null && mounted) setState(()=> opponentName = e.snapshot.value.toString());
+        });
+        getRtdb().ref("${widget.roomId}/players/p0/mobile").onValue.listen((e){
+          if(e.snapshot.value!= null && mounted) setState(()=> opponentMobile = e.snapshot.value.toString());
         });
       }
 
@@ -123,18 +115,42 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         if(event.snapshot.value!=null && mounted){
           var data = Map<String,dynamic>.from(event.snapshot.value as Map);
           setState((){
-            if(data['pos']!=null){ try { var raw = data['pos'] as List; pos = List<List<int>>.from(raw.map((e)=> List<int>.from((e as List).map((x)=> x as int)))); } catch(_){} }
+            // FINAL POS PARSE - Map or List both
+            if(data['pos']!=null){
+              try{
+                var raw = data['pos'];
+                List<List<int>> newPos = [[-1,-1,-1,-1], [-1,-1,-1,-1]];
+                if(raw is List){
+                  for(int p=0;p<2;p++){
+                    if(p < raw.length){
+                      var row = raw[p];
+                      if(row is List){
+                        for(int i=0;i<4;i++) if(i < row.length) newPos[p][i] = int.tryParse(row[i].toString())?? -1;
+                      } else if(row is Map){
+                        row.forEach((k,v){ int idx = int.tryParse(k.toString())?? 0; if(idx>=0 && idx<4) newPos[p][idx] = int.tryParse(v.toString())?? -1; });
+                      }
+                    }
+                  }
+                } else if(raw is Map){
+                  raw.forEach((pk, pv){
+                    int p = int.tryParse(pk.toString())?? 0;
+                    if(p>=0 && p<2){
+                      if(pv is List){
+                        for(int i=0;i<4 && i<pv.length;i++) newPos[p][i] = int.tryParse(pv[i].toString())?? -1;
+                      } else if(pv is Map){
+                        pv.forEach((k,v){ int idx = int.tryParse(k.toString())?? 0; if(idx>=0 && idx<4) newPos[p][idx] = int.tryParse(v.toString())?? -1; });
+                      }
+                    }
+                  });
+                }
+                pos = newPos;
+              }catch(e){ debugPrint("pos parse $e"); }
+            }
             if(data['turn']!=null) turn = int.tryParse(data['turn'].toString())?? 0;
             if(data['diceGreen']!=null) diceGreen = int.tryParse(data['diceGreen'].toString())?? 1;
             if(data['diceRed']!=null) diceRed = int.tryParse(data['diceRed'].toString())?? 1;
-            if(data['canMove']!=null){
-              if(data['canMove'] is bool) canMove = data['canMove'] as bool;
-              else canMove = data['canMove'].toString() == "true";
-            }
-            if(data['gameOver']!=null){
-              if(data['gameOver'] is bool) gameOver = data['gameOver'] as bool;
-              else gameOver = data['gameOver'].toString() == "true";
-            }
+            if(data['canMove']!=null) canMove = data['canMove'].toString() == "true";
+            if(data['gameOver']!=null) gameOver = data['gameOver'].toString() == "true";
           });
         }
       });
@@ -154,35 +170,26 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   void sendMessage() async { if (chatCtrl.text.trim().isEmpty) return; String t = chatCtrl.text.trim(); chatCtrl.clear(); if(widget.mode == GameMode.online && chatRef!= null){ getRtdb().goOnline(); await chatRef!.push().set({"player": myName, "msg": t, "time": ServerValue.timestamp}); } else { setState(()=> chatMessages.add({"player": myName, "msg": t})); } }
   void toggleMic() async { setState(() => isMicOn =!isMicOn); if(agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }
   void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); if(agoraEngine!=null){ await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); } }
-
-  // FINAL SYNC FIX - set ki jagah update nahi
-  void syncRoom(){
-    if(widget.mode == GameMode.online && roomRef!= null){
-      getRtdb().goOnline();
-      roomRef!.set({"pos": pos, "turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver, "roomId": widget.roomId});
-    }
-  }
-
-  void roll() {
+  Future<void> syncRoom() async { if(widget.mode == GameMode.online && roomRef!= null){ getRtdb().goOnline(); await roomRef!.set({"pos": pos, "turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver, "roomId": widget.roomId}); } }
+  void roll() async {
     if (gameOver || isRolling) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (canMove) return;
     setState(() => isRolling = true); _diceController.forward(from: 0);
-    Future.delayed(Duration(milliseconds: 800), () {
-      if (!mounted) return; int d = _rng.nextInt(6) + 1;
-      if (d == 6) { consecutiveSixes++; if (consecutiveSixes == 3) { setState(() { if (turn == 0) diceGreen = d; else diceRed = d; turn = 1 - turn; canMove = false; consecutiveSixes = 0; isRolling = false; }); syncRoom(); if (widget.mode == GameMode.bot && turn == 1) botTurn(); return; } } else consecutiveSixes = 0;
-      setState(() { if (turn == 0) diceGreen = d; else diceRed = d; canMove = true; isRolling = false; }); syncRoom();
-      bool any = false; for (int i = 0; i < 4; i++) if (isValidMove(turn, i, d)) { any = true; break; }
-      if (!any) { Future.delayed(Duration(milliseconds: 800), () { if (!mounted || gameOver) return; setState(() { turn = 1 - turn; canMove = false; }); syncRoom(); if (widget.mode == GameMode.bot && turn == 1) botTurn(); }); }
-    });
+    await Future.delayed(Duration(milliseconds: 800));
+    if (!mounted) return; int d = _rng.nextInt(6) + 1;
+    if (d == 6) { consecutiveSixes++; if (consecutiveSixes == 3) { turn = 1 - turn; canMove = false; consecutiveSixes = 0; isRolling = false; if(turn==0) diceGreen=d; else diceRed=d; await syncRoom(); if (widget.mode == GameMode.bot && turn == 1) botTurn(); return; } } else consecutiveSixes = 0;
+    if(turn==0) diceGreen=d; else diceRed=d; canMove=true; isRolling=false; setState((){}); await syncRoom();
+    bool any = false; for (int i = 0; i < 4; i++) if (isValidMove(turn, i, d)) { any = true; break; }
+    if (!any) { await Future.delayed(Duration(milliseconds: 800)); if (!mounted || gameOver) return; turn = 1 - turn; canMove = false; setState((){}); await syncRoom(); if (widget.mode == GameMode.bot && turn == 1) botTurn(); }
   }
   void botTurn() { if (gameOver ||!mounted) return; if (turn!=1) return; rollBot(); }
   void rollBot() { setState(() => isRolling = true); _diceController.forward(from: 0); Future.delayed(Duration(milliseconds: 800), () { if (!mounted) return; int d = _rng.nextInt(6) + 1; setState(() { diceRed = d; canMove = true; isRolling = false; }); bool any = false; for (int i = 0; i < 4; i++) if (isValidMove(1, i, d)) { any = true; break; } if (!any) { Future.delayed(Duration(milliseconds: 500), () { setState(() { turn = 0; canMove = false; }); }); } else Future.delayed(Duration(milliseconds: 500), () => botMove()); }); }
   void botMove() { if (!canMove || gameOver) return; int bestIdx = -1; for (int i = 0; i < 4; i++) if (isValidMove(1, i, diceRed)) { bestIdx = i; break; } if (bestIdx!= -1) moveGoti(bestIdx); }
-  void moveGoti(int idx) { if (!canMove || gameOver) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (!isValidMove(turn, idx, dice)) return; setState(() { int cur = pos[turn][idx]; int opp = 1 - turn; if (cur == -1) pos[turn][idx] = startPos[turn]; else if (cur < 40) { int dist = (homeEntry[turn] - cur + 40) % 40; if (dice == dist + 1) pos[turn][idx] = 40; else { int next = (cur + dice) % 40; if (!safe.contains(next)) { for (int k = 0; k < 4; k++) if (pos[opp][k] == next) pos[opp][k] = -1; } pos[turn][idx] = next; } } else pos[turn][idx] = cur + dice; if (pos[turn].every((v) => v == 45)) { gameOver = true; canMove = false; } else { if (dice!=6) turn = 1 - turn; canMove = false; } }); syncRoom(); if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 600), () => botTurn()); }
+  void moveGoti(int idx) async { if (!canMove || gameOver) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (!isValidMove(turn, idx, dice)) return; int cur = pos[turn][idx]; int opp = 1 - turn; if (cur == -1) pos[turn][idx] = startPos[turn]; else if (cur < 40) { int dist = (homeEntry[turn] - cur + 40) % 40; if (dice == dist + 1) pos[turn][idx] = 40; else { int next = (cur + dice) % 40; if (!safe.contains(next)) { for (int k = 0; k < 4; k++) if (pos[opp][k] == next) pos[opp][k] = -1; } pos[turn][idx] = next; } } else pos[turn][idx] = cur + dice; if (pos[turn].every((v) => v == 45)) { gameOver = true; canMove = false; } else { if (dice!=6) turn = 1 - turn; canMove = false; } setState((){}); await syncRoom(); if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 600), () => botTurn()); }
   Offset getHomePathPos(int p, int step, double s) { double r = s * 0.25, cx = s / 2, cy = s / 2; int entry = homeEntry[p]; double ang = (entry / 40) * 2 * pi - pi / 2; double ex = cx + r * cos(ang), ey = cy + r * sin(ang); double t = (step + 1) / 6.0; return Offset(ex + (cx - ex) * t, ey + (cy - ey) * t); }
   Widget dot() => Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.black, shape: BoxShape.circle));
   Widget emptyDot() => SizedBox(width: 10, height: 10);
   Widget buildDiceFace(int v) { Widget d = dot(), e = emptyDot(); List<Widget> r1 = [e, e, e], r2 = [e, e, e], r3 = [e, e, e]; if (v == 1) r2 = [e, d, e]; else if (v == 2) { r1 = [d, e, e]; r3 = [e, e, d]; } else if (v == 3) { r1 = [d, e, e]; r2 = [e, d, e]; r3 = [e, e, d]; } else if (v == 4) { r1 = [d, e, d]; r3 = [d, e, d]; } else if (v == 5) { r1 = [d, e, d]; r2 = [e, d, e]; r3 = [d, e, d]; } else if (v == 6) { r1 = [d, e, d]; r2 = [d, e, d]; r3 = [d, e, d]; } return Container(width: 68, height: 68, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)), child: Padding(padding: EdgeInsets.all(8), child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r1), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r2), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r3)]))); }
-  Widget diceNearHome(int p, int val) { bool isTurn = turn == p &&!canMove &&!gameOver; bool canTap = isTurn &&!isRolling && isMyTurn; Color col = p == 0? Colors.green : Colors.red; bool rolling = isRolling && turn == p; return GestureDetector(onTap: canTap? roll : null, child: AnimatedBuilder(animation: _diceController, builder: (c, child) { double a = rolling? _diceController.value * 4 * pi : 0; return Transform.rotate(angle: a, child: child); }, child: Container(width: 85, height: 85, decoration: BoxDecoration(color: isTurn? col.withOpacity(0.20) : Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: isTurn? col : Colors.black12, width: isTurn? 3 : 1.5)), child: Center(child: rolling? buildDiceFace(_rng.nextInt(6) + 1) : buildDiceFace(val))))); }
+  Widget diceNearHome(int p, int val) { bool isTurn = turn == p &&!canMove &&!gameOver; bool canTap = isTurn &&!isRolling && isMyTurn; Color col = p == 0? Colors.green : Colors.red; bool rolling = isRolling && turn == p; return GestureDetector(onTap: canTap? () async => roll() : null, child: AnimatedBuilder(animation: _diceController, builder: (c, child) { double a = rolling? _diceController.value * 4 * pi : 0; return Transform.rotate(angle: a, child: child); }, child: Container(width: 85, height: 85, decoration: BoxDecoration(color: isTurn? col.withOpacity(0.20) : Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: isTurn? col : Colors.black12, width: isTurn? 3 : 1.5)), child: Center(child: rolling? buildDiceFace(_rng.nextInt(6) + 1) : buildDiceFace(val))))); }
   Widget goti(int p, int t, double s) { int v = pos[p][t]; double boxSize = s * 0.14, pad = s * 0.02; Offset o; if (v == -1) { if (p == 0) { double bx = 10 + pad, by = 10 + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } else { double bx = s - 10 - boxSize + pad, by = s - 10 - boxSize + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } } else if (v == 45) { o = Offset(s / 2 + (t % 2 == 0? -8 : 8), s / 2 + (t < 2? -8 : 8)); } else if (v >= 40) { o = getHomePathPos(p, v - 40, s); } else { double r = s * 0.25, ang = (v / 40) * 2 * pi - pi / 2; o = Offset(s / 2 + r * cos(ang), s / 2 + r * sin(ang)); } bool act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver && isMyTurn; return Positioned(left: o.dx - 11, top: o.dy - 11, child: GestureDetector(onTap: act? () => moveGoti(t) : null, child: Container(width: act? 28 : 20, height: act? 28 : 20, decoration: BoxDecoration(color: p == 0? Colors.green : Colors.red, shape: BoxShape.circle, border: Border.all(color: act? Colors.yellow : Colors.white, width: act? 2.5 : 1.5))))); }
   @override Widget build(BuildContext context) {
     double s = (MediaQuery.of(context).size.width < 400? MediaQuery.of(context).size.width : 400) - 20; double box = s * 0.14;
