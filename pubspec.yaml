@@ -3,7 +3,7 @@ description: Ludo Premium - Online Ludo with Voice & Chat
 publish_to: 'none'
 version: 1.0.0+1
 
-environment: 
+environment:
   sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
@@ -19,6 +19,7 @@ dependencies:
   share_plus: ^8.0.2
   url_launcher: ^6.2.5
   image_picker: ^1.0.7
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
