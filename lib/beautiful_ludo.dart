@@ -6,6 +6,7 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http; // 👈 TOKEN SERVER ke liye (pubspec me http: add karna)
 import 'rtdb.dart';
 
 // LOCKED NAME HELPER - Firestore users/<mobile>/name se permanent naam lega
@@ -33,7 +34,20 @@ Future<String> getLockedName() async {
 }
 
 const String agoraAppId = "68178816ba6d47c6864cc5d584f3e2b8";
-const String agoraToken = "";
+const String agoraTokenServer = "https://patient-wave-cb8c.rohitsinghindian91.workers.dev";
+
+// Cloudflare Worker se FRESH Agora token lega - har game/room ke liye naya token
+// (khali token "" se certificate wale project me voice NAHI judegi - isliye ye zaroori hai)
+Future<String> fetchAgoraToken(String channel, int uid) async {
+  final res = await http
+     .get(Uri.parse("$agoraTokenServer/?channel=$channel&uid=$uid"))
+     .timeout(const Duration(seconds: 10));
+  if (res.statusCode == 200 && res.body.trim().isNotEmpty) {
+    return res.body.trim();
+  }
+  throw Exception("Token server failed: ${res.statusCode}");
+}
+
 late SharedPreferences ludoPrefs;
 bool isPrefsReady = false;
 Future<void> ensurePrefs() async {
@@ -289,7 +303,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   @override void dispose() { _diceController.dispose(); chatCtrl.dispose(); if(isAgoraJoined && agoraEngine!=null){ agoraEngine!.leaveChannel(); agoraEngine!.release(); } super.dispose(); }
   int get dice => turn == 0? diceGreen : diceRed;
   bool get isMyTurn { if (widget.mode == GameMode.offline) return true; if (widget.mode == GameMode.bot) return turn == 0; return turn == widget.myPlayer; }
-  bool isValidMove(int p, int idx, int d) { int cur = pos[p][idx]; if (cur == 45) return false; if (cur == -1) return d == 6; if (cur >= 40) return cur + d <= 45; int dist = (homeEntry[p] - cur + 40) % 40; if (d == dist + 1) return true; if (d > dist + 1) return false; return true; }
+  bool isValidMove(int p, int idx, int d) { int cur = pos[p][idx]; if (cur == -1) return d == 6; if (cur == 45) return false; if (cur >= 40) return cur + d <= 45; int dist = (homeEntry[p] - cur + 40) % 40; if (d == dist + 1) return true; if (d > dist + 1) return false; return true; }
   void sendMessage() async { if (chatCtrl.text.trim().isEmpty) return; String t = chatCtrl.text.trim(); chatCtrl.clear(); if(widget.mode == GameMode.online && chatRef!= null){ getRtdb().goOnline(); await chatRef!.push().set({"player": myName, "msg": t, "time": ServerValue.timestamp}); } else { setState(()=> chatMessages.add({"player": myName, "msg": t})); } }
   void toggleMic() async { setState(() => isMicOn =!isMicOn); try{ if(agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }catch(_){} }
   void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); try{ if(agoraEngine!=null){ await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); } }catch(_){} }
@@ -314,7 +328,13 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Voice disconnected"), duration: Duration(seconds: 1)));
         },
       ));
-      await agoraEngine!.joinChannel(token: agoraToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)).timeout(const Duration(seconds: 15));
+      // 👇 FRESH TOKEN Worker se lao - khaali token se voice NAHI judegi (certificate project)
+      String freshToken = "";
+      try {
+        freshToken = await fetchAgoraToken(widget.roomId, widget.myPlayer == 0? 1 : 2)
+           .timeout(const Duration(seconds: 12));
+      } catch (_) {}
+      await agoraEngine!.joinChannel(token: freshToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)).timeout(const Duration(seconds: 15));
     }catch(e){
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Voice failed - game chal raha hai"), duration: Duration(seconds: 2)));
     }
