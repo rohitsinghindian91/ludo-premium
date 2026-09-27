@@ -40,8 +40,8 @@ const String agoraTokenServer = "https://patient-wave-cb8c.rohitsinghindian91.wo
 // (khali token "" se certificate wale project me voice NAHI judegi - isliye ye zaroori hai)
 Future<String> fetchAgoraToken(String channel, int uid) async {
   final res = await http
-     .get(Uri.parse("$agoraTokenServer/?channel=$channel&uid=$uid"))
-     .timeout(const Duration(seconds: 10));
+    .get(Uri.parse("$agoraTokenServer/?channel=$channel&uid=$uid"))
+    .timeout(const Duration(seconds: 10));
   if (res.statusCode == 200 && res.body.trim().isNotEmpty) {
     return res.body.trim();
   }
@@ -232,6 +232,7 @@ class LudoGame extends StatefulWidget {
 
 class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin {
   final _rng = Random(); int diceGreen = 1, diceRed = 1, turn = 0, consecutiveSixes = 0; bool canMove = false, gameOver = false, isRolling = false, showChat = false; bool isMicOn = true, isSpeakerOn = true; bool isAgoraJoined = false; RtcEngine? agoraEngine;
+  bool _winnerDialogShown = false, _dialogOpen = false; // 🏆 winner dialog ek baar hi dikhe
   List<List<int>> pos = [[-1,-1,-1,-1], [-1,-1,-1,-1]]; List<Map<String, dynamic>> chatMessages = []; TextEditingController chatCtrl = TextEditingController();
   late AnimationController _diceController; final safe = [0, 10, 20, 30]; final startPos = [0, 20]; final homeEntry = [39, 19];
   DatabaseReference? roomRef; DatabaseReference? chatRef;
@@ -253,6 +254,9 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
         var all = event.snapshot.value as Map;
         var gameData = all["game"]!=null? Map<String,dynamic>.from(all["game"] as Map) : <String,dynamic>{};
         var playersData = all["players"]!=null? Map<String,dynamic>.from(all["players"] as Map) : null;
+        bool newGameOver = gameData['gameOver']!=null? gameData['gameOver'].toString() == "true" : gameOver;
+        bool justEnded = newGameOver &&!gameOver; // 🏆 kisi ne game jeeta (dusre player ki screen pe dialog)
+        bool justRestarted =!newGameOver && gameOver; // 🔄 dusre player ne dobara shuru kiya
         setState((){
           if(playersData!=null){
             var p0 = playersData["p0"]!=null? Map<String,dynamic>.from(playersData["p0"] as Map) : null;
@@ -284,8 +288,10 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
           if(gameData['diceGreen']!=null) diceGreen = int.tryParse(gameData['diceGreen'].toString())?? 1;
           if(gameData['diceRed']!=null) diceRed = int.tryParse(gameData['diceRed'].toString())?? 1;
           if(gameData['canMove']!=null) canMove = gameData['canMove'].toString() == "true";
-          if(gameData['gameOver']!=null) gameOver = gameData['gameOver'].toString() == "true";
+          gameOver = newGameOver;
         });
+        if(justEnded) Future.delayed(Duration(milliseconds: 900), (){ if(mounted) _showWinnerDialog(); });
+        if(justRestarted){ _winnerDialogShown = false; if(_dialogOpen){ _dialogOpen = false; try{ Navigator.of(context).pop(); }catch(_){} } }
       });
       chatRef!.onValue.listen((e){
         if(e.snapshot.value!=null && mounted){
@@ -332,7 +338,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       String freshToken = "";
       try {
         freshToken = await fetchAgoraToken(widget.roomId, widget.myPlayer == 0? 1 : 2)
-           .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 12));
       } catch (_) {}
       await agoraEngine!.joinChannel(token: freshToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)).timeout(const Duration(seconds: 15));
     }catch(e){
@@ -354,7 +360,54 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   void botTurn() { if (gameOver ||!mounted) return; if (turn!=1) return; rollBot(); }
   void rollBot() { setState(() => isRolling = true); _diceController.forward(from: 0); Future.delayed(Duration(milliseconds: 800), () { if (!mounted) return; int d = _rng.nextInt(6) + 1; setState(() { diceRed = d; canMove = true; isRolling = false; }); bool any = false; for (int i = 0; i < 4; i++) if (isValidMove(1, i, d)) { any = true; break; } if (!any) { Future.delayed(Duration(milliseconds: 500), () { setState(() { turn = 0; canMove = false; }); }); } else Future.delayed(Duration(milliseconds: 500), () => botMove()); }); }
   void botMove() { if (!canMove || gameOver) return; int bestIdx = -1; for (int i = 0; i < 4; i++) if (isValidMove(1, i, diceRed)) { bestIdx = i; break; } if (bestIdx!= -1) moveGoti(bestIdx); }
-  void moveGoti(int idx) { if (!canMove || gameOver) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (!isValidMove(turn, idx, dice)) return; setState(() { int cur = pos[turn][idx]; int opp = 1 - turn; if (cur == -1) pos[turn][idx] = startPos[turn]; else if (cur < 40) { int dist = (homeEntry[turn] - cur + 40) % 40; if (dice == dist + 1) pos[turn][idx] = 40; else { int next = (cur + dice) % 40; if (!safe.contains(next)) { for (int k = 0; k < 4; k++) if (pos[opp][k] == next) pos[opp][k] = -1; } pos[turn][idx] = next; } } else pos[turn][idx] = cur + dice; if (pos[turn].every((v) => v == 45)) { gameOver = true; canMove = false; } else { if (dice!=6) turn = 1 - turn; canMove = false; } }); syncRoom(); if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 600), () => botTurn()); }
+  void moveGoti(int idx) { if (!canMove || gameOver) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (!isValidMove(turn, idx, dice)) return; setState(() { int cur = pos[turn][idx]; int opp = 1 - turn; if (cur == -1) pos[turn][idx] = startPos[turn]; else if (cur < 40) { int dist = (homeEntry[turn] - cur + 40) % 40; if (dice == dist + 1) pos[turn][idx] = 40; else { int next = (cur + dice) % 40; if (!safe.contains(next)) { for (int k = 0; k < 4; k++) if (pos[opp][k] == next) pos[opp][k] = -1; } pos[turn][idx] = next; } } else pos[turn][idx] = cur + dice; if (pos[turn].every((v) => v == 45)) { gameOver = true; canMove = false; } else { if (dice!=6) turn = 1 - turn; canMove = false; } }); syncRoom(); if (gameOver) Future.delayed(Duration(milliseconds: 900), (){ if(mounted) _showWinnerDialog(); }); if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 600), () => botTurn()); }
+
+  // 🏆 WINNER DIALOG - jeetne wale ka naam + dobara khelo / lobby wapas (teeno mode me)
+  void _showWinnerDialog(){
+    if(_winnerDialogShown ||!mounted) return;
+    _winnerDialogShown = true;
+    String winnerName = widget.mode == GameMode.online? (turn == 0? p0Name : p1Name) : (turn == 0? myName : p1Name);
+    bool iWon;
+    if(widget.mode == GameMode.offline){ iWon = true; }
+    else if(widget.mode == GameMode.bot){ iWon = turn == 0; }
+    else { iWon = turn == widget.myPlayer; }
+    String title = widget.mode == GameMode.offline? "🏆 WINNER!" : (iWon? "🎉 JEET GAYE!" : "😞 HAAR GAYE");
+    Color titleColor = widget.mode == GameMode.offline? Colors.amber : (iWon? Colors.greenAccent : Colors.redAccent);
+    _dialogOpen = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Color(0xFF151A2B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.amber, width: 2)),
+        title: Text(title, textAlign: TextAlign.center, style: TextStyle(color: titleColor, fontWeight: FontWeight.w900, fontSize: 24)),
+        content: Text("$winnerName ne game jeet liya! 🏆", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        actions: [
+          Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: _restartGame, child: Text("DOBARA KHELO", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold))),
+            SizedBox(height: 8),
+            OutlinedButton(style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.white54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: _goToLobby, child: Text("LOBBY WAPAS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+          ]),
+        ],
+      ),
+    ).then((_){ _dialogOpen = false; });
+  }
+
+  void _restartGame(){
+    Navigator.of(context).pop(); // dialog band
+    setState((){
+      pos = [[-1,-1,-1,-1],[-1,-1,-1,-1]];
+      diceGreen = 1; diceRed = 1; turn = 0; consecutiveSixes = 0;
+      canMove = false; gameOver = false; _winnerDialogShown = false;
+    });
+    syncRoom(); // online me dusre player ki screen bhi auto-reset hogi
+  }
+
+  void _goToLobby(){
+    Navigator.of(context).pop(); // dialog band
+    if(mounted) Navigator.of(context).pop(); // game screen se bahar → lobby
+  }
+
   Offset getHomePathPos(int p, int step, double s) { double r = s * 0.25, cx = s / 2, cy = s / 2; int entry = homeEntry[p]; double ang = (entry / 40) * 2 * pi - pi / 2; double ex = cx + r * cos(ang), ey = cy + r * sin(ang); double t = (step + 1) / 6.0; return Offset(ex + (cx - ex) * t, ey + (cy - ey) * t); }
   Widget dot() => Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.black, shape: BoxShape.circle));
   Widget emptyDot() => SizedBox(width: 10, height: 10);
@@ -364,6 +417,9 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   @override Widget build(BuildContext context) {
     double s = (MediaQuery.of(context).size.width < 400? MediaQuery.of(context).size.width : 400) - 20; double box = s * 0.14;
     String turnName = widget.mode == GameMode.online? (turn == 0? p0Name : p1Name) : (turn == 0? myName : p1Name);
+    // 🎲 DICE PERSPECTIVE: online/bot me MERA dice hamesha neeche, opponent ka upar. Offline me purana layout.
+    int topDicePlayer = 0, bottomDicePlayer = 1;
+    if (widget.mode!= GameMode.offline) { bottomDicePlayer = widget.myPlayer; topDicePlayer = 1 - widget.myPlayer; }
     return Scaffold(backgroundColor: Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text(widget.mode == GameMode.offline? "OFFLINE - $myName" : widget.mode == GameMode.bot? "$myName vs $p1Name" : "ROOM ${widget.roomId} - $p0Name vs $p1Name", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)), actions: [IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent), onPressed: () async { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$p0Name vs $p1Name"))); }), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber), onPressed: () => setState(() => showChat =!showChat))]),
       body: Column(children: [
         Container(margin: EdgeInsets.symmetric(horizontal: 8, vertical: 6), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Turn: $turnName", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)), Text(isMyTurn? "YOUR TURN - TAP DICE" : "WAIT - $turnName", style: TextStyle(fontSize: 11, color: isMyTurn? Colors.greenAccent : Colors.white54, fontWeight: FontWeight.bold))])),
@@ -372,8 +428,8 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
             Positioned(left: s*0.23, top: s*0.23, width: s*0.54, height: s*0.54, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)]), border: Border.all(color: Colors.white, width: 2)))),
             Positioned(left: 10, top: 10, width: box, height: box, child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFC8E6C9), Color(0xFFE8F5E9)]), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green, width: 3)))),
             Positioned(right: 10, bottom: 10, width: box, height: box, child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFFCDD2), Color(0xFFFFEBEE)]), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red, width: 3)))),
-            Positioned(left: 8, top: box + 8, child: diceNearHome(0, diceGreen)),
-            Positioned(right: 8, bottom: box + 8, child: diceNearHome(1, diceRed)),
+            Positioned(left: 8, top: box + 8, child: diceNearHome(topDicePlayer, topDicePlayer == 0? diceGreen : diceRed)),
+            Positioned(right: 8, bottom: box + 8, child: diceNearHome(bottomDicePlayer, bottomDicePlayer == 0? diceGreen : diceRed)),
             for (int i = 0; i < 40; i++) Positioned(left: s / 2 + s * 0.25 * cos((i / 40) * 2 * pi - pi / 2) - 7, top: s / 2 + s * 0.25 * sin((i / 40) * 2 * pi - pi / 2) - 7, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: safe.contains(i)? Color(0xFFFFD700) : Colors.white, shape: BoxShape.circle, border: Border.all(color: safe.contains(i)? Colors.orange : Colors.black26)))),
             for (int j = 0; j < 5; j++) Positioned(left: getHomePathPos(0, j, s).dx - 8, top: getHomePathPos(0, j, s).dy - 8, child: Container(width: 16, height: 16, decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)))),
             for (int j = 0; j < 5; j++) Positioned(left: getHomePathPos(1, j, s).dx - 8, top: getHomePathPos(1, j, s).dy - 8, child: Container(width: 16, height: 16, decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)))),
