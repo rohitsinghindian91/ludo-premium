@@ -33,7 +33,7 @@ Future<String> getLockedName() async {
   return loginName;
 }
 
-const String agoraAppId = "68178816ba6d47c6864cc5d584f3e2b8";
+const String agoraAppId = "023565215b9e4722b8fff10c0340c699";
 const String agoraTokenServer = "https://patient-wave-cb8c.rohitsinghindian91.workers.dev";
 
 // Cloudflare Worker se FRESH Agora token lega - har game/room ke liye naya token
