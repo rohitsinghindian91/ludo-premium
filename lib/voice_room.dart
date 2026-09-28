@@ -365,7 +365,38 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
 
   DatabaseReference get roomRef => FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}");
   bool get isOwner => myRole == "owner";
-  bool get isAdmin => myRole == "admin" || isOwner;        return;
+  bool get isAdmin => myRole == "admin" || isOwner;
+  @override
+  void initState() {
+    super.initState();
+    tabCtrl = TabController(length: 2, vsync: this);
+    myMobile = prefs.getString("mobile")?? "";
+    myName = prefs.getString("name")?? "Guest";
+    myUid = makeVoiceUid(myMobile);
+    _enter();
+  }
+
+  Future<void> _enter() async {
+    try { FirebaseDatabase.instance.goOnline(); } catch (_) {}
+    // FIX 1: naam hamesha registration wala
+    myName = await getLockedName(myMobile, myName);
+    if (!mounted) return;
+    setState(() => status = "Kick check...");
+    final kickSnap = await roomRef.child("kicks/$myMobile").get();
+    if (kickSnap.exists) {
+      final k = Map<String, dynamic>.from(kickSnap.value as Map);
+      final until = (k["until"]?? 0) as int;
+      if (until == -1 || until > DateTime.now().millisecondsSinceEpoch) {
+        if (!mounted) return;
+        final by = k["byName"]?? "owner";
+        showDialog(barrierDismissible: false, context: context, builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF2A1420),
+          title: const Text("Kick Out", style: TextStyle(color: Colors.red)),
+          content: Text(until == -1? "$by ne tumhe hamesha ke liye kick kiya hai" : "$by ne tumhe kick kiya hai",
+              style: const TextStyle(color: Colors.white)),
+          actions: [TextButton(onPressed: () { Navigator.pop(context); Navigator.pop(context); }, child: const Text("OK"))],
+        ));
+        setState(() => status = "Kicked out");  return;
       } else {
         await roomRef.child("kicks/$myMobile").remove();
       }
