@@ -15,6 +15,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   List<DocumentSnapshot> searchResult = [];
   bool loading = true;
   String myName = "";
+  String myIdNo = "";
 
   @override void initState() { super.initState(); tabCtrl = TabController(length: 3, vsync: this); loadAll(); }
 
@@ -22,6 +23,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     setState((){ loading = true; });
     var me = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
     myName = me.data()?["name"]?? "You";
+    myIdNo = me.data()?["voiceRoomNo"]?.toString()?? "";
     var p = await FirebaseFirestore.instance.collection("friend_requests").where("to", isEqualTo: widget.mobile).where("status", isEqualTo: "pending").get();
     var f = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("friends").get();
     List<Map<String, dynamic>> temp = [];
@@ -29,17 +31,22 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       String fm = doc.data()["mobile"];
       var userDoc = await FirebaseFirestore.instance.collection("users").doc(fm).get();
       String fname = userDoc.data()?["name"]?? "Friend";
-      temp.add({"mobile": fm, "name": fname});
+      String fid = userDoc.data()?["voiceRoomNo"]?.toString()?? "";
+      temp.add({"mobile": fm, "name": fname, "idNo": fid});
     }
     setState((){ pending = p.docs; friendsWithName = temp; loading = false; });
   }
 
+  // ID NUMBER se search - 7 digit ka permanent ID (voice room number)
+  // Mobile number kisi ko nahi dikhega, sirf ID se dhoondo aur add karo
   Future<void> searchUser() async {
     String s = searchCtrl.text.trim();
-    if(s.length!=10) return;
-    if(s==widget.mobile) return;
-    var doc = await FirebaseFirestore.instance.collection("users").doc(s).get();
-    if(!doc.exists){ setState(()=> searchResult=[]); return; }
+    if(s.length!=7) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("7 digit ka ID number dalo"))); return; }
+    if(s==myIdNo) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ye tumhari apni ID hai"))); return; }
+    var q = await FirebaseFirestore.instance.collection("users").where("voiceRoomNo", isEqualTo: s).limit(1).get();
+    if(q.docs.isEmpty){ setState(()=> searchResult=[]); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Is ID ka koi user nahi mila"))); return; }
+    var doc = q.docs.first;
+    if(doc.id==widget.mobile){ setState(()=> searchResult=[]); return; }
     setState(()=> searchResult=[doc]);
   }
 
@@ -74,12 +81,17 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       body: loading? Center(child: CircularProgressIndicator(color: Colors.amber)):
       TabBarView(controller: tabCtrl, children: [
         Padding(padding: EdgeInsets.all(16), child: Column(children: [
-          Row(children: [Expanded(child: TextField(controller: searchCtrl, keyboardType: TextInputType.phone, maxLength: 10, style: TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "Mobile se Search (Number hide rahega)", filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))), SizedBox(width:8), ElevatedButton(onPressed: searchUser, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: Text("SEARCH", style: TextStyle(color: Colors.black))) ]),
-          SizedBox(height:20),
-          Expanded(child: searchResult.isEmpty? Center(child: Text("Search karo - Number kisi ko nahi dikhega", style: TextStyle(color: Colors.white54))): ListView.builder(itemCount: searchResult.length, itemBuilder: (c,i){ var d=searchResult[i].data() as Map; String name = d["name"]?? "User"; return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [CircleAvatar(backgroundColor: Colors.amber, child: Text(name.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.black))), SizedBox(width:12), Expanded(child: Text(name, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))), ElevatedButton(onPressed: ()=>sendRequest(d["mobile"]), child: Text("ADD"), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)) ])); }))
+          if(myIdNo.isNotEmpty)
+            Container(margin: EdgeInsets.only(bottom:12), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withOpacity(0.4))),
+              child: Row(children: [Icon(Icons.badge, color: Colors.amber), SizedBox(width:8), Text("Tumhari ID: $myIdNo", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), SizedBox(width:4), Expanded(child: Text("(dosto ko ye ID do)", style: TextStyle(color: Colors.white54, fontSize: 11)))])),
+          Row(children: [Expanded(child: TextField(controller: searchCtrl, keyboardType: TextInputType.number, maxLength: 7, style: TextStyle(color: Colors.white, letterSpacing: 4, fontWeight: FontWeight.bold), decoration: InputDecoration(counterText: "", labelText: "ID Number se Search (7 digit)", labelStyle: TextStyle(color: Colors.white54, fontSize: 12), filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))), SizedBox(width:8), ElevatedButton(onPressed: searchUser, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: Text("SEARCH", style: TextStyle(color: Colors.black))) ]),
+          SizedBox(height:8),
+          Text("Mobile number kisi ko nahi dikhega - sirf ID se add karo", style: TextStyle(color: Colors.white38, fontSize: 11)),
+          SizedBox(height:12),
+          Expanded(child: searchResult.isEmpty? Center(child: Text("ID dalke SEARCH dabao", style: TextStyle(color: Colors.white54))): ListView.builder(itemCount: searchResult.length, itemBuilder: (c,i){ var d=searchResult[i].data() as Map; String name = d["name"]?? "User"; String fid = d["voiceRoomNo"]?.toString()?? ""; String toMobile = searchResult[i].id; return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [CircleAvatar(backgroundColor: Colors.amber, child: Text(name.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.black))), SizedBox(width:12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text("ID: $fid", style: TextStyle(color: Colors.white54, fontSize: 11))])), ElevatedButton(onPressed: ()=>sendRequest(toMobile), child: Text("ADD"), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)) ])); }))
         ])),
         pending.isEmpty? Center(child: Text("Koi request nahi", style: TextStyle(color: Colors.white54))): ListView.builder(padding: EdgeInsets.all(12), itemCount: pending.length, itemBuilder: (c,i){ var data=pending[i].data() as Map; String fromName = data["fromName"]?? "Kisi ne"; return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [Expanded(child: Text("$fromName ne request bheji", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))), ElevatedButton(onPressed: ()=>acceptRequest(pending[i]), child: Text("Accept"), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)), SizedBox(width:6), ElevatedButton(onPressed: ()=>rejectRequest(pending[i]), child: Text("Reject"), style: ElevatedButton.styleFrom(backgroundColor: Colors.red)) ])); }),
-        friendsWithName.isEmpty? Center(child: Text("Koi friend nahi", style: TextStyle(color: Colors.white54))): ListView.builder(padding: EdgeInsets.all(12), itemCount: friendsWithName.length, itemBuilder: (c,i){ var data=friendsWithName[i]; String fname = data["name"]; String fm = data["mobile"]; return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [CircleAvatar(backgroundColor: Colors.green, child: Text(fname.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.white))), SizedBox(width:12), Expanded(child: Text(fname, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))), IconButton(icon: Icon(Icons.chat, color: Colors.amber), onPressed: (){ Navigator.push(context, MaterialPageRoute(builder: (_)=> PrivateChatScreen(myMobile: widget.mobile, friendMobile: fm, friendName: fname, myName: myName))); }) ])); })
+        friendsWithName.isEmpty? Center(child: Text("Koi friend nahi", style: TextStyle(color: Colors.white54))): ListView.builder(padding: EdgeInsets.all(12), itemCount: friendsWithName.length, itemBuilder: (c,i){ var data=friendsWithName[i]; String fname = data["name"]; String fm = data["mobile"]; String fid = data["idNo"]?? ""; return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [CircleAvatar(backgroundColor: Colors.green, child: Text(fname.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.white))), SizedBox(width:12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(fname, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text("ID: $fid", style: TextStyle(color: Colors.white54, fontSize: 11))])), IconButton(icon: Icon(Icons.chat, color: Colors.amber), onPressed: (){ Navigator.push(context, MaterialPageRoute(builder: (_)=> PrivateChatScreen(myMobile: widget.mobile, friendMobile: fm, friendName: fname, myName: myName))); }) ])); })
       ])
     );
   }
