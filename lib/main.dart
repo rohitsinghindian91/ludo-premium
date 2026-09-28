@@ -141,6 +141,7 @@ class _OtpPageState extends State<OtpPage> {
     }
     await prefs.setString("mobile", widget.mobile);
     await prefs.setString("name", widget.name);
+    // FIX FOR LUDO - ye 2 line add ki hai, baki kuch change nahi
     var ludoPrefs = await SharedPreferences.getInstance();
     await ludoPrefs.setString("mobile", widget.mobile);
     await ludoPrefs.setString("name", widget.name);
@@ -272,5 +273,5 @@ class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderSt
       return Container(margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ListTile(leading: CircleAvatar(backgroundColor: Colors.amber, child: Text(name.isNotEmpty? name[0].toUpperCase() : "U", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold))), title: Text("$name (${"*"*6}$last4)", style: const TextStyle(color: Colors.white, fontSize: 13)), subtitle: Text(prem, style: TextStyle(color: prem=="PREMIUM"? Colors.greenAccent : Colors.white54, fontSize: 10))));
     });
   }
-  @override Widget build(BuildContext context) { return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("My Team"), backgroundColor: Colors.amber, bottom: TabBar(controller: tabCtrl, tabs: const [Tab(text: "L1"), Tab(text: "L2"), Tab(text: "L3"), Tab(text: "Income")])), body: loading? const Center(child: CircularProgressIndicator()) : TabBarView(controller: tabCtrl, children: [buildList(l1, "L1 empty"), buildList(l2, "L2 empty"), buildList(l3, "L3 empty"), ListView.builder(itemCount: earn.length, itemBuilder: (ctx,i){ var d = earn[i].data() as Map; return ListTile(title: Text("Rs ${d["amount"]} - ${d["type"]}", style: const TextStyle(color: Colors.white)), subtitle: Text("${d["from"]}", style: const TextStyle(color: Colors.white54))); })]))); }
+  @override Widget build(BuildContext context) { return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("My Team"), backgroundColor: Colors.amber, bottom: TabBar(controller: tabCtrl, tabs: const [Tab(text: "L1"), Tab(text: "L2"), Tab(text: "L3"), Tab(text: "Income")])), body: loading? const Center(child: CircularProgressIndicator()) : TabBarView(controller: tabCtrl, children: [buildList(l1, "L1 empty"), buildList(l2, "L2 empty"), buildList(l3, "L3 empty"), ListView.builder(itemCount: earn.length, itemBuilder: (ctx,i){ var d = earn[i].data() as Map; return ListTile(title: Text("Rs ${d["amount"]} - ${d["type"]}", style: const TextStyle(color: Colors.white)), subtitle: Text("${d["from"]}", style: const TextStyle(color: Colors.white54))); })])); }
 }
