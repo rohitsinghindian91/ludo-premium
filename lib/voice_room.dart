@@ -47,8 +47,8 @@ Future<String> fetchVoiceToken(String channel, int uid) async {
   for (int attempt = 0; attempt < 3; attempt++) {
     try {
       final res = await http
-      .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
-      .timeout(const Duration(seconds: 12));
+     .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
+     .timeout(const Duration(seconds: 12));
       if (res.statusCode == 200) {
         final t = cleanVoiceToken(res.body);
         if (t.isNotEmpty) return t;
@@ -152,7 +152,7 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
             child: ElevatedButton.icon(
               onPressed: creating? null : openMyRoom,
               icon: creating
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.add_home, color: Colors.black),
               label: const Text("MY ROOM", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)),
               style: ElevatedButton.styleFrom(
@@ -377,6 +377,26 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     // MERA PERMANENT ID NUMBER lao (yehi room number hai)
     try { myIdNo = await getOrCreateRoomNo(myMobile); } catch (_) {}
 
+    // STALE SEAT CLEANUP: pichli baar app band hone se meri seat reh gayi ho to hatao
+    // (taaki dobara aaram se baith saku - voice se iska koi lena dena nahi)
+    try {
+      final ss = await roomRef.child("seats").get();
+      final sv = ss.value;
+      Future<void> cleanOne(String key, dynamic v) async {
+        if (v is Map && myMobile.isNotEmpty) {
+          final m = Map<String, dynamic>.from(v);
+          if ((m["mobile"]?? "").toString() == myMobile) {
+            await roomRef.child("seats/$key").remove();
+          }
+        }
+      }
+      if (sv is Map) {
+        for (final e in sv.entries) { await cleanOne(e.key.toString(), e.value); }
+      } else if (sv is List) {
+        for (int i = 0; i < sv.length; i++) { await cleanOne(i.toString(), sv[i]); }
+      }
+    } catch (_) {}
+
     _listenAll();
     await _joinAgora();
     myPresentRef = roomRef.child("visitors/$myUid");
@@ -391,25 +411,35 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       if (!mounted) return;
       final list = List.generate(10, (i) => _Seat(index: i));
       final val = e.snapshot.value;
+      // SEAT PARSE FIX: Firebase numeric keys pe kabhi Map deta hai, kabhi List - dono padho
+      // (warna seat bhari hogi lekin khali dikhegi aur "Seat nahi mili" aayega)
+      void parseSeat(int i, dynamic v) {
+        if (i < 0 || i >= 10 || v is! Map) return;
+        final m = Map<String, dynamic>.from(v);
+        int u;
+        try { u = (m["uid"]?? 0) as int; } catch (_) { u = int.tryParse((m["uid"]?? "0").toString())?? 0; }
+        list[i] = _Seat(
+          index: i,
+          locked: m["locked"] == true,
+          micLocked: m["micLocked"] == true,
+          uid: u,
+          mobile: (m["mobile"]?? "").toString(),
+          name: (m["name"]?? "").toString(),
+          role: (m["role"]?? "visitor").toString(),
+          gender: (m["gender"]?? "").toString(),
+          idNo: (m["idNo"]?? "").toString(),
+          muted: m["muted"] == true,
+        );
+      }
       if (val is Map) {
         val.forEach((k, v) {
           final i = int.tryParse(k.toString());
-          if (i!= null && i >= 0 && i < 10 && v is Map) {
-            final m = Map<String, dynamic>.from(v);
-            list[i] = _Seat(
-              index: i,
-              locked: m["locked"] == true,
-              micLocked: m["micLocked"] == true,
-              uid: (m["uid"]?? 0) as int,
-              mobile: (m["mobile"]?? "").toString(),
-              name: (m["name"]?? "").toString(),
-              role: (m["role"]?? "visitor").toString(),
-              gender: (m["gender"]?? "").toString(),
-              idNo: (m["idNo"]?? "").toString(),
-              muted: m["muted"] == true,
-            );
-          }
+          if (i!= null) parseSeat(i, v);
         });
+      } else if (val is List) {
+        for (int i = 0; i < val.length && i < 10; i++) {
+          parseSeat(i, val[i]);
+        }
       }
       final found = list.indexWhere((s) => s.mobile == myMobile && s.mobile.isNotEmpty);
       // SEAT RACE FIX: baithne/uthne ke 3 sec tak purana Firebase data mySeat ko wapas na badle
@@ -595,7 +625,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   }
 
   // ===== SEAT FIX (SIMPLE): transaction hataya - pehle seat check karo, phir seedha baitho =====
-  // (transaction wala tarika Firebase me commit nahi ho raha tha - "Seat nahi mili" aa raha tha)
+  // Voice connect ho ya na ho, seat pe baithna hamesha kaam karega - iska voice se koi lena dena nahi
   Future<void> _sitOn(int i) async {
     if (mySeat >= 0) { _toast("Pehle apni seat chhodo"); return; }
     _seatGuardUntil = DateTime.now().millisecondsSinceEpoch + 3000;
@@ -604,7 +634,9 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       final snap = await ref.get();
       if (snap.exists && snap.value is Map) {
         final m = Map<String, dynamic>.from(snap.value as Map);
-        if ((m["mobile"]?? "").toString().isNotEmpty) { _toast("Seat nahi mili, dobara try karo"); return; }
+        final oldMobile = (m["mobile"]?? "").toString();
+        // Koi AUR baitha hai to mana karo - lekin APNA purana bacha hua data ho to overwrite kar do
+        if (oldMobile.isNotEmpty && oldMobile!= myMobile) { _toast("Seat nahi mili, dobara try karo"); return; }
         if (m["locked"] == true) { _toast("Seat lock hai"); return; }
       }
       await ref.set({
@@ -1039,7 +1071,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     return Column(children: [
       Expanded(
         child: chats.isEmpty
-        ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
+       ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
             : ListView.builder(
                 controller: chatScroll,
                 padding: const EdgeInsets.all(12),
