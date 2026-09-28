@@ -7,7 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:http/http.dart' as http;
-import 'main.dart';
+import 'main.dart' hide Text;
 
 // ================= CONFIG =================
 const String voiceRoomAppId = "023565215b9e4722b8fff10c0340c699";
