@@ -1128,7 +1128,29 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         ),
       ),
     );
-  }            Text("ID:${widget.roomNo}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+    Widget _header() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: const BoxDecoration(gradient: LinearGradient(colors: [Colors.amber, Colors.orange]), shape: BoxShape.circle),
+          child: const Icon(Icons.casino_rounded, color: Colors.black, size: 30),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Flexible(
+                child: Text(roomName,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
+              ),
+              if (roomLocked) const Padding(
+                padding: EdgeInsets.only(left: 6),
+                child: Icon(Icons.lock, color: Colors.amber, size: 18),
+              ),
+            ]),            Text("ID:${widget.roomNo}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
           ]),
         ),
         // FIX 8: owner lock/unlock button
