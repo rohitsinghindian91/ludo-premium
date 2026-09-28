@@ -141,7 +141,6 @@ class _OtpPageState extends State<OtpPage> {
     }
     await prefs.setString("mobile", widget.mobile);
     await prefs.setString("name", widget.name);
-    // FIX FOR LUDO - ye 2 line add ki hai, baki kuch change nahi
     var ludoPrefs = await SharedPreferences.getInstance();
     await ludoPrefs.setString("mobile", widget.mobile);
     await ludoPrefs.setString("name", widget.name);
@@ -211,7 +210,6 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: 16),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: () { if (!isPrem) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pehle Premium Lo"))); openPremium(); return; } Navigator.push(context, MaterialPageRoute(builder: (_) => LobbyScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("PLAY LUDO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
       const SizedBox(height: 12),
-      // ===== VOICE CHAT ROOM BUTTON (naya) =====
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton.icon(
         onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const VoiceLobbyScreen())); },
         icon: const Icon(Icons.mic, color: Colors.white),
@@ -219,7 +217,6 @@ class _HomeScreenState extends State<HomeScreen> {
         style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
       )),
       const SizedBox(height: 12),
-      // ===== khatam =====
       Row(children: [Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => WalletScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00BCD4)), child: const Text("UPI SET KARE", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)))), const SizedBox(width: 8), Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => MyTeamScreen(mobile: widget.mobile))); }, child: const Text("MY TEAM")))]),
       const SizedBox(height: 12),
       Row(children: [Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => PlanScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("PLAN CHART", style: TextStyle(color: Colors.black)))), const SizedBox(width: 8), Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => FriendsScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.blue), child: const Text("FRIENDS", style: TextStyle(color: Colors.white))))]),
