@@ -399,7 +399,7 @@ class _LudoGameState extends State<LudoGame> {
       await agoraEngine.initialize(RtcEngineContext(appId: agoraAppId));
       if (!mounted || k!= voiceKey) return;
       await agoraEngine.enableAudio();
-      await agoraEngine.setDefaultAudioRoutetoSpeakerphone(true);
+      await agoraEngine.setEnableSpeakerphone(true);
       engineReady = true;
       agoraEngine.registerEventHandler(RtcEngineEventHandler(
         onJoinChannelSuccess: (c, e) { if (mounted && k == voiceKey) setState(() => vsay = "Voice connected!"); },
