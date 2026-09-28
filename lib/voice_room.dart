@@ -47,8 +47,8 @@ Future<String> fetchVoiceToken(String channel, int uid) async {
   for (int attempt = 0; attempt < 3; attempt++) {
     try {
       final res = await http
-     .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
-     .timeout(const Duration(seconds: 12));
+    .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
+    .timeout(const Duration(seconds: 12));
       if (res.statusCode == 200) {
         final t = cleanVoiceToken(res.body);
         if (t.isNotEmpty) return t;
@@ -152,7 +152,7 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
             child: ElevatedButton.icon(
               onPressed: creating? null : openMyRoom,
               icon: creating
-             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.add_home, color: Colors.black),
               label: const Text("MY ROOM", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)),
               style: ElevatedButton.styleFrom(
@@ -197,9 +197,11 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
                 final val = snap.data?.snapshot.value;
                 if (val is Map) {
                   val.forEach((k, v) {
-                    if (v is Map) rooms.add({"no": k.toString(), "name": (v["name"]?? "?").toString(), "online": v["online"]?? 0});
+                    if (v is Map) rooms.add({"no": k.toString(), "name": (v["name"]?? "?").toString(), "online": v["online"]?? 0, "seated": v["seated"]?? 0});
                   });
                 }
+                // SORT: sabse zyada seat par baithe users wala room sabse upar
+                rooms.sort((a, b) => ((b["seated"]?? 0) as int).compareTo((a["seated"]?? 0) as int));
                 if (rooms.isEmpty) return const Center(child: Text("Koi live room nahi", style: TextStyle(color: Colors.white54)));
                 return ListView.builder(
                   itemCount: rooms.length,
@@ -387,6 +389,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
           final m = Map<String, dynamic>.from(v);
           if ((m["mobile"]?? "").toString() == myMobile) {
             await roomRef.child("seats/$key").remove();
+            _bumpSeated(-1);
           }
         }
       }
@@ -626,24 +629,27 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
 
   // ===== SEAT FIX (SIMPLE): transaction hataya - pehle seat check karo, phir seedha baitho =====
   // Voice connect ho ya na ho, seat pe baithna hamesha kaam karega - iska voice se koi lena dena nahi
-  Future<void> _sitOn(int i) async {
+  Future<void> _sitOn(int i, {bool adminBypass = false}) async {
     if (mySeat >= 0) { _toast("Pehle apni seat chhodo"); return; }
     _seatGuardUntil = DateTime.now().millisecondsSinceEpoch + 3000;
     final ref = roomRef.child("seats/$i");
     try {
       final snap = await ref.get();
+      bool wasEmpty = true;
       if (snap.exists && snap.value is Map) {
         final m = Map<String, dynamic>.from(snap.value as Map);
         final oldMobile = (m["mobile"]?? "").toString();
         // Koi AUR baitha hai to mana karo - lekin APNA purana bacha hua data ho to overwrite kar do
         if (oldMobile.isNotEmpty && oldMobile!= myMobile) { _toast("Seat nahi mili, dobara try karo"); return; }
-        if (m["locked"] == true) { _toast("Seat lock hai"); return; }
+        if (m["locked"] == true &&!adminBypass) { _toast("Seat lock hai"); return; }
+        wasEmpty = oldMobile.isEmpty;
       }
       await ref.set({
         "locked": false, "micLocked": false, "uid": myUid, "mobile": myMobile,
         "name": myName, "role": myRole, "gender": myGender, "idNo": myIdNo,
         "muted":!micOn, "at": DateTime.now().millisecondsSinceEpoch,
       });
+      if (wasEmpty) _bumpSeated(1);
       setState(() => mySeat = i);
       _applyPublish();
     } catch (e) {
@@ -657,7 +663,17 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     setState(() => mySeat = -1);
     _seatGuardUntil = DateTime.now().millisecondsSinceEpoch + 3000;
     _applyPublish();
-    try { await roomRef.child("seats/$idx").remove(); } catch (_) {}
+    try { await roomRef.child("seats/$idx").remove(); _bumpSeated(-1); } catch (_) {}
+  }
+
+  // vRoomList me seated count - lobby me sorting ke liye (zyada seated users = sabse upar)
+  Future<void> _bumpSeated(int delta) async {
+    try {
+      await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}/seated").runTransaction((v) {
+        final n = ((v as int?)?? 0) + delta;
+        return Transaction.success(n < 0? 0 : n);
+      });
+    } catch (_) {}
   }
 
   Future<void> _toggleMic() async {
@@ -702,6 +718,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
 
   Future<void> _removeFromSeat(int i) async {
     await roomRef.child("seats/$i").remove();
+    _bumpSeated(-1);
     _toast("Seat se hataya");
   }
 
@@ -716,7 +733,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       "name": name, "by": myMobile, "byName": myName, "until": until, "at": ServerValue.timestamp,
     });
     final si = seats.indexWhere((s) => s.mobile == mobile);
-    if (si >= 0) await roomRef.child("seats/$si").remove();
+    if (si >= 0) { await roomRef.child("seats/$si").remove(); _bumpSeated(-1); }
     _toast("$name kick ${days < 0? "forever" : "$days din"}");
   }
 
@@ -785,7 +802,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   }
 
   Future<void> _leave({bool pop = true}) async {
-    try { if (mySeat >= 0) await roomRef.child("seats/$mySeat").remove(); } catch (_) {}
+    try { if (mySeat >= 0) { await roomRef.child("seats/$mySeat").remove(); _bumpSeated(-1); } } catch (_) {}
     try { await myPresentRef?.remove(); } catch (_) {}
     try {
       await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}/online").runTransaction((v) {
@@ -953,8 +970,10 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
 
   void _onSeatTap(_Seat s) {
     if (s.empty) {
+      // OWNER/ADMIN ko lock se koi matlab nahi - sheet khulega (lock/unlock + baitho)
+      if (isAdmin) { _seatAdminSheet(s); return; }
       if (s.locked) { _toast("Seat lock hai"); return; }
-      if (isAdmin) { _seatAdminSheet(s); } else { _sitOn(s.index); }
+      _sitOn(s.index);
       return;
     }
     _userSheet(name: s.name, mobile: s.mobile, uid: s.uid, role: s.role, gender: s.gender, idNo: s.idNo, seatIndex: s.index, isSeated: true);
@@ -966,7 +985,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(title: Text("Seat ${s.index + 1}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
           ListTile(leading: const Icon(Icons.event_seat, color: Colors.amber), title: const Text("Baith jao", style: TextStyle(color: Colors.white)),
-              onTap: () { Navigator.pop(context); _sitOn(s.index); }),
+              onTap: () { Navigator.pop(context); _sitOn(s.index, adminBypass: true); }),
           ListTile(leading: Icon(s.locked? Icons.lock_open : Icons.lock, color: Colors.orange),
               title: Text(s.locked? "Seat unlock karo" : "Seat lock karo", style: const TextStyle(color: Colors.white)),
               onTap: () { Navigator.pop(context); _lockSeat(s.index,!s.locked); }),
@@ -1021,14 +1040,15 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
                 addTile(Icons.delete_forever, Colors.red, "Kick - Forever", () => _kick(mobile, name, -1));
               }
             } else if (isAdmin) {
+              // ADMIN: sirf member/visitor par action (owner ya dusre admin par nahi)
               if (!targetIsOwner && role!= "admin") {
                 addTile(Icons.block, Colors.red, "Kick - 3 din", () => _kick(mobile, name, 3));
                 if (role!= "member") addTile(Icons.person_add, Colors.green, "Member banao", () => _setRole(mobile, name, "member"));
                 if (isSeated) {
                   final st = seats[seatIndex];
-                  addTile(Icons.mic_off, Colors.purple, st.muted? "Unmute karo" : "Mute karo", () async {
-                    await roomRef.child("seats/$seatIndex").update({"muted":!st.muted});
-                  });
+                  addTile(st.micLocked? Icons.mic : Icons.mic_off, Colors.purple, st.micLocked? "Mic unlock karo" : "Mic lock karo",
+                      () => _lockMic(seatIndex,!st.micLocked));
+                  addTile(Icons.event_seat, Colors.orange, "Seat se hatao", () => _removeFromSeat(seatIndex));
                 } else {
                   addTile(Icons.event_seat, Colors.amber, "Seat pe invite karo", () => _inviteDialog(mobile));
                 }
@@ -1071,7 +1091,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     return Column(children: [
       Expanded(
         child: chats.isEmpty
-       ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
+      ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
             : ListView.builder(
                 controller: chatScroll,
                 padding: const EdgeInsets.all(12),
