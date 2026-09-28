@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'beautiful_ludo.dart';
+import 'voice_room.dart';
 import 'plan_screen.dart';
 import 'friends_screen.dart';
 import 'rtdb.dart';
@@ -210,6 +211,15 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: 16),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: () { if (!isPrem) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pehle Premium Lo"))); openPremium(); return; } Navigator.push(context, MaterialPageRoute(builder: (_) => LobbyScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("PLAY LUDO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
       const SizedBox(height: 12),
+      // ===== VOICE CHAT ROOM BUTTON (naya) =====
+      SizedBox(width: double.infinity, height: 54, child: ElevatedButton.icon(
+        onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const VoiceLobbyScreen())); },
+        icon: const Icon(Icons.mic, color: Colors.white),
+        label: const Text("VOICE CHAT ROOM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+      )),
+      const SizedBox(height: 12),
+      // ===== khatam =====
       Row(children: [Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => WalletScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00BCD4)), child: const Text("UPI SET KARE", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)))), const SizedBox(width: 8), Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => MyTeamScreen(mobile: widget.mobile))); }, child: const Text("MY TEAM")))]),
       const SizedBox(height: 12),
       Row(children: [Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => PlanScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("PLAN CHART", style: TextStyle(color: Colors.black)))), const SizedBox(width: 8), Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => FriendsScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.blue), child: const Text("FRIENDS", style: TextStyle(color: Colors.white))))]),
@@ -265,5 +275,5 @@ class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderSt
       return Container(margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ListTile(leading: CircleAvatar(backgroundColor: Colors.amber, child: Text(name.isNotEmpty? name[0].toUpperCase() : "U", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold))), title: Text("$name (${"*"*6}$last4)", style: const TextStyle(color: Colors.white, fontSize: 13)), subtitle: Text(prem, style: TextStyle(color: prem=="PREMIUM"? Colors.greenAccent : Colors.white54, fontSize: 10))));
     });
   }
-  @override Widget build(BuildContext context) { return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("My Team"), backgroundColor: Colors.amber, bottom: TabBar(controller: tabCtrl, tabs: const [Tab(text: "L1"), Tab(text: "L2"), Tab(text: "L3"), Tab(text: "Income")])), body: loading? const Center(child: CircularProgressIndicator()) : TabBarView(controller: tabCtrl, children: [buildList(l1, "L1 empty"), buildList(l2, "L2 empty"), buildList(l3, "L3 empty"), ListView.builder(itemCount: earn.length, itemBuilder: (ctx,i){ var d = earn[i].data() as Map; return ListTile(title: Text("Rs ${d["amount"]} - ${d["type"]}", style: const TextStyle(color: Colors.white)), subtitle: Text("${d["from"]}", style: const TextStyle(color: Colors.white54))); })])); }
+  @override Widget build(BuildContext context) { return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("My Team"), backgroundColor: Colors.amber, bottom: TabBar(controller: tabCtrl, tabs: const [Tab(text: "L1"), Tab(text: "L2"), Tab(text: "L3"), Tab(text: "Income")])), body: loading? const Center(child: CircularProgressIndicator()) : TabBarView(controller: tabCtrl, children: [buildList(l1, "L1 empty"), buildList(l2, "L2 empty"), buildList(l3, "L3 empty"), ListView.builder(itemCount: earn.length, itemBuilder: (ctx,i){ var d = earn[i].data() as Map; return ListTile(title: Text("Rs ${d["amount"]} - ${d["type"]}", style: const TextStyle(color: Colors.white)), subtitle: Text("${d["from"]}", style: const TextStyle(color: Colors.white54))); })]))); }
 }
