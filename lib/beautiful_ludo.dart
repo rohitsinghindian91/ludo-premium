@@ -400,7 +400,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       } catch (e) { vsay("Voice: token FAILED - $e"); }
       if(freshToken.isEmpty){ vsay("Voice RUKA: token nahi mila - Worker check karo"); return; } // khali token pe aage badho hi mat
       vsay("Voice: channel join ho raha...");
-      await agoraEngine!.joinChannel(token: freshToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)).timeout(const Duration(seconds: 15));
+      await agoraEngine!.joinChannel(token: freshToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)).timeout(const Duration(seconds: 15));
     }catch(e){
       vsay("Voice failed: $e - game chal raha hai");
     }
