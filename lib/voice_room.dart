@@ -457,7 +457,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     chatSub = roomRef.child("chat").limitToLast(50).onValue.listen((e) {
       if (!mounted) return;
       final list = <_ChatMsg>[];
-      val = e.snapshot.value;
+      final val = e.snapshot.value;
       if (val is Map) {
         val.forEach((k, v) {
           if (v is Map) {
