@@ -13,6 +13,13 @@ import 'main.dart';
 const String voiceRoomAppId = "023565215b9e4722b8fff10c0340c699";
 const String voiceRoomTokenServer = "https://patient-wave-cb8c.rohitsinghindian91.workers.dev";
 
+// Keep-option: minimize karke bahar aane par room yaad rahe
+String? minimizedRoomNo;
+// Global engine taaki Keep par voice chalu rahe
+RtcEngine? globalVoiceEngine;
+String? globalVoiceRoom;
+int globalVoiceUid = 0;
+
 int makeVoiceUid(String mobile) {
   final d = mobile.replaceAll(RegExp(r'[^0-9]'), '');
   if (d.length >= 6) {
@@ -22,7 +29,6 @@ int makeVoiceUid(String mobile) {
   return 100000 + (DateTime.now().millisecondsSinceEpoch % 900000);
 }
 
-// Token saaf karne wala helper - Worker plain text de ya JSON {"token":"..."} de ya quotes me de, teeno chalega
 String cleanVoiceToken(String body) {
   var t = body.trim();
   if (t.isEmpty) return "";
@@ -39,7 +45,7 @@ String cleanVoiceToken(String body) {
   if (t.length >= 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")))) {
     t = t.substring(1, t.length - 1).trim();
   }
-  if (t.startsWith("<")) return ""; // HTML error page aaya to khali samjho
+  if (t.startsWith("<")) return "";
   return t;
 }
 
@@ -47,8 +53,8 @@ Future<String> fetchVoiceToken(String channel, int uid) async {
   for (int attempt = 0; attempt < 3; attempt++) {
     try {
       final res = await http
-    .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
-    .timeout(const Duration(seconds: 12));
+         .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
+         .timeout(const Duration(seconds: 12));
       if (res.statusCode == 200) {
         final t = cleanVoiceToken(res.body);
         if (t.isNotEmpty) return t;
@@ -65,8 +71,20 @@ String genderSymbol(String g) {
   return "";
 }
 
-// Room number HAMESHA same = USER KA PERMANENT ID NUMBER (7 digit)
-// Firestore (pakka) + phone cache (double lock). Login mobile se, lekin ID ye number hai.
+// FIX 1: Naam HAMESHA registration wala (Firestore users/mobile -> name)
+Future<String> getLockedName(String mobile, String fallback) async {
+  if (mobile.isEmpty) return fallback;
+  try {
+    final doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
+    final n = doc.data()?["name"]?.toString().trim()?? "";
+    if (n.isNotEmpty) {
+      try { await prefs.setString("name", n); } catch (_) {}
+      return n;
+    }
+  } catch (_) {}
+  return fallback;
+}
+
 Future<String> getOrCreateRoomNo(String mobile) async {
   if (mobile.isEmpty) throw Exception("Login nahi hai");
   final cacheKey = "voice_room_no_$mobile";
@@ -116,7 +134,15 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Room number dalo")));
       return;
     }
+    minimizedRoomNo = null;
     Navigator.push(context, MaterialPageRoute(builder: (_) => VoiceRoomScreen(roomNo: no)));
+  }
+
+  // FIX 3: Keep kiya hua room - wapas jao banner
+  void backToRoom() {
+    final no = minimizedRoomNo;
+    if (no == null) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => VoiceRoomScreen(roomNo: no, rejoin: true)));
   }
 
   Future<void> openMyRoom() async {
@@ -126,6 +152,7 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
       final no = await getOrCreateRoomNo(mobile);
       if (!mounted) return;
       setState(() => creating = false);
+      minimizedRoomNo = null;
       joinRoom(no);
     } catch (e) {
       if (!mounted) return;
@@ -142,6 +169,22 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // FIX 3: minimized room banner
+          if (minimizedRoomNo!= null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Colors.green, Colors.teal]),
+                  borderRadius: BorderRadius.circular(14)),
+              child: ListTile(
+                leading: const Icon(Icons.headset_mic, color: Colors.white),
+                title: Text("Room $minimizedRoomNo me ho",
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text("Tap karke wapas jao", style: TextStyle(color: Colors.white70, fontSize: 11)),
+                trailing: const Icon(Icons.arrow_forward, color: Colors.white),
+                onTap: backToRoom,
+              ),
+            ),
           const Icon(Icons.mic, size: 60, color: Colors.amber),
           const SizedBox(height: 8),
           const Text("Apna room banao ya kisi ke room me jao",
@@ -152,7 +195,7 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
             child: ElevatedButton.icon(
               onPressed: creating? null : openMyRoom,
               icon: creating
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.add_home, color: Colors.black),
               label: const Text("MY ROOM", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)),
               style: ElevatedButton.styleFrom(
@@ -187,7 +230,16 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
             ),
           ]),
           const SizedBox(height: 20),
-          const Text("Live Rooms", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+          Row(children: [
+            const Text("Live Rooms", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            if (minimizedRoomNo!= null)
+              TextButton.icon(
+                onPressed: backToRoom,
+                icon: const Icon(Icons.headset_mic, color: Colors.greenAccent, size: 16),
+                label: const Text("Wapas jao", style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
+              ),
+          ]),
           const SizedBox(height: 8),
           Expanded(
             child: StreamBuilder<DatabaseEvent>(
@@ -197,10 +249,9 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
                 final val = snap.data?.snapshot.value;
                 if (val is Map) {
                   val.forEach((k, v) {
-                    if (v is Map) rooms.add({"no": k.toString(), "name": (v["name"]?? "?").toString(), "online": v["online"]?? 0, "seated": v["seated"]?? 0});
+                    if (v is Map) rooms.add({"no": k.toString(), "name": (v["name"]?? "?").toString(), "online": v["online"]?? 0, "seated": v["seated"]?? 0, "locked": v["locked"] == true});
                   });
                 }
-                // SORT: sabse zyada seat par baithe users wala room sabse upar
                 rooms.sort((a, b) => ((b["seated"]?? 0) as int).compareTo((a["seated"]?? 0) as int));
                 if (rooms.isEmpty) return const Center(child: Text("Koi live room nahi", style: TextStyle(color: Colors.white54)));
                 return ListView.builder(
@@ -214,9 +265,10 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
                         leading: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: const BoxDecoration(gradient: LinearGradient(colors: [Colors.amber, Colors.orange]), shape: BoxShape.circle),
-                            child: const Icon(Icons.casino_rounded, color: Colors.black, size: 20)),
+                            child: Icon(r["locked"] == true? Icons.lock : Icons.casino_rounded, color: Colors.black, size: 20)),
                         title: Text(r["name"], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        subtitle: Text("ID:${r["no"]} - ${r["online"]} online", style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                        subtitle: Text("ID:${r["no"]} • ${r["online"]} online${r["locked"] == true? " • 🔒 Locked" : ""}",
+                            style: const TextStyle(color: Colors.white54, fontSize: 11)),
                         trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
                         onTap: () => joinRoom(r["no"]),
                       ),
@@ -270,13 +322,14 @@ class _ChatMsg {
 // ================= VOICE ROOM =================
 class VoiceRoomScreen extends StatefulWidget {
   final String roomNo;
-  const VoiceRoomScreen({super.key, required this.roomNo});
+  final bool rejoin;
+  const VoiceRoomScreen({super.key, required this.roomNo, this.rejoin = false});
   @override
   State<VoiceRoomScreen> createState() => _VoiceRoomScreenState();
 }
 
 class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProviderStateMixin {
-  RtcEngine? engine;
+  RtcEngine? get engine => globalVoiceEngine;
   late int myUid;
   late String myName;
   late String myMobile;
@@ -286,9 +339,11 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   int _seatGuardUntil = 0;
   String roomName = "...";
   String ownerMobile = "";
+  bool roomLocked = false;
   bool joined = false;
   bool micOn = true;
   bool speakerOn = true;
+  bool _keepAlive = false;
   String status = "Checking...";
   List<_Seat> seats = List.generate(10, (i) => _Seat(index: i));
   List<_Present> present = [];
@@ -305,41 +360,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   StreamSubscription<DatabaseEvent>? roleSub;
   StreamSubscription<DatabaseEvent>? kickSub;
   StreamSubscription<DatabaseEvent>? inviteSub;
+  StreamSubscription<DatabaseEvent>? lockSub;
   DatabaseReference? myPresentRef;
 
   DatabaseReference get roomRef => FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}");
   bool get isOwner => myRole == "owner";
-  bool get isAdmin => myRole == "admin" || isOwner;
-
-  @override
-  void initState() {
-    super.initState();
-    tabCtrl = TabController(length: 2, vsync: this);
-    myMobile = prefs.getString("mobile")?? "";
-    myName = prefs.getString("name")?? "Guest";
-    myUid = makeVoiceUid(myMobile);
-    _enter();
-  }
-
-  Future<void> _enter() async {
-    try { FirebaseDatabase.instance.goOnline(); } catch (_) {}
-    setState(() => status = "Kick check...");
-    final kickSnap = await roomRef.child("kicks/$myMobile").get();
-    if (kickSnap.exists) {
-      final k = Map<String, dynamic>.from(kickSnap.value as Map);
-      final until = (k["until"]?? 0) as int;
-      if (until == -1 || until > DateTime.now().millisecondsSinceEpoch) {
-        if (!mounted) return;
-        final by = k["byName"]?? "owner";
-        showDialog(barrierDismissible: false, context: context, builder: (_) => AlertDialog(
-          backgroundColor: const Color(0xFF2A1420),
-          title: const Text("Kick Out", style: TextStyle(color: Colors.red)),
-          content: Text(until == -1? "$by ne tumhe hamesha ke liye kick kiya hai" : "$by ne tumhe kick kiya hai",
-              style: const TextStyle(color: Colors.white)),
-          actions: [TextButton(onPressed: () { Navigator.pop(context); Navigator.pop(context); }, child: const Text("OK"))],
-        ));
-        setState(() => status = "Kicked out");
-        return;
+  bool get isAdmin => myRole == "admin" || isOwner;        return;
       } else {
         await roomRef.child("kicks/$myMobile").remove();
       }
@@ -349,20 +375,34 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     if (!infoSnap.exists) {
       await roomRef.child("info").set({
         "name": myName, "ownerMobile": myMobile, "ownerName": myName,
-        "createdAt": ServerValue.timestamp,
+        "createdAt": ServerValue.timestamp, "locked": false, "roomPassword": "",
       });
       await roomRef.child("roles/$myMobile").set({"role": "owner", "name": myName});
     }
     final info = Map<String, dynamic>.from((await roomRef.child("info").get()).value as Map);
     ownerMobile = (info["ownerMobile"]?? "").toString();
+    roomLocked = info["locked"] == true;
     if (!mounted) return;
     setState(() => roomName = (info["name"]?? info["ownerName"]?? "?").toString());
+
+    // FIX 8: lock room - password check (owner ko nahi)
+    if (roomLocked && myMobile!= ownerMobile &&!widget.rejoin) {
+      final ok = await _askRoomPassword();
+      if (!ok) {
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+    }
 
     final roleSnap = await roomRef.child("roles/$myMobile").get();
     if (roleSnap.exists) {
       final rm = Map<String, dynamic>.from(roleSnap.value as Map);
       myRole = (rm["role"]?? "visitor").toString();
       myGender = (rm["gender"]?? "").toString();
+      // FIX 1: role me naam bhi lock wala rakho
+      if ((rm["name"]?? "").toString()!= myName) {
+        try { await roomRef.child("roles/$myMobile").update({"name": myName}); } catch (_) {}
+      }
     } else if (myMobile == ownerMobile) {
       myRole = "owner";
       await roomRef.child("roles/$myMobile").set({"role": "owner", "name": myName});
@@ -376,11 +416,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         }
       } catch (_) {}
     }
-    // MERA PERMANENT ID NUMBER lao (yehi room number hai)
     try { myIdNo = await getOrCreateRoomNo(myMobile); } catch (_) {}
 
-    // STALE SEAT CLEANUP: pichli baar app band hone se meri seat reh gayi ho to hatao
-    // (taaki dobara aaram se baith saku - voice se iska koi lena dena nahi)
     try {
       final ss = await roomRef.child("seats").get();
       final sv = ss.value;
@@ -401,12 +438,123 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     } catch (_) {}
 
     _listenAll();
-    await _joinAgora();
+    // FIX 3: Keep karke wapas aaye ho to dobara join mat karo
+    if (widget.rejoin && globalVoiceEngine!= null && globalVoiceRoom == widget.roomNo) {
+      setState(() { joined = true; status = "Connected"; });
+      _applyPublish();
+    } else {
+      await _joinAgora();
+    }
     myPresentRef = roomRef.child("visitors/$myUid");
     await myPresentRef!.set({"name": myName, "mobile": myMobile, "idNo": myIdNo, "at": ServerValue.timestamp});
     myPresentRef!.onDisconnect().remove();
-    await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update({"name": roomName, "id": widget.roomNo});
+    await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update(
+        {"name": roomName, "id": widget.roomNo, "locked": roomLocked});
     await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}/online").runTransaction((v) => Transaction.success(((v as int?)?? 0) + 1));
+  }
+
+  // FIX 8: password dialog
+  Future<bool> _askRoomPassword() async {
+    final ctrl = TextEditingController();
+    final res = await showDialog<bool>(
+      barrierDismissible: false,
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF2A1420),
+        title: const Text("🔒 Locked Room", style: TextStyle(color: Colors.amber)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text("Ye room lock hai. Owner se password lekar dalo.",
+              style: TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            obscureText: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+                hintText: "Password",
+                hintStyle: const TextStyle(color: Colors.white30),
+                filled: true,
+                fillColor: Colors.black38,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none)),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Wapas")),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+              child: const Text("Join", style: TextStyle(color: Colors.black))),
+        ],
+      ),
+    );
+    if (res!= true) return false;
+    try {
+      final snap = await roomRef.child("info/roomPassword").get();
+      final pw = snap.value?.toString()?? "";
+      if (pw.isNotEmpty && ctrl.text.trim() == pw) return true;
+      if (mounted) _toast("Galat password!");
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // FIX 8: owner lock/unlock
+  Future<void> _toggleRoomLock() async {
+    if (!isOwner) return;
+    if (!roomLocked) {
+      final ctrl = TextEditingController();
+      final res = await showDialog<String>(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF2A1420),
+          title: const Text("Room Lock karo", style: TextStyle(color: Colors.amber)),
+          content: TextField(
+            controller: ctrl,
+            obscureText: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+                hintText: "Password set karo",
+                hintStyle: const TextStyle(color: Colors.white30),
+                filled: true,
+                fillColor: Colors.black38,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none)),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+                child: const Text("Lock", style: TextStyle(color: Colors.black))),
+          ],
+        ),
+      );
+      if (res == null || res.isEmpty) return;
+      await roomRef.child("info").update({"locked": true, "roomPassword": res});
+      await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update({"locked": true});
+      setState(() => roomLocked = true);
+      _toast("Room lock ho gaya 🔒");
+    } else {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF2A1420),
+          title: const Text("Room Unlock karein?", style: TextStyle(color: Colors.white)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Nahi")),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                child: const Text("Unlock", style: TextStyle(color: Colors.white))),
+          ],
+        ),
+      );
+      if (ok!= true) return;
+      await roomRef.child("info").update({"locked": false, "roomPassword": ""});
+      await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update({"locked": false});
+      setState(() => roomLocked = false);
+      _toast("Room unlock ho gaya 🔓");
+    }
   }
 
   void _listenAll() {
@@ -414,8 +562,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       if (!mounted) return;
       final list = List.generate(10, (i) => _Seat(index: i));
       final val = e.snapshot.value;
-      // SEAT PARSE FIX: Firebase numeric keys pe kabhi Map deta hai, kabhi List - dono padho
-      // (warna seat bhari hogi lekin khali dikhegi aur "Seat nahi mili" aayega)
       void parseSeat(int i, dynamic v) {
         if (i < 0 || i >= 10 || v is! Map) return;
         final m = Map<String, dynamic>.from(v);
@@ -445,34 +591,43 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         }
       }
       final found = list.indexWhere((s) => s.mobile == myMobile && s.mobile.isNotEmpty);
-      // SEAT RACE FIX: baithne/uthne ke 3 sec tak purana Firebase data mySeat ko wapas na badle
       if (DateTime.now().millisecondsSinceEpoch > _seatGuardUntil && found!= mySeat) mySeat = found;
       setState(() => seats = list);
       if (mySeat >= 0) {
         final s = seats[mySeat];
         if ((s.micLocked || s.muted) && micOn) {
           micOn = false;
-          engine?.muteLocalAudioStream(true);
+          globalVoiceEngine?.muteLocalAudioStream(true);
           if (s.micLocked) _toast("Tumhara mic lock kar diya gaya");
         }
       }
       _applyPublish();
     });
 
+    // FIX 7: members me seat wale + visitors sab
     presentSub = roomRef.child("visitors").onValue.listen((e) async {
       if (!mounted) return;
       final list = <_Present>[];
+      final seen = <String>{};
+      for (final s in seats) {
+        if (!s.empty) {
+          seen.add(s.mobile);
+          list.add(_Present(uid: s.uid, name: s.name, mobile: s.mobile, role: s.role, gender: s.gender, idNo: s.idNo));
+        }
+      }
       final val = e.snapshot.value;
       if (val is Map) {
         final rolesSnap = await roomRef.child("roles").get();
         final roles = <String, String>{};
         final genders = <String, String>{};
+        final names = <String, String>{};
         if (rolesSnap.exists && rolesSnap.value is Map) {
           (rolesSnap.value as Map).forEach((k, v) {
             if (v is Map) {
               final vm = Map<String, dynamic>.from(v);
               roles[k.toString()] = (vm["role"]?? "visitor").toString();
               genders[k.toString()] = (vm["gender"]?? "").toString();
+              names[k.toString()] = (vm["name"]?? "").toString();
             }
           });
         }
@@ -480,7 +635,17 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
           if (v is Map) {
             final m = Map<String, dynamic>.from(v);
             final mob = (m["mobile"]?? "").toString();
-            list.add(_Present(uid: int.tryParse(k.toString())?? 0, name: (m["name"]?? "?").toString(), mobile: mob, role: roles[mob]?? "visitor", gender: genders[mob]?? "", idNo: (m["idNo"]?? "").toString()));
+            if (mob.isEmpty || seen.contains(mob)) return;
+            seen.add(mob);
+            // FIX 1: naam lock wala dikhao
+            final lockedName = names[mob];
+            list.add(_Present(
+                uid: int.tryParse(k.toString())?? 0,
+                name: (lockedName!= null && lockedName.isNotEmpty)? lockedName : (m["name"]?? "?").toString(),
+                mobile: mob,
+                role: roles[mob]?? "visitor",
+                gender: genders[mob]?? "",
+                idNo: (m["idNo"]?? "").toString()));
           }
         });
       }
@@ -520,6 +685,15 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       }
     });
 
+    lockSub = roomRef.child("info/locked").onValue.listen((e) {
+      if (!mounted) return;
+      final l = e.snapshot.value == true;
+      if (l!= roomLocked) {
+        setState(() => roomLocked = l);
+        _toast(l? "Room lock ho gaya 🔒" : "Room unlock ho gaya 🔓");
+      }
+    });
+
     kickSub = roomRef.child("kicks/$myMobile").onValue.listen((e) {
       if (!mounted ||!e.snapshot.exists) return;
       final k = Map<String, dynamic>.from(e.snapshot.value as Map);
@@ -549,86 +723,45 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         ],
       ));
     });
-  }
-
-  Future<void> _joinAgora() async {
-    setState(() => status = "Mic permission...");
-    await [Permission.microphone].request();
-    if (!mounted) return;
-    try { await engine?.leaveChannel(); } catch (_) {}
-    try { await engine?.release(); } catch (_) {}
-    engine = null;
-    setState(() => status = "Token...");
-    final token = await fetchVoiceToken("voiceroom_${widget.roomNo}", myUid);
-    if (!mounted) return;
-    if (token.isEmpty) { setState(() => status = "Token nahi mila - Worker check karo"); return; }
-    try {
-      engine = createAgoraRtcEngine();
-      await engine!.initialize(RtcEngineContext(appId: voiceRoomAppId));
-      await engine!.enableAudio();
-      await engine!.setEnableSpeakerphone(true);
-      await engine!.enableAudioVolumeIndication(interval: 300, smooth: 3, reportVad: true);
-      engine!.registerEventHandler(RtcEngineEventHandler(
-        onJoinChannelSuccess: (c, e) { if (mounted) setState(() { joined = true; status = "Connected"; }); _applyPublish(); },
-        onAudioVolumeIndication: (c, speakers, t, vad) {
-          if (!mounted) return;
-          final s = <int>{};
-          for (var sp in speakers) { if ((sp.volume?? 0) > 5) s.add(sp.uid == 0? myUid : sp.uid!); }
-          setState(() => speaking = s);
-        },
-        onError: (err, msg) { if (mounted) setState(() => status = "Agora error $err: $msg"); },
-        onTokenPrivilegeWillExpire: (c, tok) async {
-          final nt = await fetchVoiceToken("voiceroom_${widget.roomNo}", myUid);
-          if (nt.isNotEmpty) { try { await engine?.renewToken(nt); } catch (_) {} }
+  }          final nt = await fetchVoiceToken("voiceroom_${widget.roomNo}", myUid);
+          if (nt.isNotEmpty) { try { await globalVoiceEngine?.renewToken(nt); } catch (_) {} }
         },
       ));
       setState(() => status = "Joining...");
+      // FIX 5: communication profile (call jaisa), broadcaster role hataya
+      final opts = ChannelMediaOptions(
+        channelProfile: ChannelProfileType.channelProfileCommunication,
+        autoSubscribeAudio: true,
+        publishMicrophoneTrack: false,
+      );
       try {
-        await engine!.joinChannel(
-          token: token,
-          channelId: "voiceroom_${widget.roomNo}",
-          uid: myUid,
-          options: const ChannelMediaOptions(
-            clientRoleType: ClientRoleType.clientRoleBroadcaster,
-            autoSubscribeAudio: true,
-            publishMicrophoneTrack: false,
-          ),
-        );
+        await eng.joinChannel(token: token, channelId: "voiceroom_${widget.roomNo}", uid: myUid, options: opts);
       } on AgoraRtcException {
         await Future.delayed(const Duration(seconds: 2));
         if (!mounted) return;
-        await engine!.joinChannel(
-          token: token,
-          channelId: "voiceroom_${widget.roomNo}",
-          uid: myUid,
-          options: const ChannelMediaOptions(
-            clientRoleType: ClientRoleType.clientRoleBroadcaster,
-            autoSubscribeAudio: true,
-            publishMicrophoneTrack: false,
-          ),
-        );
+        await eng.joinChannel(token: token, channelId: "voiceroom_${widget.roomNo}", uid: myUid, options: opts);
       }
     } on AgoraRtcException catch (e) {
       if (mounted) setState(() => status = "Join failed (${e.code}) - token/Worker check karo");
-      try { await engine?.release(); } catch (_) {}
-      engine = null;
+      try { await globalVoiceEngine?.release(); } catch (_) {}
+      globalVoiceEngine = null;
+      globalVoiceRoom = null;
     } catch (e) {
       if (mounted) setState(() => status = "Failed: $e");
     }
   }
 
   Future<void> _applyPublish() async {
-    if (engine == null) return;
+    final eng = globalVoiceEngine;
+    if (eng == null) return;
     if (mySeat >= 0) {
-      await engine!.updateChannelMediaOptions(const ChannelMediaOptions(publishMicrophoneTrack: true));
-      await engine!.muteLocalAudioStream(!micOn);
+      await eng.updateChannelMediaOptions(const ChannelMediaOptions(publishMicrophoneTrack: true));
+      await eng.muteLocalAudioStream(!micOn);
     } else {
-      await engine!.updateChannelMediaOptions(const ChannelMediaOptions(publishMicrophoneTrack: false));
+      await eng.updateChannelMediaOptions(const ChannelMediaOptions(publishMicrophoneTrack: false));
     }
   }
 
-  // ===== SEAT FIX (SIMPLE): transaction hataya - pehle seat check karo, phir seedha baitho =====
-  // Voice connect ho ya na ho, seat pe baithna hamesha kaam karega - iska voice se koi lena dena nahi
   Future<void> _sitOn(int i, {bool adminBypass = false}) async {
     if (mySeat >= 0) { _toast("Pehle apni seat chhodo"); return; }
     _seatGuardUntil = DateTime.now().millisecondsSinceEpoch + 3000;
@@ -639,7 +772,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       if (snap.exists && snap.value is Map) {
         final m = Map<String, dynamic>.from(snap.value as Map);
         final oldMobile = (m["mobile"]?? "").toString();
-        // Koi AUR baitha hai to mana karo - lekin APNA purana bacha hua data ho to overwrite kar do
         if (oldMobile.isNotEmpty && oldMobile!= myMobile) { _toast("Seat nahi mili, dobara try karo"); return; }
         if (m["locked"] == true &&!adminBypass) { _toast("Seat lock hai"); return; }
         wasEmpty = oldMobile.isEmpty;
@@ -666,7 +798,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     try { await roomRef.child("seats/$idx").remove(); _bumpSeated(-1); } catch (_) {}
   }
 
-  // vRoomList me seated count - lobby me sorting ke liye (zyada seated users = sabse upar)
   Future<void> _bumpSeated(int delta) async {
     try {
       await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}/seated").runTransaction((v) {
@@ -680,21 +811,22 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     if (mySeat >= 0 && seats[mySeat].micLocked) { _toast("Mic lock hai"); return; }
     setState(() => micOn =!micOn);
     if (mySeat >= 0) {
-      await engine?.muteLocalAudioStream(!micOn);
+      await globalVoiceEngine?.muteLocalAudioStream(!micOn);
       try { await roomRef.child("seats/$mySeat").update({"muted":!micOn}); } catch (_) {}
     }
   }
 
   Future<void> _toggleSpeaker() async {
     setState(() => speakerOn =!speakerOn);
-    await engine?.setEnableSpeakerphone(speakerOn);
+    await globalVoiceEngine?.setEnableSpeakerphone(speakerOn);
   }
 
   Future<void> _setRole(String mobile, String name, String role) async {
-    await roomRef.child("roles/$mobile").update({"role": role, "name": name});
+    final locked = await getLockedName(mobile, name);
+    await roomRef.child("roles/$mobile").update({"role": role, "name": locked});
     final si = seats.indexWhere((s) => s.mobile == mobile);
-    if (si >= 0) { try { await roomRef.child("seats/$si").update({"role": role}); } catch (_) {} }
-    _toast("$name -> $role");
+    if (si >= 0) { try { await roomRef.child("seats/$si").update({"role": role, "name": locked}); } catch (_) {} }
+    _toast("$locked -> $role");
   }
 
   Future<void> _removeRole(String mobile, String name) async {
@@ -737,7 +869,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     _toast("$name kick ${days < 0? "forever" : "$days din"}");
   }
 
-  // Voice room se seedha friend request - ID number se pehchan, mobile andar hi rehta hai
   Future<void> _addFriend(String toMobile, String toName) async {
     try {
       final fs = FirebaseFirestore.instance;
@@ -755,6 +886,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     showDialog(context: context, builder: (_) => AlertDialog(
       backgroundColor: const Color(0xFF2A1420),
       title: const Text("Apna gender chuno", style: TextStyle(color: Colors.white)),
+      content: const Text("Note: 1 mahine me sirf 2 baar badal sakte ho",
+          style: TextStyle(color: Colors.white54, fontSize: 12)),
       actions: [
         ElevatedButton(
           onPressed: () { Navigator.pop(context); _saveGender("male"); },
@@ -768,14 +901,32 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     ));
   }
 
+  // FIX 4: gender 1 mahine me max 2 baar
   Future<void> _saveGender(String g) async {
-    setState(() => myGender = g);
+    if (g == myGender) { _toast("Ye gender pehle se set hai"); return; }
     try {
-      await roomRef.child("roles/$myMobile").update({"gender": g});
-      if (mySeat >= 0) { try { await roomRef.child("seats/$mySeat").update({"gender": g}); } catch (_) {} }
-      try { await FirebaseFirestore.instance.collection("users").doc(myMobile).set({"gender": g}, SetOptions(merge: true)); } catch (_) {}
-    } catch (_) {}
-    _toast(g == "male"? "Gender: Male ♂" : "Gender: Female ♀");
+      final docRef = FirebaseFirestore.instance.collection("users").doc(myMobile);
+      final doc = await docRef.get();
+      final now = DateTime.now();
+      final monthKey = "${now.year}-${now.month.toString().padLeft(2, '0')}";
+      final data = doc.data()?? {};
+      final changes = Map<String, dynamic>.from(data["genderChanges"]?? {});
+      final count = (changes[monthKey]?? 0) as int;
+      if (count >= 2) {
+        _toast("Is mahine 2 baar badal chuke ho - agle mahine try karo");
+        return;
+      }
+      changes[monthKey] = count + 1;
+      await docRef.set({"gender": g, "genderChanges": changes}, SetOptions(merge: true));
+      setState(() => myGender = g);
+      try {
+        await roomRef.child("roles/$myMobile").update({"gender": g});
+        if (mySeat >= 0) { try { await roomRef.child("seats/$mySeat").update({"gender": g}); } catch (_) {} }
+      } catch (_) {}
+      _toast(g == "male"? "Gender: Male ♂" : "Gender: Female ♀");
+    } catch (e) {
+      _toast("Error: $e");
+    }
   }
 
   Future<void> _sendChat() async {
@@ -801,7 +952,54 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     if (ok == true) await roomRef.child("chat").remove();
   }
 
+  // FIX 3: back dabane par Keep / Leave option
+  Future<bool> _onBackPressed() async {
+    final res = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF2A1420),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text("Room se bahar jana hai?",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.headset_mic, color: Colors.greenAccent),
+            title: const Text("Keep - room me raho, bahar jao",
+                style: TextStyle(color: Colors.white)),
+            subtitle: const Text("Voice chalu rahegi, icon par tap karke wapas aa jaoge",
+                style: TextStyle(color: Colors.white54, fontSize: 11)),
+            onTap: () => Navigator.pop(context, "keep"),
+          ),
+          ListTile(
+            leading: const Icon(Icons.call_end, color: Colors.redAccent),
+            title: const Text("Leave - room chhod do",
+                style: TextStyle(color: Colors.white)),
+            subtitle: const Text("Voice band ho jayegi",
+                style: TextStyle(color: Colors.white54, fontSize: 11)),
+            onTap: () => Navigator.pop(context, "leave"),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (res == "keep") {
+      _keepAlive = true;
+      minimizedRoomNo = widget.roomNo;
+      return true;
+    } else if (res == "leave") {
+      _keepAlive = false;
+      minimizedRoomNo = null;
+      await _leave(pop: false);
+      return true;
+    }
+    return false;
+  }
+
   Future<void> _leave({bool pop = true}) async {
+    minimizedRoomNo = null;
     try { if (mySeat >= 0) { await roomRef.child("seats/$mySeat").remove(); _bumpSeated(-1); } } catch (_) {}
     try { await myPresentRef?.remove(); } catch (_) {}
     try {
@@ -810,18 +1008,26 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         return Transaction.success(n < 0? 0 : n);
       });
     } catch (_) {}
-    for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub]) {
+    for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub, lockSub]) {
       try { await s?.cancel(); } catch (_) {}
     }
-    try { await engine?.leaveChannel(); } catch (_) {}
-    try { await engine?.release(); } catch (_) {}
-    engine = null;
+    try { await globalVoiceEngine?.leaveChannel(); } catch (_) {}
+    try { await globalVoiceEngine?.release(); } catch (_) {}
+    globalVoiceEngine = null;
+    globalVoiceRoom = null;
     if (pop && mounted) Navigator.pop(context);
   }
 
   @override
   void dispose() {
-    _leave(pop: false);
+    // FIX 3: Keep kiya to engine zinda rakho
+    if (_keepAlive) {
+      for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub, lockSub]) {
+        try { s?.cancel(); } catch (_) {}
+      }
+    } else {
+      _leave(pop: false);
+    }
     tabCtrl.dispose();
     chatCtrl.dispose();
     chatScroll.dispose();
@@ -833,11 +1039,41 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), duration: const Duration(seconds: 2)));
   }
 
+  // FIX 6: gender icon DP (male=boy, female=girl), bolne par green glow
+  Widget _avatarFor(String name, String gender, double radius, {bool isMe = false, bool glow = false}) {
+    IconData icon;
+    Color bg;
+    if (gender == "male") {
+      icon = Icons.boy;
+      bg = isMe? Colors.blue : const Color(0xFF2A5A8A);
+    } else if (gender == "female") {
+      icon = Icons.girl;
+      bg = isMe? Colors.pinkAccent : const Color(0xFF8A2A5A);
+    } else {
+      icon = Icons.person;
+      bg = isMe? Colors.amber : const Color(0xFF7A4A5E);
+    }
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: glow? Colors.greenAccent : Colors.transparent, width: 2.5),
+        boxShadow: glow? [BoxShadow(color: Colors.greenAccent.withOpacity(0.7), blurRadius: 12)] : [],
+      ),
+      child: CircleAvatar(
+        radius: radius,
+        backgroundColor: bg,
+        child: Icon(icon, color: Colors.white, size: radius * 1.3),
+      ),
+    );
+  }
+
   // ================= UI =================
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: () async { await _leave(pop: false); return true; },
+      onWillPop: _onBackPressed,
       child: Scaffold(
         body: Container(
           decoration: const BoxDecoration(
@@ -861,24 +1097,16 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         ),
       ),
     );
-  }
-
-  Widget _header() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      child: Row(children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: const BoxDecoration(gradient: LinearGradient(colors: [Colors.amber, Colors.orange]), shape: BoxShape.circle),
-          child: const Icon(Icons.casino_rounded, color: Colors.black, size: 30),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(roomName, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
-            Text("ID:${widget.roomNo}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+  }            Text("ID:${widget.roomNo}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
           ]),
         ),
+        // FIX 8: owner lock/unlock button
+        if (isOwner)
+          IconButton(
+            icon: Icon(roomLocked? Icons.lock_open : Icons.lock, color: Colors.amber),
+            tooltip: roomLocked? "Room unlock karo" : "Room lock karo",
+            onPressed: _toggleRoomLock,
+          ),
         if (isOwner)
           IconButton(
             icon: const Icon(Icons.block, color: Colors.redAccent),
@@ -914,21 +1142,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       circle = _seatCircle(icon: Icons.mic, bg: Colors.white10, iconColor: Colors.white54);
     } else {
       circle = Stack(alignment: Alignment.center, children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: isSpeaking? Colors.greenAccent : Colors.transparent, width: 2.5),
-            boxShadow: isSpeaking? [BoxShadow(color: Colors.greenAccent.withOpacity(0.6), blurRadius: 10)] : [],
-          ),
-          child: CircleAvatar(
-            radius: 26,
-            backgroundColor: isMe? Colors.amber : const Color(0xFF7A4A5E),
-            child: Text(s.name.isNotEmpty? s.name[0].toUpperCase() : "?",
-                style: TextStyle(color: isMe? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
-          ),
-        ),
+        _avatarFor(s.name, s.gender, 26, isMe: isMe, glow: isSpeaking),
         Positioned(bottom: 0, right: 2, child: _roleBadge(s.role)),
         if (s.muted || s.micLocked)
           const Positioned(top: 0, right: 2,
@@ -970,7 +1184,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
 
   void _onSeatTap(_Seat s) {
     if (s.empty) {
-      // OWNER/ADMIN ko lock se koi matlab nahi - sheet khulega (lock/unlock + baitho)
       if (isAdmin) { _seatAdminSheet(s); return; }
       if (s.locked) { _toast("Seat lock hai"); return; }
       _sitOn(s.index);
@@ -996,13 +1209,16 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   void _userSheet({required String name, required String mobile, required int uid, required String role, String gender = "", String idNo = "", int seatIndex = -1, bool isSeated = false}) {
     final isMe = mobile == myMobile;
     final targetIsOwner = role == "owner" || mobile == ownerMobile;
+    // FIX 1: sheet me bhi lock naam
+    final showName = isMe? myName : name;
+    final showGender = isMe? myGender : gender;
     showModalBottomSheet(context: context, backgroundColor: const Color(0xFF2A1420),
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
         builder: (_) {
           final items = <Widget>[
             ListTile(
-              leading: CircleAvatar(backgroundColor: Colors.amber, child: Text(name.isNotEmpty? name[0].toUpperCase() : "?", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold))),
-              title: Text("$name${genderSymbol(isMe? myGender : gender)} ${_roleTag(role)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              leading: _avatarFor(showName, showGender, 20),
+              title: Text("$showName${genderSymbol(showGender)} ${_roleTag(role)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               subtitle: Text(isMe? "ID: $myIdNo" : "ID: ${idNo.isNotEmpty? idNo : "..."}",
                   style: const TextStyle(color: Colors.white54, fontSize: 11)),
             ),
@@ -1020,12 +1236,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
                 myGender.isEmpty? "Apna gender set karo" : "Gender: ${myGender == "male"? "Male ♂" : "Female ♀"} (badlo)",
                 _chooseGender);
           } else {
-            addTile(Icons.person_add_alt, Colors.greenAccent, "Add Friend", () => _addFriend(mobile, name));
+            addTile(Icons.person_add_alt, Colors.greenAccent, "Add Friend", () => _addFriend(mobile, showName));
             if (isOwner) {
               if (!targetIsOwner) {
-                if (role!= "admin") addTile(Icons.shield, Colors.blue, "Admin banao", () => _setRole(mobile, name, "admin"));
-                if (role!= "member") addTile(Icons.person_add, Colors.green, "Member banao", () => _setRole(mobile, name, "member"));
-                if (role == "admin" || role == "member") addTile(Icons.person_remove, Colors.orange, "Role hatao", () => _removeRole(mobile, name));
+                if (role!= "admin") addTile(Icons.shield, Colors.blue, "Admin banao", () => _setRole(mobile, showName, "admin"));
+                if (role!= "member") addTile(Icons.person_add, Colors.green, "Member banao", () => _setRole(mobile, showName, "member"));
+                if (role == "admin" || role == "member") addTile(Icons.person_remove, Colors.orange, "Role hatao", () => _removeRole(mobile, showName));
               }
               if (isSeated) {
                 final st = seats[seatIndex];
@@ -1036,14 +1252,13 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
                 addTile(Icons.event_seat, Colors.amber, "Seat pe invite karo", () => _inviteDialog(mobile));
               }
               if (!targetIsOwner) {
-                addTile(Icons.block, Colors.red, "Kick - 7 din", () => _kick(mobile, name, 7));
-                addTile(Icons.delete_forever, Colors.red, "Kick - Forever", () => _kick(mobile, name, -1));
+                addTile(Icons.block, Colors.red, "Kick - 7 din", () => _kick(mobile, showName, 7));
+                addTile(Icons.delete_forever, Colors.red, "Kick - Forever", () => _kick(mobile, showName, -1));
               }
             } else if (isAdmin) {
-              // ADMIN: sirf member/visitor par action (owner ya dusre admin par nahi)
               if (!targetIsOwner && role!= "admin") {
-                addTile(Icons.block, Colors.red, "Kick - 3 din", () => _kick(mobile, name, 3));
-                if (role!= "member") addTile(Icons.person_add, Colors.green, "Member banao", () => _setRole(mobile, name, "member"));
+                addTile(Icons.block, Colors.red, "Kick - 3 din", () => _kick(mobile, showName, 3));
+                if (role!= "member") addTile(Icons.person_add, Colors.green, "Member banao", () => _setRole(mobile, showName, "member"));
                 if (isSeated) {
                   final st = seats[seatIndex];
                   addTile(st.micLocked? Icons.mic : Icons.mic_off, Colors.purple, st.micLocked? "Mic unlock karo" : "Mic lock karo",
@@ -1091,7 +1306,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     return Column(children: [
       Expanded(
         child: chats.isEmpty
-      ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
+          ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
             : ListView.builder(
                 controller: chatScroll,
                 padding: const EdgeInsets.all(12),
@@ -1160,17 +1375,16 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       itemBuilder: (c, i) {
         final p = present[i];
         final seated = seats.any((s) => s.mobile == p.mobile);
+        final isMe = p.mobile == myMobile;
         return Container(
           margin: const EdgeInsets.only(bottom: 6),
           decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(10)),
           child: ListTile(
             leading: Stack(children: [
-              CircleAvatar(backgroundColor: p.mobile == myMobile? Colors.amber : const Color(0xFF7A4A5E),
-                  child: Text(p.name.isNotEmpty? p.name[0].toUpperCase() : "?",
-                      style: TextStyle(color: p.mobile == myMobile? Colors.black : Colors.white, fontWeight: FontWeight.bold))),
+              _avatarFor(p.name, isMe? myGender : p.gender, 18),
               Positioned(bottom: 0, right: 0, child: _roleBadge(p.role)),
             ]),
-            title: Text("${p.name}${p.mobile == myMobile? " (Tum)" : ""}${genderSymbol(p.mobile == myMobile? myGender : p.gender)}",
+            title: Text("${p.name}${isMe? " (Tum)" : ""}${genderSymbol(isMe? myGender : p.gender)}",
                 style: const TextStyle(color: Colors.white, fontSize: 13)),
             subtitle: Text("${_roleTag(p.role)}${seated? " - Seat pe" : " - Visitor"} - ID: ${p.idNo.isNotEmpty? p.idNo : "..."}",
                 style: const TextStyle(color: Colors.white38, fontSize: 10)),
@@ -1184,6 +1398,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     );
   }
 
+  // FIX 6: neeche wala Leave hataya - ab sirf Mic + Speaker
   Widget _bottomBar() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
@@ -1197,7 +1412,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
               active: micOn, onTap: _toggleMic),
           _bigBtn(icon: speakerOn? Icons.volume_up : Icons.volume_off, label: "Speaker",
               active: speakerOn, onTap: _toggleSpeaker),
-          _bigBtn(icon: Icons.call_end, label: "Leave", active: false, danger: true, onTap: _leave),
         ]),
       ]),
     );
