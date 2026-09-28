@@ -37,7 +37,7 @@ Future<String> getLockedName() async {
 const String agoraAppId = "023565215b9e4722b8fff10c0340c699";
 const String agoraTokenServer = "https://patient-wave-cb8c.rohitsinghindian91.workers.dev";
 
-// ===== TOKEN FIX: Worker plain text de ya JSON {"token":"..."} de ya quotes me de - teeno format chalega =====
+// VOICE FIX: Worker plain text de ya JSON {"token":"..."} de ya quotes me de - teeno format chalega
 String cleanAgoraToken(String body) {
   var t = body.trim();
   if (t.isEmpty) return "";
@@ -58,14 +58,14 @@ String cleanAgoraToken(String body) {
   return t;
 }
 
-// ===== TOKEN FIX: Cloudflare Worker se FRESH Agora token - 3 BAAR TRY karega =====
+// Cloudflare Worker se FRESH Agora token lega - har game/room ke liye naya token
 // (khali token "" se certificate wale project me voice NAHI judegi - isliye ye zaroori hai)
 Future<String> fetchAgoraToken(String channel, int uid) async {
   for (int a = 0; a < 3; a++) {
     try {
       final res = await http
-     .get(Uri.parse("$agoraTokenServer/?channel=$channel&uid=$uid"))
-     .timeout(const Duration(seconds: 10));
+      .get(Uri.parse("$agoraTokenServer/?channel=$channel&uid=$uid"))
+      .timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
         final t = cleanAgoraToken(res.body);
         if (t.isNotEmpty) return t;
@@ -254,514 +254,279 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
 
 class LudoGame extends StatefulWidget {
   final String roomId; final int myPlayer; final GameMode mode;
-  LudoGame({required this.roomId, required this.myPlayer, required this.mode});
+  const LudoGame({super.key, required this.roomId, required this.myPlayer, required this.mode});
   @override State<LudoGame> createState() => _LudoGameState();
 }
-class _LudoGameState extends State<LudoGame> {
-  late RtcEngine agoraEngine;
-  bool engineReady = false; bool voiceOn = true; bool speakerOn = true;
-  String vsay = "";
-  int voiceKey = 0;
-  Timer? botTimer;
-  Set<String> lockedTokens = {};
-  int captured = 0;
-  late StreamSubscription<DatabaseEvent> _gameSub;
-  DatabaseReference get gRef => getRtdb().ref(widget.roomId);
-  List<List<int>> pos = [[-1,-1,-1,-1],[-1,-1,-1,-1]];
-  int dice = 1; int turn = 0; bool canMove = false; bool gameOver = false;
-  String oppName = "Opponent";
-  bool oppInRoom = false;
-  bool chatOpen = false;
-  String? myName;
-  Timer? _timer;
-  final mainPath = [35,36,37,38,39,40,47,54,61,60,59,58,57,56,55,48,41,34,27,20,13,6,7,8,9,10,11,12,19,26,33,40+6,47+6,54+6,61+6,68,75,82,89,96,97,98,99,100,101,102,109,116,123,116+14,109+14,102+14,95+14,88+14,81+14,74+14,67+14];
-  List<int> diceAnim = [];
-  final msgCtrl = TextEditingController();
-  final chatScrollCtrl = ScrollController();
-  List<Map<String,dynamic>> chatList = [];
-  bool isMoving = false;
-  late StreamSubscription<DatabaseEvent> _chatSub;
 
-  @override void initState() {
-    super.initState();
-    if(widget.mode == GameMode.offline){ if(mounted) setState((){ oppName = "Player 2"; oppInRoom = true; }); }
-    else if(widget.mode == GameMode.bot){
-      oppInRoom = true;
-      if(mounted) setState(() => oppName = "Player 2");
-      botLoop();
-      botAutoDice();
-    }
-    else initAgoraAndRoom();
-  }
-
-  void botLoop(){ if(mounted && widget.mode == GameMode.bot &&!gameOver && turn == 1) botTimer = Timer(Duration(milliseconds: 900), () async {
-    if(!mounted || widget.mode!= GameMode.bot || gameOver) return;
-    bool botCanMove = await botCanMoveCheck();
-    if(botCanMove &&!gameOver && turn == 1){
-      int b = Random().nextInt(6) + 1;
-      if(mounted) setState((){ dice = b; });
-      int totalTokens = 0, finished = 0, inHome = 0;
-      for(int i=0;i<4;i++){ if(pos[1][i] >= 0) totalTokens++; if(pos[1][i] == 57) finished++; if(pos[1][i] == -1) inHome++; }
-      int movableCount = 0;
-      for(int i=0;i<4;i++){ if(pos[1][i] >= 0 && pos[1][i] < 57) movableCount++; }
-      if(b == 6 && inHome > 0 && movableCount == 0){
-        for(int i=0;i<4;i++){ if(pos[1][i] == -1){ if(mounted) setState(() => pos[1][i] = 0); break; } }
-      } else if(movableCount > 0){
-        int bestIdx = -1, bestScore = -999;
-        for(int i=0;i<4;i++){
-          int p = pos[1][i];
-          if(p < 0 || p >= 57) continue;
-          int np = p + b; if(np > 57) continue;
-          int score = 0; bool willFinish = (np == 57);
-          bool willCapture = false, willDanger = false, willLeaveBase = (p == 0);
-          bool willSafe = [0,8,13,21,26,34,39,47].contains(np);
-          bool willHome = (np >= 51);
-          for(int j=0;j<4;j++){
-            if(pos[0][j] < 0 || pos[0][j] >= 51 || pos[0][j] >= 57) continue;
-            int rel = (pos[0][j] + 26) % 52;
-            if(rel == np &&![0,8,13,21,26,34,39,47].contains(np)) willCapture = true;
-          }
-          for(int j=0;j<4;j++){
-            if(pos[0][j] < 0 || pos[0][j] >= 51 || pos[0][j] >= 57) continue;
-            int rel = (pos[0][j] + 26) % 52;
-            int dist = (np - rel + 52) % 52;
-            if(dist >= 1 && dist <= 6 &&![0,8,13,21,26,34,39,47].contains(np)) willDanger = true;
-          }
-          if(willFinish) score += 100;
-          if(willCapture) score += 60;
-          if(willSafe) score += 25;
-          if(willLeaveBase) score += 15;
-          if(willHome) score += 20;
-          if(willDanger) score -= 30;
-          score += np;
-          if(score > bestScore){ bestScore = score; bestIdx = i; }
-        }
-        if(bestIdx >= 0 && mounted) setState(() => pos[1][bestIdx] = pos[1][bestIdx] + b);
-        await Future.delayed(Duration(milliseconds: 300));
-        if(!mounted) return;
-        int np2 = pos[1][bestIdx] + 0;
-        if(np2 >= 0 && np2 < 51){
-          int myAbs = (np2 + 26) % 52;
-          if(![0,8,13,21,26,34,39,47].contains(myAbs)){
-            bool gotiKati = false;
-            for(int j=0;j<4;j++){
-              if(pos[0][j] >= 0 && pos[0][j] < 51){
-                int oppAbs = (pos[0][j] + 0) % 52;
-                if(oppAbs == myAbs){ if(mounted) setState(() => pos[0][j] = -1); gotiKati = true; }
-              }
-            }
-            if(gotiKati && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("BOT ne tumhari goti kaat di!")));
-          }
-        }
-      }
-      if(mounted &&!gameOver){
-        if(b == 6){ setState(() => turn = 1); }
-        else { setState(() => turn = 0); }
-        botLoop();
-      }
-    } else if(!gameOver && turn == 1){ setState(() => turn = 0); botLoop(); }
-  }); }
-
-  void botAutoDice() {
-    Future.delayed(Duration(milliseconds: 1200), () {
-      if(!mounted || widget.mode!= GameMode.bot || gameOver) return;
-      if(turn == 1) botLoop();
-      else Future.delayed(Duration(milliseconds: 800), botAutoDice);
-    });
-  }
-
-  Future<bool> botCanMoveCheck() async {
-    for(int i=0;i<4;i++){ if(pos[1][i] == -1 || (pos[1][i] >= 0 && pos[1][i] + dice <= 57)) return true; }
-    return false;
-  }
+class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin {
+  final _rng = Random(); int diceGreen = 1, diceRed = 1, turn = 0, consecutiveSixes = 0; bool canMove = false, gameOver = false, isRolling = false, showChat = false; bool isMicOn = true, isSpeakerOn = true; bool isAgoraJoined = false; RtcEngine? agoraEngine;
+  bool _winnerDialogShown = false, _dialogOpen = false; // winner dialog ek baar hi dikhe
+  bool _oppOnline = true, _joinAnnounced = false; // opponent presence - join/chhod diya status
+  List<List<int>> pos = [[-1,-1,-1,-1], [-1,-1,-1,-1]]; List<Map<String, dynamic>> chatMessages = []; TextEditingController chatCtrl = TextEditingController();
+  late AnimationController _diceController; final safe = [0, 10, 20, 30]; final startPos = [0, 20]; final homeEntry = [39, 19];
+  DatabaseReference? roomRef; DatabaseReference? chatRef;
+  String? myMobile; String myName = "You"; String p0Name = "Player0"; String p1Name = "Player1";
+  final List<String> botNames = ["Jyoti","Simran","Kajal","Pinki","Sonia","Ritika","Anjali","Sweety","Pooja","Deepika"]; String selectedBotName = "Jyoti";
+  @override void initState() { selectedBotName = botNames[_rng.nextInt(botNames.length)]; _diceController = AnimationController(vsync: this, duration: Duration(milliseconds: 800)); initAgoraAndRoom(); if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 800), () => botTurn()); }
 
   Future<void> initAgoraAndRoom() async {
-    await ensurePrefs();
-    myName = await getLockedName(); // LOCKED naam - ek baar jo naam bana, wahi hamesha
-    await [Permission.microphone].request();
-    getRtdb().goOnline();
-    var snap = await gRef.child("game").get();
-    if(!snap.exists) { if(mounted) Navigator.pop(context); return; }
-    await initVoice();
-    listenRoom();
-  }
+    await ensurePrefs(); myMobile = ludoPrefs.getString("mobile"); myName = await getLockedName(); // LOCKED permanent naam
+    if(widget.mode == GameMode.online){
+      initVoice(); // BINA AWAIT - voice background me judegi, fail/hang ho to bhi game nahi rukega
+      getRtdb().goOnline();
+      roomRef = getRtdb().ref(widget.roomId); chatRef = getRtdb().ref("${widget.roomId}/chats");
+      roomRef!.keepSynced(true);
 
-  // ===== TOKEN FIX: ONLINE me voice ke liye FRESH token Worker se - channel join se pehle =====
-  Future<void> initVoice() async {
-    voiceKey++;
-    final k = voiceKey;
-    if (mounted) setState(() => vsay = "Voice: token la rahe hain...");
-    try {
-      final freshToken = await fetchAgoraToken("ludo_${widget.roomId}", widget.myPlayer == 0? 1 : 2);
-      if (!mounted || k!= voiceKey) return;
-      setState(() => vsay = "Voice: token mil gaya (${freshToken.length} chars)");
-      agoraEngine = createAgoraRtcEngine();
-      await agoraEngine.initialize(RtcEngineContext(appId: agoraAppId));
-      if (!mounted || k!= voiceKey) return;
-      await agoraEngine.enableAudio();
-      await agoraEngine.setEnableSpeakerphone(true);
-      engineReady = true;
-      agoraEngine.registerEventHandler(RtcEngineEventHandler(
-        onJoinChannelSuccess: (c, e) { if (mounted && k == voiceKey) setState(() => vsay = "Voice connected!"); },
-        onError: (e, m) { if (mounted && k == voiceKey) setState(() => vsay = "Voice ERROR $e: $m"); },
-        onTokenPrivilegeWillExpire: (c, t) async {
-          try {
-            final nt = await fetchAgoraToken("ludo_${widget.roomId}", widget.myPlayer == 0? 1 : 2);
-            await agoraEngine.renewToken(nt);
-          } catch (_) {}
-        },
-      ));
-      if (mounted && k == voiceKey) setState(() => vsay = "Voice: channel join ho raha...");
-      await agoraEngine.joinChannel(
-        token: freshToken,
-        channelId: "ludo_${widget.roomId}",
-        uid: widget.myPlayer == 0? 1 : 2,
-        options: ChannelMediaOptions(autoSubscribeAudio: true, publishMicrophoneTrack: true),
-      );
-    } catch (e) {
-      if (mounted && k == voiceKey) setState(() => vsay = "Voice ERROR $e");
-    }
-  }
-
-  void toggleVoice() async {
-    if(!engineReady) return;
-    setState(() => voiceOn =!voiceOn);
-    await agoraEngine.muteLocalAudioStream(!voiceOn);
-  }
-
-  void toggleSpeaker() async {
-    if(!engineReady) return;
-    setState(() => speakerOn =!speakerOn);
-    await agoraEngine.setEnableSpeakerphone(speakerOn);
-  }
-
-  void listenRoom() {
-    getRtdb().goOnline();
-    _gameSub = gRef.child("game").onValue.listen((ev) {
-      if(!mounted || widget.mode!= GameMode.online) return;
-      var v = ev.snapshot.value; if(v == null) return;
-      var g = Map<String,dynamic>.from(v as Map);
-      var p = Map<String,dynamic>.from(g["pos"] as Map);
-      List<List<int>> np = [[-1,-1,-1,-1],[-1,-1,-1,-1]];
-      p.forEach((k,val){ int pl = int.parse(k.toString()); var m = Map<String,dynamic>.from(val as Map); m.forEach((kk,vv){ np[pl][int.parse(kk.toString())] = int.parse(vv.toString()); }); });
-      setState((){
-        pos = np; dice = int.parse(g["diceGreen"].toString()); turn = int.parse(g["turn"].toString());
-        canMove = g["canMove"] == true; gameOver = g["gameOver"] == true;
-      });
-      if(gameOver) showWinner();
-    });
-    gRef.child("players").onValue.listen((ev) async {
-      if(!mounted || widget.mode!= GameMode.online) return;
-      var v = ev.snapshot.value; if(v == null) return;
+      // PRESENCE: main online hu - back dabau / net kate / app band ho to opponent ko "chhod diya" dikhega
       try {
-        var m = Map<String,dynamic>.from(v as Map);
-        int opp = widget.myPlayer == 0? 1 : 0;
-        var key = "p$opp";
-        if(m[key]!= null){
-          var pm = Map<String,dynamic>.from(m[key] as Map);
-          String nm = pm["name"]?.toString()?? "Opponent";
-          if(nm.isNotEmpty && nm!= "WAITING" && nm!= "Opponent"){
-            if(mounted) setState((){ oppName = nm; oppInRoom = true; });
-            if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$nm ne game join kar liya 🎉")));
+        var presRef = getRtdb().ref("${widget.roomId}/players/p${widget.myPlayer}/online");
+        await presRef.set(true);
+        presRef.onDisconnect().set(false);
+      } catch (_) {}
+
+      // PURANI WORKING FILE WALA CONNECTION LOGIC: poore room pe EK listener - game + players ek saath
+      roomRef!.onValue.listen((event){
+        if(event.snapshot.value==null ||!mounted) return;
+        var all = event.snapshot.value as Map;
+        var gameData = all["game"]!=null? Map<String,dynamic>.from(all["game"] as Map) : <String,dynamic>{};
+        var playersData = all["players"]!=null? Map<String,dynamic>.from(all["players"] as Map) : null;
+        bool newGameOver = gameData['gameOver']!=null? gameData['gameOver'].toString() == "true" : gameOver;
+        bool justEnded = newGameOver &&!gameOver; // kisi ne game jeeta (dusre player ki screen pe dialog)
+        bool justRestarted =!newGameOver && gameOver; // dusre player ne dobara shuru kiya
+        setState((){
+          if(playersData!=null){
+            var p0 = playersData["p0"]!=null? Map<String,dynamic>.from(playersData["p0"] as Map) : null;
+            var p1 = playersData["p1"]!=null? Map<String,dynamic>.from(playersData["p1"] as Map) : null;
+            if(p0!=null && p0["name"]!=null && p0["name"].toString().isNotEmpty && p0["name"].toString()!="WAITING") p0Name = p0["name"].toString();
+            if(p1!=null && p1["name"]!=null && p1["name"].toString().isNotEmpty && p1["name"].toString()!="WAITING") p1Name = p1["name"].toString();
           }
+          // opponent presence check - online field se pata chalega chhod ke gaya ya nahi
+          int _oppIdx = 1 - widget.myPlayer;
+          if(playersData!=null && playersData["p$_oppIdx"]!=null){
+            try{
+              var _od = Map<String,dynamic>.from(playersData["p$_oppIdx"] as Map);
+              if(_od["online"]!=null) _oppOnline = _od["online"].toString() == "true";
+            }catch(_){}
+          }
+          if(gameData['pos']!=null){
+            try{
+              var raw = gameData['pos'];
+              if(raw is Map){
+                List<List<int>> newPos = [[-1,-1,-1,-1],[-1,-1,-1,-1]];
+                raw.forEach((pk,pv){
+                  int pp = int.tryParse(pk.toString())?? 0;
+                  if(pp>=0 && pp<2 && pv is Map){
+                    pv.forEach((k,v){
+                      int idx = int.tryParse(k.toString())?? 0;
+                      if(idx>=0 && idx<4) newPos[pp][idx] = int.tryParse(v.toString())?? -1;
+                    });
+                  }
+                });
+                pos = newPos;
+              } else if(raw is List){
+                pos = List<List<int>>.from(raw.map((e)=> List<int>.from((e as List).map((x)=> x as int))));
+              }
+            }catch(_){}
+          }
+          if(gameData['turn']!=null) turn = int.tryParse(gameData['turn'].toString())?? 0;
+          if(gameData['diceGreen']!=null) diceGreen = int.tryParse(gameData['diceGreen'].toString())?? 1;
+          if(gameData['diceRed']!=null) diceRed = int.tryParse(gameData['diceRed'].toString())?? 1;
+          if(gameData['canMove']!=null) canMove = gameData['canMove'].toString() == "true";
+          gameOver = newGameOver;
+        });
+        // opponent ne game JOIN kiya - ek baar announce karo
+        int _oi = 1 - widget.myPlayer;
+        String _on = _oi == 0? p0Name : p1Name;
+        bool _real = _on.isNotEmpty && _on!="WAITING" && _on!="Player0" && _on!="Player1";
+        if(_real &&!_joinAnnounced){
+          _joinAnnounced = true;
+          Future.delayed(Duration(milliseconds: 400), (){
+            if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$_on ne game join kar liya hai"), backgroundColor: Colors.green, duration: Duration(seconds: 3)));
+          });
         }
-      } catch(_){}
+        if(justEnded) Future.delayed(Duration(milliseconds: 900), (){ if(mounted) _showWinnerDialog(); });
+        if(justRestarted){ _winnerDialogShown = false; if(_dialogOpen){ _dialogOpen = false; try{ Navigator.of(context).pop(); }catch(_){} } }
+      });
+      chatRef!.onValue.listen((e){
+        if(e.snapshot.value!=null && mounted){
+          var allc = Map<String,dynamic>.from(e.snapshot.value as Map);
+          List<Map<String,dynamic>> msgs = [];
+          allc.forEach((k,v){
+            try{ var m = Map<String,dynamic>.from(v as Map); if(m['player']!="System") msgs.add({"player": m['player'], "msg": m['msg']}); }catch(_){}
+          });
+          setState(()=> chatMessages = msgs);
+        }
+      });
+    } else { setState((){ p0Name = myName; p1Name = widget.mode == GameMode.bot? selectedBotName : "Dost"; }); }
+  }
+
+  @override void dispose() { _diceController.dispose(); chatCtrl.dispose(); if(widget.mode == GameMode.online){ try{ getRtdb().ref("${widget.roomId}/players/p${widget.myPlayer}/online").set(false); }catch(_){} } if(isAgoraJoined && agoraEngine!=null){ agoraEngine!.leaveChannel(); agoraEngine!.release(); } super.dispose(); }
+  int get dice => turn == 0? diceGreen : diceRed;
+  bool get isMyTurn { if (widget.mode == GameMode.offline) return true; if (widget.mode == GameMode.bot) return turn == 0; return turn == widget.myPlayer; }
+  bool isValidMove(int p, int idx, int d) { int cur = pos[p][idx]; if (cur == -1) return d == 6; if (cur == 45) return false; if (cur >= 40) return cur + d <= 45; int dist = (homeEntry[p] - cur + 40) % 40; if (d == dist + 1) return true; if (d > dist + 1) return false; return true; }
+  void sendMessage() async { if (chatCtrl.text.trim().isEmpty) return; String t = chatCtrl.text.trim(); chatCtrl.clear(); if(widget.mode == GameMode.online && chatRef!= null){ getRtdb().goOnline(); await chatRef!.push().set({"player": myName, "msg": t, "time": ServerValue.timestamp}); } else { setState(()=> chatMessages.add({"player": myName, "msg": t})); } }
+  void toggleMic() async { setState(() => isMicOn =!isMicOn); try{ if(agoraEngine!=null) await agoraEngine!.muteLocalAudioStream(!isMicOn); }catch(_){} }
+  void toggleSpeaker() async { setState(() => isSpeakerOn =!isSpeakerOn); try{ if(agoraEngine!=null){ await agoraEngine!.setEnableSpeakerphone(isSpeakerOn); } }catch(_){} }
+
+  // VOICE bilkul alag function - fail ho ya hang ho, game pe ZERO asar. Har step pe timeout.
+  Future<void> initVoice() async {
+    void vsay(String m){ if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), duration: Duration(seconds: 2))); }
+    try{
+      vsay("Voice: mic permission...");
+      await [Permission.microphone].request().timeout(const Duration(seconds: 10));
+      agoraEngine = createAgoraRtcEngine();
+      await agoraEngine!.initialize(RtcEngineContext(appId: agoraAppId)).timeout(const Duration(seconds: 10));
+      await agoraEngine!.enableAudio().timeout(const Duration(seconds: 10));
+      agoraEngine!.registerEventHandler(RtcEngineEventHandler(
+        onJoinChannelSuccess: (c,e){
+          if(mounted) setState(()=> isAgoraJoined = true);
+          agoraEngine!.setEnableSpeakerphone(true); // join ke BAAD speaker on
+          vsay("Voice connected!");
+        },
+        onUserJoined: (c, uid, elapsed){
+          agoraEngine!.setEnableSpeakerphone(true); // saamne wala jude to speaker pakka on
+          vsay("Saamne wala voice me jud gaya!");
+        },
+        onUserOffline: (c, uid, reason){ vsay("Voice disconnected"); },
+        onError: (err, msg){ vsay("Voice ERROR $err: $msg"); }, // asli error code ab dikhega
+      ));
+      vsay("Voice: token la rahe hain...");
+      // FRESH TOKEN Worker se lao - khaali token se voice NAHI judegi (certificate project)
+      String freshToken = "";
+      try {
+        freshToken = await fetchAgoraToken(widget.roomId, widget.myPlayer == 0? 1 : 2)
+      .timeout(const Duration(seconds: 15));
+        vsay(freshToken.isEmpty? "Voice: KHALI token mila!" : "Voice: token mil gaya (${freshToken.length} chars)");
+      } catch (e) { vsay("Voice: token FAILED - $e"); }
+      if(freshToken.isEmpty){ vsay("Voice RUKA: token nahi mila - Worker check karo"); return; } // khali token pe aage badho hi mat
+      vsay("Voice: channel join ho raha...");
+      await agoraEngine!.joinChannel(token: freshToken, channelId: widget.roomId, uid: widget.myPlayer==0?1:2, options: ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleBroadcaster, channelProfile: ChannelProfileType.channelProfileCommunication, autoSubscribeAudio: true, publishMicrophoneTrack: true)).timeout(const Duration(seconds: 15));
+    }catch(e){
+      vsay("Voice failed: $e - game chal raha hai");
+    }
+  }
+  void syncRoom(){ if(widget.mode == GameMode.online){ getRtdb().goOnline(); getRtdb().ref("${widget.roomId}/game/pos").set({"0": {"0": pos[0][0], "1": pos[0][1], "2": pos[0][2], "3": pos[0][3]}, "1": {"0": pos[1][0], "1": pos[1][1], "2": pos[1][2], "3": pos[1][3]}}); getRtdb().ref("${widget.roomId}/game").update({"turn": turn, "diceGreen": diceGreen, "diceRed": diceRed, "canMove": canMove, "gameOver": gameOver}); } }
+  void roll() {
+    if (gameOver || isRolling) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (canMove) return;
+    setState(() => isRolling = true); _diceController.forward(from: 0);
+    Future.delayed(Duration(milliseconds: 800), () {
+      if (!mounted) return; int d = _rng.nextInt(6) + 1;
+      if (d == 6) { consecutiveSixes++; if (consecutiveSixes == 3) { setState(() { if (turn == 0) diceGreen = d; else diceRed = d; turn = 1 - turn; canMove = false; consecutiveSixes = 0; isRolling = false; }); syncRoom(); if (widget.mode == GameMode.bot && turn == 1) botTurn(); return; } } else consecutiveSixes = 0;
+      setState(() { if (turn == 0) diceGreen = d; else diceRed = d; canMove = true; isRolling = false; }); syncRoom();
+      bool any = false; for (int i = 0; i < 4; i++) if (isValidMove(turn, i, d)) { any = true; break; }
+      if (!any) { Future.delayed(Duration(milliseconds: 800), () { if (!mounted || gameOver) return; setState(() { turn = 1 - turn; canMove = false; }); syncRoom(); if (widget.mode == GameMode.bot && turn == 1) botTurn(); }); }
     });
-    _chatSub = gRef.child("chats").limitToLast(30).onValue.listen((ev) {
-      if(!mounted) return;
-      var v = ev.snapshot.value; List<Map<String,dynamic>> l = [];
-      if(v!= null){ (v as Map).forEach((k,val){ var m = Map<String,dynamic>.from(val as Map); l.add({"player": m["player"]?.toString()??"?", "msg": m["msg"]?.toString()??"", "time": m["time"]}); }); }
-      l.sort((a,b){ int ta = a["time"] is int? a["time"] : 0; int tb = b["time"] is int? b["time"] : 0; return ta.compareTo(tb); });
-      if(mounted) setState(() => chatList = l);
-      Future.delayed(Duration(milliseconds: 100), (){ if(chatScrollCtrl.hasClients) chatScrollCtrl.jumpTo(chatScrollCtrl.position.maxScrollExtent); });
-    });
-    _timer = Timer.periodic(Duration(seconds: 2), (_) async {
-      if(!mounted) return;
-      if(widget.mode == GameMode.online && gameOver) return;
-      if(widget.mode == GameMode.online && turn!= widget.myPlayer) return;
-      if(widget.mode == GameMode.bot && turn!= 0) return;
-      var snap = await gRef.child("players").get().timeout(Duration(seconds: 3), onTimeout: () => throw TimeoutException("x"));
-    });
   }
+  void botTurn() { if (gameOver ||!mounted) return; if (turn!=1) return; rollBot(); }
+  void rollBot() { setState(() => isRolling = true); _diceController.forward(from: 0); Future.delayed(Duration(milliseconds: 800), () { if (!mounted) return; int d = _rng.nextInt(6) + 1; setState(() { diceRed = d; canMove = true; isRolling = false; }); bool any = false; for (int i = 0; i < 4; i++) if (isValidMove(1, i, d)) { any = true; break; } if (!any) { Future.delayed(Duration(milliseconds: 500), () { setState(() { turn = 0; canMove = false; }); }); } else Future.delayed(Duration(milliseconds: 500), () => botMove()); }); }
+  void botMove() { if (!canMove || gameOver) return; int bestIdx = -1; for (int i = 0; i < 4; i++) if (isValidMove(1, i, diceRed)) { bestIdx = i; break; } if (bestIdx!= -1) moveGoti(bestIdx); }
+  void moveGoti(int idx) { if (!canMove || gameOver) return; if (widget.mode == GameMode.online &&!isMyTurn) return; if (!isValidMove(turn, idx, dice)) return; setState(() { int cur = pos[turn][idx]; int opp = 1 - turn; if (cur == -1) pos[turn][idx] = startPos[turn]; else if (cur < 40) { int dist = (homeEntry[turn] - cur + 40) % 40; if (dice == dist + 1) pos[turn][idx] = 40; else { int next = (cur + dice) % 40; if (!safe.contains(next)) { for (int k = 0; k < 4; k++) if (pos[opp][k] == next) pos[opp][k] = -1; } pos[turn][idx] = next; } } else pos[turn][idx] = cur + dice; if (pos[turn].every((v) => v == 45)) { gameOver = true; canMove = false; } else { if (dice!=6) turn = 1 - turn; canMove = false; } }); syncRoom(); if (gameOver) Future.delayed(Duration(milliseconds: 900), (){ if(mounted) _showWinnerDialog(); }); if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 600), () => botTurn()); }
 
-  void showWinner(){
-    if(!mounted) return;
-    String w = turn == 0? (myName?? "Player 1") : oppName;
-    showDialog(barrierDismissible: false, context: context, builder: (_) => AlertDialog(
-      title: Text("🏆 $w JEET GAYA!", style: TextStyle(fontWeight: FontWeight.bold)),
-      actions: [TextButton(onPressed: (){ Navigator.pop(context); Navigator.pop(context); }, child: Text("LOBBY"))],
-    ));
-  }
-
-  Future<void> rollDice() async {
-    if(gameOver || isMoving) return;
-    if(widget.mode == GameMode.online && turn!= widget.myPlayer) return;
-    if(widget.mode == GameMode.bot && turn!= 0) return;
-    int d = Random().nextInt(6) + 1;
-    setState((){ diceAnim = [1,2,3,4,5,6]; });
-    await Future.delayed(Duration(milliseconds: 250));
-    if(!mounted) return;
-    setState((){ dice = d; diceAnim = []; });
-    bool can = false;
-    for(int i=0;i<4;i++){ int p = pos[turn][i]; if(p == -1 && d == 6) can = true; else if(p >= 0 && p + d <= 57) can = true; }
-    if(widget.mode == GameMode.online){
-      await gRef.child("game").update({"diceGreen": turn == 0? d : dice, "diceRed": turn == 1? d : dice, "canMove": can, "turn": turn});
-      if(!can){ await Future.delayed(Duration(milliseconds: 600)); if(mounted) nextTurn(); }
-    } else {
-      setState(() => canMove = can);
-      if(!can){ await Future.delayed(Duration(milliseconds: 600)); if(mounted) nextTurn(); }
-    }
-  }
-
-  void nextTurn() async {
-    if(gameOver) return;
-    int nt = turn == 0? 1 : 0;
-    if(widget.mode == GameMode.online){
-      await gRef.child("game").update({"turn": nt, "canMove": false});
-    } else {
-      setState((){ turn = nt; canMove = false; });
-      if(widget.mode == GameMode.bot && nt == 1) botLoop();
-    }
-  }
-
-  Future<void> tryMove(int idx) async {
-    if(gameOver || isMoving ||!canMove) return;
-    if(widget.mode == GameMode.online && turn!= widget.myPlayer) return;
-    if(widget.mode == GameMode.bot && turn!= 0) return;
-    int p = pos[turn][idx];
-    int d = dice;
-    bool valid = false;
-    if(p == -1 && d == 6) valid = true;
-    else if(p >= 0 && p + d <= 57) valid = true;
-    if(!valid) return;
-    isMoving = true;
-    int np = (p == -1)? 0 : p + d;
-    setState(() => pos[turn][idx] = np);
-    await Future.delayed(Duration(milliseconds: 350));
-    if(!mounted){ isMoving = false; return; }
-    checkCapture(turn, idx);
-    if(checkWin(turn)){
-      if(widget.mode == GameMode.online) await gRef.child("game").update({"gameOver": true});
-      else setState(() => gameOver = true);
-      isMoving = false;
-      showWinner();
-      return;
-    }
-    if(widget.mode == GameMode.online){
-      Map<String,dynamic> posMap = {};
-      for(int pl=0; pl<2; pl++){ Map<String,dynamic> tm = {}; for(int i=0;i<4;i++) tm["$i"] = pos[pl][i]; posMap["$pl"] = tm; }
-      await gRef.child("game").update({"pos": posMap});
-    }
-    isMoving = false;
-    if(d == 6){ if(mounted) setState(() => canMove = false); if(widget.mode == GameMode.online){ await gRef.child("game").update({"canMove": false}); } }
-    else nextTurn();
-  }
-
-  void checkCapture(int pl, int idx){
-    int myPos = pos[pl][idx];
-    if(myPos < 0 || myPos >= 51) return;
-    int myAbs = pl == 0? myPos : (myPos + 26) % 52;
-    if([0,8,13,21,26,34,39,47].contains(myAbs)) return;
-    int opp = pl == 0? 1 : 0;
-    for(int j=0;j<4;j++){
-      int op = pos[opp][j];
-      if(op < 0 || op >= 51) continue;
-      int oppAbs = opp == 0? op : (op + 26) % 52;
-      if(oppAbs == myAbs){
-        setState(() => pos[opp][j] = -1);
-        captured++;
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(pl == widget.myPlayer? "Goti kaat di! 🎯" : "Tumhari goti kat gayi! 😅")));
-      }
-    }
-  }
-
-  bool checkWin(int pl){
-    for(int i=0;i<4;i++) if(pos[pl][i]!= 57) return false;
-    return true;
-  }
-
-  void sendChat() async {
-    String t = msgCtrl.text.trim(); if(t.isEmpty) return;
-    msgCtrl.clear();
-    await gRef.child("chats").push().set({"player": myName?? "Player", "msg": t, "time": ServerValue.timestamp});
-  }
-
-  @override void dispose(){
-    botTimer?.cancel(); _timer?.cancel();
-    try{ _gameSub.cancel(); }catch(_){}
-    try{ _chatSub.cancel(); }catch(_){}
-    if(engineReady){ try{ agoraEngine.leaveChannel(); }catch(_){} try{ agoraEngine.release(); }catch(_){} }
-    msgCtrl.dispose(); chatScrollCtrl.dispose();
-    super.dispose();
-  }
-
-  Offset tokenXY(int pl, int idx, double s){
-    int p = pos[pl][idx];
-    double cell = s / 15;
-    if(p == -1){
-      double bx = pl == 0? cell * 1.5 : cell * 10.5;
-      double by = pl == 0? cell * 10.5 : cell * 1.5;
-      double ox = (idx % 2) * cell * 1.6; double oy = (idx ~/ 2) * cell * 1.6;
-      return Offset(bx + ox, by + oy);
-    }
-    int absPos = pl == 0? p : (p + 26) % 52;
-    int cellIdx;
-    if(p >= 51){
-      List<int> homePath = pl == 0? [52,53,54,55,56,57] : [58,59,60,61,62,63];
-      cellIdx = homePath[p - 51];
-    } else cellIdx = mainPath[absPos];
-    int r = cellIdx ~/ 15, c = cellIdx % 15;
-    return Offset(c * cell + cell / 2, r * cell + cell / 2);
-  }
-
-  @override Widget build(BuildContext context){
-    String title = widget.mode == GameMode.offline? "OFFLINE" : widget.mode == GameMode.bot? "BOT MATCH" : "ROOM ${widget.roomId}";
-    String sub = widget.mode == GameMode.online? "${myName?? ""} vs $oppName" : widget.mode == GameMode.bot? "You vs $oppName" : "Player 1 vs Player 2";
-    bool myTurn = widget.mode == GameMode.offline? true : (widget.mode == GameMode.bot? turn == 0 : turn == widget.myPlayer);
-    return WillPopScope(
-      onWillPop: () async {
-        if(widget.mode == GameMode.online){ try{ await gRef.child("players/p${widget.myPlayer}").update({"online": false}); }catch(_){} }
-        return true;
-      },
-      child: Scaffold(
-        backgroundColor: Color(0xFF0A0E1A),
-        appBar: AppBar(backgroundColor: Color(0xFF0A0E1A), elevation: 0, leading: IconButton(icon: Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
-          title: Text("$title - $sub", style: TextStyle(fontSize: 13, color: Colors.white)),
-          actions: [
-            if(widget.mode == GameMode.online)
-              IconButton(icon: Icon(Icons.chat, color: Colors.amber), onPressed: () => setState(() => chatOpen =!chatOpen)),
+  // WINNER DIALOG - jeetne wale ka naam + dobara khelo / lobby wapas (teeno mode me)
+  void _showWinnerDialog(){
+    if(_winnerDialogShown ||!mounted) return;
+    _winnerDialogShown = true;
+    String winnerName = widget.mode == GameMode.online? (turn == 0? p0Name : p1Name) : (turn == 0? myName : p1Name);
+    bool iWon;
+    if(widget.mode == GameMode.offline){ iWon = true; }
+    else if(widget.mode == GameMode.bot){ iWon = turn == 0; }
+    else { iWon = turn == widget.myPlayer; }
+    String title = widget.mode == GameMode.offline? "WINNER!" : (iWon? "JEET GAYE!" : "HAAR GAYE");
+    Color titleColor = widget.mode == GameMode.offline? Colors.amber : (iWon? Colors.greenAccent : Colors.redAccent);
+    _dialogOpen = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Color(0xFF151A2B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.amber, width: 2)),
+        title: Text(title, textAlign: TextAlign.center, style: TextStyle(color: titleColor, fontWeight: FontWeight.w900, fontSize: 24)),
+        content: Text("$winnerName ne game jeet liya!", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        actions: [
+          Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: _restartGame, child: Text("DOBARA KHELO", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold))),
+            SizedBox(height: 8),
+            OutlinedButton(style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.white54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: _goToLobby, child: Text("LOBBY WAPAS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
           ]),
-        body: Column(children: [
-          Container(padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6), color: turn == 0? Colors.red.withOpacity(0.25) : Colors.green.withOpacity(0.25),
-            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text("Turn: ${turn == 0? (widget.myPlayer == 0? (myName?? "You") : oppName) : (widget.myPlayer == 1? (myName?? "You") : oppName)}",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-              Text(myTurn? (canMove? "CHALO!" : "YOUR TURN - TAP DICE") : "WAIT - ${turn == 0? "pooja" : oppName}",
-                  style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-            ])),
-          if(widget.mode == GameMode.online && oppInRoom)
-            Container(width: double.infinity, padding: EdgeInsets.symmetric(vertical: 6), color: Colors.green.withOpacity(0.2),
-              child: Text("✅ $oppName ne game join kar liya hai", textAlign: TextAlign.center, style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold))),
-          if(widget.mode == GameMode.online)
-            Padding(padding: EdgeInsets.symmetric(vertical: 4), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              InkWell(onTap: toggleVoice, child: Container(padding: EdgeInsets.all(8), decoration: BoxDecoration(color: voiceOn? Colors.green : Colors.red, shape: BoxShape.circle), child: Icon(voiceOn? Icons.mic : Icons.mic_off, color: Colors.white, size: 20))),
-              SizedBox(width: 12),
-              InkWell(onTap: toggleSpeaker, child: Container(padding: EdgeInsets.all(8), decoration: BoxDecoration(color: speakerOn? Colors.blue : Colors.grey, shape: BoxShape.circle), child: Icon(speakerOn? Icons.volume_up : Icons.volume_off, color: Colors.white, size: 20))),
-            ])),
-          Expanded(child: Center(child: AspectRatio(aspectRatio: 1, child: Container(margin: EdgeInsets.all(8),
-            decoration: BoxDecoration(border: Border.all(color: Colors.amber, width: 3), borderRadius: BorderRadius.circular(8)),
-            child: LayoutBuilder(builder: (ctx, cons){
-              double s = cons.maxWidth;
-              return Stack(children: [
-                CustomPaint(size: Size(s, s), painter: BoardPainter()),
-                for(int pl=0; pl<2; pl++) for(int i=0;i<4;i++)
-                  Builder(builder: (_){
-                    Offset o = tokenXY(pl, i, s);
-                    bool clickable = myTurn && canMove && turn == pl &&
-                      (widget.mode == GameMode.offline || widget.mode == GameMode.bot || pl == widget.myPlayer) &&
-                      ((pos[pl][i] == -1 && dice == 6) || (pos[pl][i] >= 0 && pos[pl][i] + dice <= 57));
-                    return Positioned(
-                      left: o.dx - s/34, top: o.dy - s/34,
-                      child: GestureDetector(
-                        onTap: clickable? () => tryMove(i) : null,
-                        child: Container(
-                          width: s/17, height: s/17,
-                          decoration: BoxDecoration(
-                            color: pl == 0? Colors.red : Colors.green,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: clickable? Colors.yellow : Colors.white, width: clickable? 3 : 1.5),
-                            boxShadow: clickable? [BoxShadow(color: Colors.yellow, blurRadius: 8)] : [],
-                          ),
-                          child: Center(child: Text("${i+1}", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
-                        ),
-                      ),
-                    );
-                  }),
-                Positioned.fill(child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  _diceBox(0, s, myTurn && turn == 0),
-                  _diceBox(1, s, myTurn && turn == 1),
-                ])),
-              ]);
-            }))))),
-          if(widget.mode == GameMode.online)
-            Padding(padding: EdgeInsets.all(8), child: Text(vsay, style: TextStyle(color: Colors.white54, fontSize: 11), textAlign: TextAlign.center)),
-          if(widget.mode == GameMode.online && chatOpen)
-            Container(height: 180, margin: EdgeInsets.all(8), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)),
-              child: Column(children: [
-                Expanded(child: ListView.builder(controller: chatScrollCtrl, padding: EdgeInsets.all(8), itemCount: chatList.length,
-                  itemBuilder: (c,i){ var m = chatList[i]; return Padding(padding: EdgeInsets.symmetric(vertical: 2),
-                    child: Text("${m["player"]}: ${m["msg"]}", style: TextStyle(color: Colors.white70, fontSize: 12))); })),
-                Row(children: [Expanded(child: TextField(controller: msgCtrl, style: TextStyle(color: Colors.white, fontSize: 12),
-                  decoration: InputDecoration(hintText: "Message...", hintStyle: TextStyle(color: Colors.white30), contentPadding: EdgeInsets.symmetric(horizontal: 10)))),
-                  IconButton(icon: Icon(Icons.send, color: Colors.amber, size: 20), onPressed: sendChat)]),
-              ])),
-        ]),
-        floatingActionButton: widget.mode == GameMode.online? FloatingActionButton(
-          backgroundColor: Colors.amber,
-          child: Icon(Icons.chat, color: Colors.black),
-          onPressed: () => setState(() => chatOpen =!chatOpen),
-        ) : null,
+        ],
       ),
-    );
+    ).then((_){ _dialogOpen = false; });
   }
 
-  Widget _diceBox(int pl, double s, bool active){
-    int show = diceAnim.isNotEmpty? diceAnim[Random().nextInt(diceAnim.length)] : dice;
-    return GestureDetector(
-      onTap: active? rollDice : null,
-      child: Container(
-        margin: EdgeInsets.all(s * 0.06),
-        padding: EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: active? Colors.yellow : Colors.transparent, width: 3),
-          boxShadow: active? [BoxShadow(color: Colors.yellow.withOpacity(0.6), blurRadius: 10)] : [],
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text("$show", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
-          SizedBox(height: 2),
-          Row(mainAxisSize: MainAxisSize.min, children: List.generate(3, (i) =>
-            Container(margin: EdgeInsets.all(1), width: 8, height: 8,
-              decoration: BoxDecoration(color: show > i? Colors.black : Colors.black26, shape: BoxShape.circle)))),
-        ]),
-      ),
+  void _restartGame(){
+    Navigator.of(context).pop(); // dialog band
+    setState((){
+      pos = [[-1,-1,-1,-1],[-1,-1,-1,-1]];
+      diceGreen = 1; diceRed = 1; turn = 0; consecutiveSixes = 0;
+      canMove = false; gameOver = false; _winnerDialogShown = false;
+    });
+    syncRoom(); // online me dusre player ki screen bhi auto-reset hogi
+  }
+
+  void _goToLobby(){
+    Navigator.of(context).pop(); // dialog band
+    if(mounted) Navigator.of(context).pop(); // game screen se bahar -> lobby
+  }
+
+  // PRESENCE BANNER: opponent joined hai / chhod ke gaya / intezaar - game screen ke upar patti
+  Widget _presenceBanner(){
+    int oppIdx = 1 - widget.myPlayer;
+    String oppName = oppIdx == 0? p0Name : p1Name;
+    bool waiting = oppName.isEmpty || oppName=="WAITING" || oppName=="Player0" || oppName=="Player1";
+    Color bg; Color bd; String msg; IconData ic;
+    if(waiting){ bg = Color(0xFF2A2A3E); bd = Colors.white24; msg = "Opponent ka intezaar hai..."; ic = Icons.hourglass_empty; }
+    else if(!_oppOnline &&!gameOver){ bg = Color(0xFF3E1A1A); bd = Colors.redAccent; msg = "$oppName ne game chhod diya hai"; ic = Icons.exit_to_app; }
+    else { bg = Color(0xFF1A3E1A); bd = Colors.greenAccent; msg = "$oppName ne game join kar rakha hai"; ic = Icons.check_circle; }
+    return Container(margin: EdgeInsets.fromLTRB(8, 0, 8, 6), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8), decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: bd.withOpacity(0.5))), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(ic, color: Colors.white, size: 16), SizedBox(width: 6), Flexible(child: Text(msg, textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)))]));
+  }
+
+  // ghar ke rang - perspective ke hisaab se (mera ghar neeche, opponent ka upar)
+  List<Color> homeGrad(int p) => p == 0? [Color(0xFFC8E6C9), Color(0xFFE8F5E9)] : [Color(0xFFFFCDD2), Color(0xFFFFEBEE)];
+  Color homeBorder(int p) => p == 0? Colors.green : Colors.red;
+  Offset getHomePathPos(int p, int step, double s) { double r = s * 0.25, cx = s / 2, cy = s / 2; int entry = homeEntry[p]; double ang = (entry / 40) * 2 * pi - pi / 2; double ex = cx + r * cos(ang), ey = cy + r * sin(ang); double t = (step + 1) / 6.0; return Offset(ex + (cx - ex) * t, ey + (cy - ey) * t); }
+  Widget dot() => Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.black, shape: BoxShape.circle));
+  Widget emptyDot() => SizedBox(width: 10, height: 10);
+  Widget buildDiceFace(int v) { Widget d = dot(), e = emptyDot(); List<Widget> r1 = [e, e, e], r2 = [e, e, e], r3 = [e, e, e]; if (v == 1) r2 = [e, d, e]; else if (v == 2) { r1 = [d, e, e]; r3 = [e, e, d]; } else if (v == 3) { r1 = [d, e, e]; r2 = [e, d, e]; r3 = [e, e, d]; } else if (v == 4) { r1 = [d, e, d]; r3 = [d, e, d]; } else if (v == 5) { r1 = [d, e, d]; r2 = [e, d, e]; r3 = [d, e, d]; } else if (v == 6) { r1 = [d, e, d]; r2 = [d, e, d]; r3 = [d, e, d]; } return Container(width: 68, height: 68, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)), child: Padding(padding: EdgeInsets.all(8), child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r1), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r2), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: r3)]))); }
+  Widget diceNearHome(int p, int val) { bool isTurn = turn == p &&!canMove &&!gameOver; bool canTap = isTurn &&!isRolling && isMyTurn; Color col = p == 0? Colors.green : Colors.red; bool rolling = isRolling && turn == p; return GestureDetector(onTap: canTap? roll : null, child: AnimatedBuilder(animation: _diceController, builder: (c, child) { double a = rolling? _diceController.value * 4 * pi : 0; return Transform.rotate(angle: a, child: child); }, child: Container(width: 85, height: 85, decoration: BoxDecoration(color: isTurn? col.withOpacity(0.20) : Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: isTurn? col : Colors.black12, width: isTurn? 3 : 1.5)), child: Center(child: rolling? buildDiceFace(_rng.nextInt(6) + 1) : buildDiceFace(val))))); }
+  Widget goti(int p, int t, double s) { int v = pos[p][t]; double boxSize = s * 0.14, pad = s * 0.02; Offset o; if (v == -1) { bool myHome = p == widget.myPlayer; double bx = myHome? s - 10 - boxSize + pad : 10 + pad, by = myHome? s - 10 - boxSize + pad : 10 + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } else if (v == 45) { o = Offset(s / 2 + (t % 2 == 0? -8 : 8), s / 2 + (t < 2? -8 : 8)); } else if (v >= 40) { o = getHomePathPos(p, v - 40, s); } else { double r = s * 0.25, ang = (v / 40) * 2 * pi - pi / 2; o = Offset(s / 2 + r * cos(ang), s / 2 + r * sin(ang)); } bool act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver && isMyTurn; return Positioned(left: o.dx - 11, top: o.dy - 11, child: GestureDetector(onTap: act? () => moveGoti(t) : null, child: Container(width: act? 28 : 20, height: act? 28 : 20, decoration: BoxDecoration(color: p == 0? Colors.green : Colors.red, shape: BoxShape.circle, border: Border.all(color: act? Colors.yellow : Colors.white, width: act? 2.5 : 1.5))))); }
+  @override Widget build(BuildContext context) {
+    double s = (MediaQuery.of(context).size.width < 400? MediaQuery.of(context).size.width : 400) - 20; double box = s * 0.14;
+    String turnName = widget.mode == GameMode.online? (turn == 0? p0Name : p1Name) : (turn == 0? myName : p1Name);
+    // PERSPECTIVE: har user ko APNA ghar (4 goti wala box) + APNA dice hamesha neeche dikhega - teeno mode me
+    int bottomPlayer = widget.myPlayer, topPlayer = 1 - widget.myPlayer;
+    return Scaffold(backgroundColor: Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text(widget.mode == GameMode.offline? "OFFLINE - $myName" : widget.mode == GameMode.bot? "$myName vs $p1Name" : "ROOM ${widget.roomId} - $p0Name vs $p1Name", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)), actions: [IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent), onPressed: () async { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$p0Name vs $p1Name"))); }), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber), onPressed: () => setState(() => showChat =!showChat))]),
+      body: Column(children: [
+        Container(margin: EdgeInsets.symmetric(horizontal: 8, vertical: 6), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Turn: $turnName", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)), Text(isMyTurn? "YOUR TURN - TAP DICE" : "WAIT - $turnName", style: TextStyle(fontSize: 11, color: isMyTurn? Colors.greenAccent : Colors.white54, fontWeight: FontWeight.bold))])),
+        if(widget.mode == GameMode.online) _presenceBanner(),
+        Expanded(child: Stack(children: [
+          Center(child: Container(width: s, height: s, decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFFF9C4), Color(0xFFE1F5FE), Color(0xFFFCE4EC)], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.amber, width: 4)), child: Stack(clipBehavior: Clip.none, children: [
+            Positioned(left: s*0.23, top: s*0.23, width: s*0.54, height: s*0.54, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)]), border: Border.all(color: Colors.white, width: 2)))),
+            Positioned(left: 10, top: 10, width: box, height: box, child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: homeGrad(topPlayer)), borderRadius: BorderRadius.circular(12), border: Border.all(color: homeBorder(topPlayer), width: 3)))),
+            Positioned(right: 10, bottom: 10, width: box, height: box, child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: homeGrad(bottomPlayer)), borderRadius: BorderRadius.circular(12), border: Border.all(color: homeBorder(bottomPlayer), width: 3)))),
+            Positioned(left: 8, top: box + 8, child: diceNearHome(topPlayer, topPlayer == 0? diceGreen : diceRed)),
+            Positioned(right: 8, bottom: box + 8, child: diceNearHome(bottomPlayer, bottomPlayer == 0? diceGreen : diceRed)),
+            for (int i = 0; i < 40; i++) Positioned(left: s / 2 + s * 0.25 * cos((i / 40) * 2 * pi - pi / 2) - 7, top: s / 2 + s * 0.25 * sin((i / 40) * 2 * pi - pi / 2) - 7, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: safe.contains(i)? Color(0xFFFFD700) : Colors.white, shape: BoxShape.circle, border: Border.all(color: safe.contains(i)? Colors.orange : Colors.black26)))),
+            for (int j = 0; j < 5; j++) Positioned(left: getHomePathPos(0, j, s).dx - 8, top: getHomePathPos(0, j, s).dy - 8, child: Container(width: 16, height: 16, decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)))),
+            for (int j = 0; j < 5; j++) Positioned(left: getHomePathPos(1, j, s).dx - 8, top: getHomePathPos(1, j, s).dy - 8, child: Container(width: 16, height: 16, decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)))),
+            goti(0, 0, s), goti(0, 1, s), goti(0, 2, s), goti(0, 3, s), goti(1, 0, s), goti(1, 1, s), goti(1, 2, s), goti(1, 3, s)
+          ]))),
+          Positioned(top: 15, left: 0, right: 0, child: Center(child: Container(padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)), child: Row(mainAxisSize: MainAxisSize.min, children: [
+            GestureDetector(onTap: toggleMic, child: Container(padding: EdgeInsets.all(8), decoration: BoxDecoration(color: isMicOn? Colors.green : Colors.red, shape: BoxShape.circle), child: Icon(isMicOn? Icons.mic : Icons.mic_off, color: Colors.white, size: 18))),
+            SizedBox(width: 10),
+            GestureDetector(onTap: toggleSpeaker, child: Container(padding: EdgeInsets.all(8), decoration: BoxDecoration(color: isSpeakerOn? Colors.green : Colors.red, shape: BoxShape.circle), child: Icon(isSpeakerOn? Icons.volume_up : Icons.volume_off, color: Colors.white, size: 18))),
+          ])))),
+          if (showChat) Positioned(bottom: 0, left: 0, right: 0, child: Container(height: 380, decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)), border: Border.all(color: Colors.amber.withOpacity(0.5))), child: Column(children: [
+            Container(padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("CHAT - $p0Name vs $p1Name", style: TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.bold)), GestureDetector(onTap: ()=> setState(()=> showChat=false), child: Container(padding: EdgeInsets.all(4), decoration: BoxDecoration(color: Colors.black, shape: BoxShape.circle), child: Icon(Icons.close, color: Colors.white, size: 16)))])),
+            Expanded(child: ListView.builder(padding: EdgeInsets.all(10), itemCount: chatMessages.length, itemBuilder: (c, i) { var m = chatMessages[i]; bool isMe = m['player'] == myName; return Align(alignment: isMe? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: EdgeInsets.symmetric(vertical: 4), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8), decoration: BoxDecoration(color: isMe? Colors.green : Colors.white24, borderRadius: BorderRadius.circular(12)), child: Text("${m['player']}: ${m['msg']}", style: TextStyle(fontSize: 13, color: Colors.white)))); })),
+            Container(padding: EdgeInsets.fromLTRB(10, 8, 10, MediaQuery.of(context).viewInsets.bottom + 10), color: Color(0xFF0A0E1A), child: Row(children: [
+              Expanded(child: TextField(controller: chatCtrl, onSubmitted: (_) => sendMessage(), style: TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "Type message...", filled: true, fillColor: Color(0xFF2A2A3E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none), contentPadding: EdgeInsets.symmetric(horizontal: 18, vertical: 14)))),
+              SizedBox(width: 10), GestureDetector(onTap: sendMessage, child: Container(padding: EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.amber, shape: BoxShape.circle), child: Icon(Icons.send, color: Colors.black, size: 22))),
+            ])),
+          ])))
+        ])),
+        Container(margin: EdgeInsets.fromLTRB(10, 5, 10, 10), padding: EdgeInsets.symmetric(horizontal: 15, vertical: 12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(20), border: Border.all(color: turn==widget.myPlayer? Colors.green : Colors.red, width: 1.5)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.casino, color: turn==widget.myPlayer? Colors.green : Colors.red, size: 16), SizedBox(width: 6), Text("${turnName} KI BAARI ${isMyTurn? "(TAP DICE)" : ""}", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))])),
+      ]),
+      floatingActionButton: showChat? null : FloatingActionButton.small(backgroundColor: Colors.amber, onPressed: () => setState(() => showChat =!showChat), child: Icon(Icons.chat, color: Colors.black)),
     );
   }
-}
-
-class BoardPainter extends CustomPainter {
-  @override void paint(Canvas canvas, Size size){
-    double cell = size.width / 15;
-    Paint red = Paint()..color = Colors.red;
-    Paint green = Paint()..color = Colors.green;
-    Paint white = Paint()..color = Colors.white;
-    Paint yellow = Paint()..color = Colors.amber;
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), Paint()..color = Color(0xFFE8F4F8));
-    canvas.drawRect(Rect.fromLTWH(0, 0, cell*6, cell*6), red);
-    canvas.drawRect(Rect.fromLTWH(cell*9, 0, cell*6, cell*6), green);
-    canvas.drawRect(Rect.fromLTWH(0, cell*9, cell*6, cell*6), Paint()..color = Colors.blue);
-    canvas.drawRect(Rect.fromLTWH(cell*9, cell*9, cell*6, cell*6), Paint()..color = Colors.amber);
-    for(int r=0;r<15;r++) for(int c=0;c<15;c++){
-      if(r<6 && c<6) continue; if(r<6 && c>=9) continue; if(r>=9 && c<6) continue; if(r>=9 && c>=9) continue;
-      canvas.drawRect(Rect.fromLTWH(c*cell, r*cell, cell, cell), white);
-      canvas.drawRect(Rect.fromLTWH(c*cell, r*cell, cell, cell), Paint()..style = PaintingStyle.stroke..color = Colors.black12);
-    }
-    List<int> safeCells = [0,8,13,21,26,34,39,47];
-    for(int sc in safeCells){
-      int r = sc ~/ 15, c = sc % 15;
-      canvas.drawCircle(Offset(c*cell + cell/2, r*cell + cell/2), cell*0.3, yellow);
-    }
-    List<int> redHome = [52,53,54,55,56];
-    for(int hc in redHome){ int r = hc ~/ 15, c = hc % 15; canvas.drawRect(Rect.fromLTWH(c*cell, r*cell, cell, cell), red); }
-    List<int> greenHome = [58,59,60,61,62];
-    for(int hc in greenHome){ int r = hc ~/ 15, c = hc % 15; canvas.drawRect(Rect.fromLTWH(c*cell, r*cell, cell, cell), green); }
-    Path tri = Path();
-    tri.moveTo(cell*6, cell*6); tri.lineTo(cell*9, cell*6); tri.lineTo(cell*7.5, cell*7.5); tri.close();
-    canvas.drawPath(tri, red);
-    tri = Path();
-    tri.moveTo(cell*9, cell*6); tri.lineTo(cell*9, cell*9); tri.lineTo(cell*7.5, cell*7.5); tri.close();
-    canvas.drawPath(tri, green);
-  }
-  @override bool shouldRepaint(covariant CustomPainter old) => false;
 }
