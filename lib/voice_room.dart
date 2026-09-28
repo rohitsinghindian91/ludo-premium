@@ -569,7 +569,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       await engine!.setEnableSpeakerphone(true);
       await engine!.enableAudioVolumeIndication(interval: 300, smooth: 3, reportVad: true);
       engine!.registerEventHandler(RtcEngineEventHandler(
-        onJoinChannelSuccess: (c, e) { if (mounted) setState(() { joined = true; status = "Connected"; }); },
+        onJoinChannelSuccess: (c, e) { if (mounted) setState(() { joined = true; status = "Connected"; }); _applyPublish(); },
         onAudioVolumeIndication: (c, speakers, t, vad) {
           if (!mounted) return;
           final s = <int>{};
