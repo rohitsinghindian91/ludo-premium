@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -21,28 +22,81 @@ int makeVoiceUid(String mobile) {
   return 100000 + (DateTime.now().millisecondsSinceEpoch % 900000);
 }
 
+// FIX 2: Token saaf karne wala helper - Worker plain text de ya JSON {"token":"..."} de ya quotes me de, teeno chalega
+String cleanVoiceToken(String body) {
+  var t = body.trim();
+  if (t.isEmpty) return "";
+  if (t.startsWith("{")) {
+    try {
+      final m = jsonDecode(t) as Map<String, dynamic>;
+      for (final k in ["token", "rtcToken", "rtc_token", "agoraToken", "data"]) {
+        final v = m[k]?.toString()?? "";
+        if (v.isNotEmpty &&!v.startsWith("{")) { t = v; break; }
+      }
+    } catch (_) {}
+  }
+  t = t.trim();
+  if (t.length >= 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")))) {
+    t = t.substring(1, t.length - 1).trim();
+  }
+  if (t.startsWith("<")) return ""; // HTML error page aaya to khali samjho
+  return t;
+}
+
 Future<String> fetchVoiceToken(String channel, int uid) async {
-  try {
-    final res = await http
-      .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
-      .timeout(const Duration(seconds: 12));
-    if (res.statusCode == 200) return res.body.trim();
-  } catch (_) {}
+  for (int attempt = 0; attempt < 3; attempt++) {
+    try {
+      final res = await http
+       .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
+       .timeout(const Duration(seconds: 12));
+      if (res.statusCode == 200) {
+        final t = cleanVoiceToken(res.body);
+        if (t.isNotEmpty) return t;
+      }
+    } catch (_) {}
+    await Future.delayed(const Duration(seconds: 1));
+  }
   return "";
 }
 
+// FIX 4: gender symbol helper
+String genderSymbol(String g) {
+  if (g == "male") return " ♂";
+  if (g == "female") return " ♀";
+  return "";
+}
+
+// FIX 5: Room number HAMESHA same - Firestore (pakka) + phone cache (double lock)
 Future<String> getOrCreateRoomNo(String mobile) async {
-  final doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
-  var no = doc.data()?["voiceRoomNo"]?.toString();
-  if (no!= null && no.isNotEmpty) return no;
+  if (mobile.isEmpty) throw Exception("Login nahi hai");
+  final cacheKey = "voice_room_no_$mobile";
+  try {
+    final doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
+    var no = doc.data()?["voiceRoomNo"]?.toString();
+    if (no!= null && no.isNotEmpty) {
+      try { await prefs.setString(cacheKey, no); } catch (_) {}
+      return no;
+    }
+  } catch (_) {}
+  try {
+    final cached = prefs.getString(cacheKey);
+    if (cached!= null && cached.isNotEmpty) {
+      try { await FirebaseFirestore.instance.collection("users").doc(mobile).update({"voiceRoomNo": cached}); } catch (_) {}
+      return cached;
+    }
+  } catch (_) {}
   final rnd = Random();
+  String no;
   while (true) {
     no = (1000000 + rnd.nextInt(9000000)).toString();
-    final snap = await FirebaseDatabase.instance.ref("vRooms/$no/info").get();
-    if (!snap.exists) break;
+    try {
+      final snap = await FirebaseDatabase.instance.ref("vRooms/$no/info").get();
+      if (!snap.exists) break;
+    } catch (_) { break; }
   }
-  await FirebaseFirestore.instance.collection("users").doc(mobile).update({"voiceRoomNo": no});
-  return no!;
+  try { await FirebaseFirestore.instance.collection("users").doc(mobile).update({"voiceRoomNo": no}); } catch (_) {}
+  try { await prefs.setString(cacheKey, no); } catch (_) {}
+  return no;
 }
 
 // ================= LOBBY =================
@@ -98,7 +152,7 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
             child: ElevatedButton.icon(
               onPressed: creating? null : openMyRoom,
               icon: creating
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.add_home, color: Colors.black),
               label: const Text("MY ROOM", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)),
               style: ElevatedButton.styleFrom(
@@ -185,9 +239,10 @@ class _Seat {
   final String mobile;
   final String name;
   final String role;
+  final String gender;
   final bool muted;
   bool get empty => mobile.isEmpty;
-  _Seat({required this.index, this.locked = false, this.micLocked = false, this.uid = 0, this.mobile = "", this.name = "", this.role = "visitor", this.muted = false});
+  _Seat({required this.index, this.locked = false, this.micLocked = false, this.uid = 0, this.mobile = "", this.name = "", this.role = "visitor", this.gender = "", this.muted = false});
 }
 
 class _Present {
@@ -195,7 +250,8 @@ class _Present {
   final String name;
   final String mobile;
   final String role;
-  _Present({required this.uid, required this.name, required this.mobile, required this.role});
+  final String gender;
+  _Present({required this.uid, required this.name, required this.mobile, required this.role, this.gender = ""});
 }
 
 class _ChatMsg {
@@ -221,6 +277,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   late String myName;
   late String myMobile;
   String myRole = "visitor";
+  String myGender = "";
   String roomName = "...";
   String ownerMobile = "";
   bool joined = false;
@@ -259,6 +316,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   }
 
   Future<void> _enter() async {
+    try { FirebaseDatabase.instance.goOnline(); } catch (_) {}
     setState(() => status = "Kick check...");
     final kickSnap = await roomRef.child("kicks/$myMobile").get();
     if (kickSnap.exists) {
@@ -296,10 +354,22 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
 
     final roleSnap = await roomRef.child("roles/$myMobile").get();
     if (roleSnap.exists) {
-      myRole = (Map<String, dynamic>.from(roleSnap.value as Map)["role"]?? "visitor").toString();
+      final rm = Map<String, dynamic>.from(roleSnap.value as Map);
+      myRole = (rm["role"]?? "visitor").toString();
+      myGender = (rm["gender"]?? "").toString();
     } else if (myMobile == ownerMobile) {
       myRole = "owner";
       await roomRef.child("roles/$myMobile").set({"role": "owner", "name": myName});
+    }
+    // FIX 4: gender Firestore se fallback (pehle kabhi set kiya tha to)
+    if (myGender.isEmpty) {
+      try {
+        final u = await FirebaseFirestore.instance.collection("users").doc(myMobile).get();
+        myGender = u.data()?["gender"]?.toString()?? "";
+        if (myGender.isNotEmpty) {
+          try { await roomRef.child("roles/$myMobile").update({"gender": myGender}); } catch (_) {}
+        }
+      } catch (_) {}
     }
 
     _listenAll();
@@ -329,12 +399,14 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
               mobile: (m["mobile"]?? "").toString(),
               name: (m["name"]?? "").toString(),
               role: (m["role"]?? "visitor").toString(),
+              gender: (m["gender"]?? "").toString(),
               muted: m["muted"] == true,
             );
           }
         });
       }
-      mySeat = list.indexWhere((s) => s.mobile == myMobile && s.mobile.isNotEmpty);
+      final found = list.indexWhere((s) => s.mobile == myMobile && s.mobile.isNotEmpty);
+      if (found!= mySeat) mySeat = found;
       setState(() => seats = list);
       if (mySeat >= 0) {
         final s = seats[mySeat];
@@ -354,16 +426,21 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       if (val is Map) {
         final rolesSnap = await roomRef.child("roles").get();
         final roles = <String, String>{};
+        final genders = <String, String>{};
         if (rolesSnap.exists && rolesSnap.value is Map) {
           (rolesSnap.value as Map).forEach((k, v) {
-            if (v is Map) roles[k.toString()] = (v["role"]?? "visitor").toString();
+            if (v is Map) {
+              final vm = Map<String, dynamic>.from(v);
+              roles[k.toString()] = (vm["role"]?? "visitor").toString();
+              genders[k.toString()] = (vm["gender"]?? "").toString();
+            }
           });
         }
         val.forEach((k, v) {
           if (v is Map) {
             final m = Map<String, dynamic>.from(v);
             final mob = (m["mobile"]?? "").toString();
-            list.add(_Present(uid: int.tryParse(k.toString())?? 0, name: (m["name"]?? "?").toString(), mobile: mob, role: roles[mob]?? "visitor"));
+            list.add(_Present(uid: int.tryParse(k.toString())?? 0, name: (m["name"]?? "?").toString(), mobile: mob, role: roles[mob]?? "visitor", gender: genders[mob]?? ""));
           }
         });
       }
@@ -393,7 +470,10 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     roleSub = roomRef.child("roles/$myMobile").onValue.listen((e) {
       if (!mounted) return;
       if (e.snapshot.exists) {
-        final r = (Map<String, dynamic>.from(e.snapshot.value as Map)["role"]?? "visitor").toString();
+        final rm = Map<String, dynamic>.from(e.snapshot.value as Map);
+        final r = (rm["role"]?? "visitor").toString();
+        final g = (rm["gender"]?? "").toString();
+        if (g!= myGender) setState(() => myGender = g);
         if (r!= myRole) { setState(() => myRole = r); _toast("Tumhara role: $r"); }
       } else if (myRole!= "visitor" && myMobile!= ownerMobile) {
         setState(() => myRole = "visitor"); _toast("Tumhara role hata diya gaya");
@@ -431,14 +511,18 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     });
   }
 
+  // FIX 2: mazboot join - purana engine saaf, token retry, saaf error message
   Future<void> _joinAgora() async {
     setState(() => status = "Mic permission...");
     await [Permission.microphone].request();
     if (!mounted) return;
+    try { await engine?.leaveChannel(); } catch (_) {}
+    try { await engine?.release(); } catch (_) {}
+    engine = null;
     setState(() => status = "Token...");
     final token = await fetchVoiceToken("voiceroom_${widget.roomNo}", myUid);
     if (!mounted) return;
-    if (token.isEmpty) { setState(() => status = "Token nahi mila"); return; }
+    if (token.isEmpty) { setState(() => status = "Token nahi mila - Worker check karo"); return; }
     try {
       engine = createAgoraRtcEngine();
       await engine!.initialize(RtcEngineContext(appId: voiceRoomAppId));
@@ -453,20 +537,43 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
           for (var sp in speakers) { if ((sp.volume?? 0) > 5) s.add(sp.uid == 0? myUid : sp.uid!); }
           setState(() => speaking = s);
         },
-        onError: (err, msg) { if (mounted) setState(() => status = "Error $err"); },
+        onError: (err, msg) { if (mounted) setState(() => status = "Agora error $err: $msg"); },
+        onTokenPrivilegeWillExpire: (c, tok) async {
+          final nt = await fetchVoiceToken("voiceroom_${widget.roomNo}", myUid);
+          if (nt.isNotEmpty) { try { await engine?.renewToken(nt); } catch (_) {} }
+        },
       ));
       setState(() => status = "Joining...");
-      await engine!.joinChannel(
-        token: token,
-        channelId: "voiceroom_${widget.roomNo}",
-        uid: myUid,
-        options: const ChannelMediaOptions(
-          clientRoleType: ClientRoleType.clientRoleBroadcaster,
-          channelProfile: ChannelProfileType.channelProfileCommunication,
-          autoSubscribeAudio: true,
-          publishMicrophoneTrack: false,
-        ),
-      );
+      try {
+        await engine!.joinChannel(
+          token: token,
+          channelId: "voiceroom_${widget.roomNo}",
+          uid: myUid,
+          options: const ChannelMediaOptions(
+            clientRoleType: ClientRoleType.clientRoleBroadcaster,
+            autoSubscribeAudio: true,
+            publishMicrophoneTrack: false,
+          ),
+        );
+      } on AgoraRtcException {
+        // ek baar retry - kabhi engine "not ready" hota hai
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+        await engine!.joinChannel(
+          token: token,
+          channelId: "voiceroom_${widget.roomNo}",
+          uid: myUid,
+          options: const ChannelMediaOptions(
+            clientRoleType: ClientRoleType.clientRoleBroadcaster,
+            autoSubscribeAudio: true,
+            publishMicrophoneTrack: false,
+          ),
+        );
+      }
+    } on AgoraRtcException catch (e) {
+      if (mounted) setState(() => status = "Join failed (${e.code}) - token/Worker check karo");
+      try { await engine?.release(); } catch (_) {}
+      engine = null;
     } catch (e) {
       if (mounted) setState(() => status = "Failed: $e");
     }
@@ -482,20 +589,41 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     }
   }
 
+  // FIX 1: transaction se seat pakdo - bhari/lock seat par kabhi overwrite nahi, dobara baithna hamesha kaam karega
   Future<void> _sitOn(int i) async {
-    final s = seats[i];
-    if (!s.empty) { _toast("Ye seat bhari hai"); return; }
-    if (s.locked) { _toast("Ye seat lock hai"); return; }
     if (mySeat >= 0) { _toast("Pehle apni seat chhodo"); return; }
-    await roomRef.child("seats/$i").set({
-      "locked": false, "micLocked": false, "uid": myUid, "mobile": myMobile,
-      "name": myName, "role": myRole, "muted":!micOn, "at": ServerValue.timestamp,
-    });
+    final ref = roomRef.child("seats/$i");
+    try {
+      final res = await ref.runTransaction((current) {
+        if (current!= null) {
+          final m = Map<String, dynamic>.from(current as Map);
+          if ((m["mobile"]?? "").toString().isNotEmpty) return Transaction.abort();
+          if (m["locked"] == true) return Transaction.abort();
+        }
+        final prevMicLock = current is Map? (Map<String, dynamic>.from(current as Map)["micLocked"] == true) : false;
+        return Transaction.success({
+          "locked": false, "micLocked": prevMicLock, "uid": myUid, "mobile": myMobile,
+          "name": myName, "role": myRole, "gender": myGender,
+          "muted":!micOn, "at": DateTime.now().millisecondsSinceEpoch,
+        });
+      });
+      if (res.committed) {
+        setState(() => mySeat = i);
+        _applyPublish();
+      } else {
+        _toast("Seat nahi mili, dobara try karo");
+      }
+    } catch (e) {
+      _toast("Seat error: $e");
+    }
   }
 
   Future<void> _leaveSeat() async {
     if (mySeat < 0) return;
-    await roomRef.child("seats/$mySeat").remove();
+    final idx = mySeat;
+    setState(() => mySeat = -1); // turant khali - abhi dobara baith sakte ho
+    _applyPublish();
+    try { await roomRef.child("seats/$idx").remove(); } catch (_) {}
   }
 
   Future<void> _toggleMic() async {
@@ -503,7 +631,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     setState(() => micOn =!micOn);
     if (mySeat >= 0) {
       await engine?.muteLocalAudioStream(!micOn);
-      await roomRef.child("seats/$mySeat/muted").set(!micOn);
+      try { await roomRef.child("seats/$mySeat").update({"muted":!micOn}); } catch (_) {}
     }
   }
 
@@ -513,35 +641,28 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   }
 
   Future<void> _setRole(String mobile, String name, String role) async {
-    await roomRef.child("roles/$mobile").set({"role": role, "name": name});
+    await roomRef.child("roles/$mobile").update({"role": role, "name": name});
     final si = seats.indexWhere((s) => s.mobile == mobile);
-    if (si >= 0) await roomRef.child("seats/$si/role").set(role);
+    if (si >= 0) { try { await roomRef.child("seats/$si").update({"role": role}); } catch (_) {} }
     _toast("$name -> $role");
   }
 
   Future<void> _removeRole(String mobile, String name) async {
     await roomRef.child("roles/$mobile").remove();
     final si = seats.indexWhere((s) => s.mobile == mobile);
-    if (si >= 0) await roomRef.child("seats/$si/role").set("visitor");
+    if (si >= 0) { try { await roomRef.child("seats/$si").update({"role": "visitor"}); } catch (_) {} }
     _toast("$name ka role hataya");
   }
 
   Future<void> _lockSeat(int i, bool lock) async {
-    if (lock) {
-      await roomRef.child("seats/$i").set({"locked": true});
-    } else {
-      await roomRef.child("seats/$i/locked").set(false);
-    }
+    await roomRef.child("seats/$i").update({"locked": lock});
+    _toast(lock? "Seat lock" : "Seat unlock");
   }
 
   Future<void> _lockMic(int i, bool lock) async {
-    final s = seats[i];
-    if (s.empty) {
-      await roomRef.child("seats/$i").set({"locked": false, "micLocked": lock});
-    } else {
-      await roomRef.child("seats/$i/micLocked").set(lock);
-      if (lock) await roomRef.child("seats/$i/muted").set(true);
-    }
+    final upd = <String, dynamic>{"micLocked": lock};
+    if (lock) upd["muted"] = true;
+    await roomRef.child("seats/$i").update(upd);
     _toast(lock? "Mic lock" : "Mic unlock");
   }
 
@@ -563,6 +684,48 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     final si = seats.indexWhere((s) => s.mobile == mobile);
     if (si >= 0) await roomRef.child("seats/$si").remove();
     _toast("$name kick ${days < 0? "forever" : "$days din"}");
+  }
+
+  // FIX 3: voice room se seedha friend request (Friends screen wale system se judta hai)
+  Future<void> _addFriend(String toMobile, String toName) async {
+    try {
+      final fs = FirebaseFirestore.instance;
+      final fr = await fs.collection("users").doc(myMobile).collection("friends").doc(toMobile).get();
+      if (fr.exists) { _toast("Pehle se friend hai"); return; }
+      final q1 = await fs.collection("friend_requests").where("from", isEqualTo: myMobile).where("to", isEqualTo: toMobile).where("status", isEqualTo: "pending").get();
+      final q2 = await fs.collection("friend_requests").where("from", isEqualTo: toMobile).where("to", isEqualTo: myMobile).where("status", isEqualTo: "pending").get();
+      if (q1.docs.isNotEmpty || q2.docs.isNotEmpty) { _toast("Request pehle se pending hai"); return; }
+      await fs.collection("friend_requests").add({"from": myMobile, "to": toMobile, "fromName": myName, "status": "pending", "time": FieldValue.serverTimestamp()});
+      _toast("$toName ko friend request bheji");
+    } catch (e) { _toast("Error: $e"); }
+  }
+
+  // FIX 4: apna gender set karo
+  void _chooseGender() {
+    showDialog(context: context, builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF2A1420),
+      title: const Text("Apna gender chuno", style: TextStyle(color: Colors.white)),
+      actions: [
+        ElevatedButton(
+          onPressed: () { Navigator.pop(context); _saveGender("male"); },
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+          child: const Text("♂ Male", style: TextStyle(color: Colors.white))),
+        ElevatedButton(
+          onPressed: () { Navigator.pop(context); _saveGender("female"); },
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.pink),
+          child: const Text("♀ Female", style: TextStyle(color: Colors.white))),
+      ],
+    ));
+  }
+
+  Future<void> _saveGender(String g) async {
+    setState(() => myGender = g);
+    try {
+      await roomRef.child("roles/$myMobile").update({"gender": g});
+      if (mySeat >= 0) { try { await roomRef.child("seats/$mySeat").update({"gender": g}); } catch (_) {} }
+      try { await FirebaseFirestore.instance.collection("users").doc(myMobile).update({"gender": g}); } catch (_) {}
+    } catch (_) {}
+    _toast(g == "male"? "Gender: Male ♂" : "Gender: Female ♀");
   }
 
   Future<void> _sendChat() async {
@@ -588,7 +751,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     if (ok == true) await roomRef.child("chat").remove();
   }
 
-  Future<void> _leave() async {
+  Future<void> _leave({bool pop = true}) async {
     try { if (mySeat >= 0) await roomRef.child("seats/$mySeat").remove(); } catch (_) {}
     try { await myPresentRef?.remove(); } catch (_) {}
     try {
@@ -603,12 +766,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     try { await engine?.leaveChannel(); } catch (_) {}
     try { await engine?.release(); } catch (_) {}
     engine = null;
-    if (mounted) Navigator.pop(context);
+    if (pop && mounted) Navigator.pop(context);
   }
 
   @override
   void dispose() {
-    _leave();
+    _leave(pop: false);
     tabCtrl.dispose();
     chatCtrl.dispose();
     chatScroll.dispose();
@@ -624,7 +787,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: () async { await _leave(); return true; },
+      onWillPop: () async { await _leave(pop: false); return true; },
       child: Scaffold(
         body: Container(
           decoration: const BoxDecoration(
@@ -728,7 +891,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         circle,
         const SizedBox(height: 2),
-        Text(s.empty? "${s.index + 1}" : s.name.split(" ").first,
+        Text(s.empty? "${s.index + 1}" : s.name.split(" ").first + genderSymbol(s.gender),
             maxLines: 1, overflow: TextOverflow.ellipsis,
             style: TextStyle(color: s.empty? Colors.white24 : Colors.white, fontSize: 10)),
       ]),
@@ -761,7 +924,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       if (isAdmin) { _seatAdminSheet(s); } else { _sitOn(s.index); }
       return;
     }
-    _userSheet(name: s.name, mobile: s.mobile, uid: s.uid, role: s.role, seatIndex: s.index, isSeated: true);
+    _userSheet(name: s.name, mobile: s.mobile, uid: s.uid, role: s.role, gender: s.gender, seatIndex: s.index, isSeated: true);
   }
 
   void _seatAdminSheet(_Seat s) {
@@ -778,7 +941,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         ])));
   }
 
-  void _userSheet({required String name, required String mobile, required int uid, required String role, int seatIndex = -1, bool isSeated = false}) {
+  void _userSheet({required String name, required String mobile, required int uid, required String role, String gender = "", int seatIndex = -1, bool isSeated = false}) {
     final isMe = mobile == myMobile;
     final targetIsOwner = role == "owner" || mobile == ownerMobile;
     showModalBottomSheet(context: context, backgroundColor: const Color(0xFF2A1420),
@@ -787,7 +950,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
           final items = <Widget>[
             ListTile(
               leading: CircleAvatar(backgroundColor: Colors.amber, child: Text(name.isNotEmpty? name[0].toUpperCase() : "?", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold))),
-              title: Text("$name ${_roleTag(role)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              title: Text("$name${genderSymbol(isMe? myGender : gender)} ${_roleTag(role)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               subtitle: Text(mobile, style: const TextStyle(color: Colors.white54, fontSize: 11)),
             ),
             const Divider(color: Colors.white12),
@@ -800,35 +963,42 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
           if (isMe) {
             if (isSeated) addTile(Icons.event_seat, Colors.orange, "Seat se uth jao", () => _leaveSeat());
             addTile(micOn? Icons.mic_off : Icons.mic, Colors.amber, micOn? "Khud ko mute karo" : "Unmute karo", _toggleMic);
-          } else if (isOwner) {
-            if (!targetIsOwner) {
-              if (role!= "admin") addTile(Icons.shield, Colors.blue, "Admin banao", () => _setRole(mobile, name, "admin"));
-              if (role!= "member") addTile(Icons.person_add, Colors.green, "Member banao", () => _setRole(mobile, name, "member"));
-              if (role == "admin" || role == "member") addTile(Icons.person_remove, Colors.orange, "Role hatao", () => _removeRole(mobile, name));
-            }
-            if (isSeated) {
-              final st = seats[seatIndex];
-              addTile(st.micLocked? Icons.mic : Icons.mic_off, Colors.purple, st.micLocked? "Mic unlock karo" : "Mic lock karo",
-                  () => _lockMic(seatIndex,!st.micLocked));
-              addTile(Icons.event_seat, Colors.orange, "Seat se hatao", () => _removeFromSeat(seatIndex));
-            } else {
-              addTile(Icons.event_seat, Colors.amber, "Seat pe invite karo", () => _inviteDialog(mobile));
-            }
-            if (!targetIsOwner) {
-              addTile(Icons.block, Colors.red, "Kick - 7 din", () => _kick(mobile, name, 7));
-              addTile(Icons.delete_forever, Colors.red, "Kick - Forever", () => _kick(mobile, name, -1));
-            }
-          } else if (isAdmin) {
-            if (!targetIsOwner && role!= "admin") {
-              addTile(Icons.block, Colors.red, "Kick - 3 din", () => _kick(mobile, name, 3));
-              if (role!= "member") addTile(Icons.person_add, Colors.green, "Member banao", () => _setRole(mobile, name, "member"));
+            addTile(Icons.wc, Colors.pinkAccent,
+                myGender.isEmpty? "Apna gender set karo" : "Gender: ${myGender == "male"? "Male ♂" : "Female ♀"} (badlo)",
+                _chooseGender);
+          } else {
+            // FIX 3: kisi par bhi tap karke Add Friend
+            addTile(Icons.person_add_alt, Colors.greenAccent, "Add Friend", () => _addFriend(mobile, name));
+            if (isOwner) {
+              if (!targetIsOwner) {
+                if (role!= "admin") addTile(Icons.shield, Colors.blue, "Admin banao", () => _setRole(mobile, name, "admin"));
+                if (role!= "member") addTile(Icons.person_add, Colors.green, "Member banao", () => _setRole(mobile, name, "member"));
+                if (role == "admin" || role == "member") addTile(Icons.person_remove, Colors.orange, "Role hatao", () => _removeRole(mobile, name));
+              }
               if (isSeated) {
                 final st = seats[seatIndex];
-                addTile(Icons.mic_off, Colors.purple, st.muted? "Unmute karo" : "Mute karo", () async {
-                  await roomRef.child("seats/$seatIndex/muted").set(!st.muted);
-                });
+                addTile(st.micLocked? Icons.mic : Icons.mic_off, Colors.purple, st.micLocked? "Mic unlock karo" : "Mic lock karo",
+                    () => _lockMic(seatIndex,!st.micLocked));
+                addTile(Icons.event_seat, Colors.orange, "Seat se hatao", () => _removeFromSeat(seatIndex));
               } else {
                 addTile(Icons.event_seat, Colors.amber, "Seat pe invite karo", () => _inviteDialog(mobile));
+              }
+              if (!targetIsOwner) {
+                addTile(Icons.block, Colors.red, "Kick - 7 din", () => _kick(mobile, name, 7));
+                addTile(Icons.delete_forever, Colors.red, "Kick - Forever", () => _kick(mobile, name, -1));
+              }
+            } else if (isAdmin) {
+              if (!targetIsOwner && role!= "admin") {
+                addTile(Icons.block, Colors.red, "Kick - 3 din", () => _kick(mobile, name, 3));
+                if (role!= "member") addTile(Icons.person_add, Colors.green, "Member banao", () => _setRole(mobile, name, "member"));
+                if (isSeated) {
+                  final st = seats[seatIndex];
+                  addTile(Icons.mic_off, Colors.purple, st.muted? "Unmute karo" : "Mute karo", () async {
+                    await roomRef.child("seats/$seatIndex").update({"muted":!st.muted});
+                  });
+                } else {
+                  addTile(Icons.event_seat, Colors.amber, "Seat pe invite karo", () => _inviteDialog(mobile));
+                }
               }
             }
           }
@@ -868,7 +1038,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     return Column(children: [
       Expanded(
         child: chats.isEmpty
-          ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
+         ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
             : ListView.builder(
                 controller: chatScroll,
                 padding: const EdgeInsets.all(12),
@@ -947,13 +1117,13 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
                       style: TextStyle(color: p.mobile == myMobile? Colors.black : Colors.white, fontWeight: FontWeight.bold))),
               Positioned(bottom: 0, right: 0, child: _roleBadge(p.role)),
             ]),
-            title: Text("${p.name}${p.mobile == myMobile? " (Tum)" : ""}",
+            title: Text("${p.name}${p.mobile == myMobile? " (Tum)" : ""}${genderSymbol(p.mobile == myMobile? myGender : p.gender)}",
                 style: const TextStyle(color: Colors.white, fontSize: 13)),
             subtitle: Text("${_roleTag(p.role)}${seated? " - Seat pe" : " - Visitor"}",
                 style: const TextStyle(color: Colors.white38, fontSize: 10)),
             onTap: () {
               final si = seats.indexWhere((s) => s.mobile == p.mobile);
-              _userSheet(name: p.name, mobile: p.mobile, uid: p.uid, role: p.role, seatIndex: si, isSeated: si >= 0);
+              _userSheet(name: p.name, mobile: p.mobile, uid: p.uid, role: p.role, gender: p.gender, seatIndex: si, isSeated: si >= 0);
             },
           ),
         );
