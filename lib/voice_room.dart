@@ -47,8 +47,8 @@ Future<String> fetchVoiceToken(String channel, int uid) async {
   for (int attempt = 0; attempt < 3; attempt++) {
     try {
       final res = await http
-       .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
-       .timeout(const Duration(seconds: 12));
+      .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
+      .timeout(const Duration(seconds: 12));
       if (res.statusCode == 200) {
         final t = cleanVoiceToken(res.body);
         if (t.isNotEmpty) return t;
@@ -152,7 +152,7 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
             child: ElevatedButton.icon(
               onPressed: creating? null : openMyRoom,
               icon: creating
-               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.add_home, color: Colors.black),
               label: const Text("MY ROOM", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)),
               style: ElevatedButton.styleFrom(
@@ -594,31 +594,26 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     }
   }
 
-  // SEAT FIX: transaction + race guard - dobara baithna hamesha kaam karega
+  // ===== SEAT FIX (SIMPLE): transaction hataya - pehle seat check karo, phir seedha baitho =====
+  // (transaction wala tarika Firebase me commit nahi ho raha tha - "Seat nahi mili" aa raha tha)
   Future<void> _sitOn(int i) async {
     if (mySeat >= 0) { _toast("Pehle apni seat chhodo"); return; }
     _seatGuardUntil = DateTime.now().millisecondsSinceEpoch + 3000;
     final ref = roomRef.child("seats/$i");
     try {
-      final res = await ref.runTransaction((current) {
-        if (current!= null) {
-          final m = Map<String, dynamic>.from(current as Map);
-          if ((m["mobile"]?? "").toString().isNotEmpty) return Transaction.abort();
-          if (m["locked"] == true) return Transaction.abort();
-        }
-        final prevMicLock = current is Map? (Map<String, dynamic>.from(current as Map)["micLocked"] == true) : false;
-        return Transaction.success({
-          "locked": false, "micLocked": prevMicLock, "uid": myUid, "mobile": myMobile,
-          "name": myName, "role": myRole, "gender": myGender, "idNo": myIdNo,
-          "muted":!micOn, "at": DateTime.now().millisecondsSinceEpoch,
-        });
-      });
-      if (res.committed) {
-        setState(() => mySeat = i);
-        _applyPublish();
-      } else {
-        _toast("Seat nahi mili, dobara try karo");
+      final snap = await ref.get();
+      if (snap.exists && snap.value is Map) {
+        final m = Map<String, dynamic>.from(snap.value as Map);
+        if ((m["mobile"]?? "").toString().isNotEmpty) { _toast("Seat nahi mili, dobara try karo"); return; }
+        if (m["locked"] == true) { _toast("Seat lock hai"); return; }
       }
+      await ref.set({
+        "locked": false, "micLocked": false, "uid": myUid, "mobile": myMobile,
+        "name": myName, "role": myRole, "gender": myGender, "idNo": myIdNo,
+        "muted":!micOn, "at": DateTime.now().millisecondsSinceEpoch,
+      });
+      setState(() => mySeat = i);
+      _applyPublish();
     } catch (e) {
       _toast("Seat error: $e");
     }
@@ -1044,7 +1039,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     return Column(children: [
       Expanded(
         child: chats.isEmpty
-         ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
+        ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
             : ListView.builder(
                 controller: chatScroll,
                 padding: const EdgeInsets.all(12),
