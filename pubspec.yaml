@@ -13,12 +13,14 @@ dependencies:
   firebase_core: ^2.24.2
   cloud_firestore: ^4.15.8
   firebase_database: ^10.4.0
+  firebase_storage: ^11.6.0
   agora_rtc_engine: ^6.3.2
   permission_handler: ^11.3.0
   shared_preferences: ^2.2.2
   share_plus: ^8.0.2
   url_launcher: ^6.2.5
   image_picker: ^1.0.7
+  image_gallery_saver: ^2.0.3
   http: ^1.2.0
 
 dev_dependencies:
