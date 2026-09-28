@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:http/http.dart' as http;
 import 'main.dart';
 
@@ -24,14 +24,13 @@ int makeVoiceUid(String mobile) {
 Future<String> fetchVoiceToken(String channel, int uid) async {
   try {
     final res = await http
-       .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
-       .timeout(const Duration(seconds: 12));
+      .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
+      .timeout(const Duration(seconds: 12));
     if (res.statusCode == 200) return res.body.trim();
   } catch (_) {}
   return "";
 }
 
-// Req 9: ek owner ka ek hi permanent 7-digit room number
 Future<String> getOrCreateRoomNo(String mobile) async {
   final doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
   var no = doc.data()?["voiceRoomNo"]?.toString();
@@ -99,7 +98,7 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
             child: ElevatedButton.icon(
               onPressed: creating? null : openMyRoom,
               icon: creating
-                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.add_home, color: Colors.black),
               label: const Text("MY ROOM", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)),
               style: ElevatedButton.styleFrom(
@@ -448,7 +447,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       await engine!.enableAudioVolumeIndication(interval: 300, smooth: 3, reportVad: true);
       engine!.registerEventHandler(RtcEngineEventHandler(
         onJoinChannelSuccess: (c, e) { if (mounted) setState(() { joined = true; status = "Connected"; }); },
-        onAudioVolumeIndication: (c, speakers, t) {
+        onAudioVolumeIndication: (c, speakers, t, vad) {
           if (!mounted) return;
           final s = <int>{};
           for (var sp in speakers) { if ((sp.volume?? 0) > 5) s.add(sp.uid == 0? myUid : sp.uid!); }
@@ -869,7 +868,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     return Column(children: [
       Expanded(
         child: chats.isEmpty
-           ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
+          ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
             : ListView.builder(
                 controller: chatScroll,
                 padding: const EdgeInsets.all(12),
@@ -996,7 +995,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   }
 }
 
-// ================= KICK LIST (sirf owner) =================
+// ================= KICK LIST =================
 class _KickListScreen extends StatefulWidget {
   final String roomNo;
   const _KickListScreen({required this.roomNo});
@@ -1009,7 +1008,7 @@ class _KickListScreenState extends State<_KickListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A0A12),
-      appBar: AppBar(title: const Text("Kick List"), backgroundColor: const Color(0xFF1A0A12)),
+      appBar: AppBar(title: const Text("Kick List"), backgroundColor: const Color(0xFF1A0E1A)),
       body: StreamBuilder<DatabaseEvent>(
         stream: FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}/kicks").onValue,
         builder: (ctx, snap) {
