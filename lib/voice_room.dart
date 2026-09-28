@@ -7,6 +7,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:http/http.dart' as http;
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'main.dart' hide Text;
 
 // ================= CONFIG =================
@@ -19,6 +23,9 @@ String? minimizedRoomNo;
 RtcEngine? globalVoiceEngine;
 String? globalVoiceRoom;
 int globalVoiceUid = 0;
+bool globalMicOn = true;
+bool globalSpeakerOn = true;
+String tokenDebug = "";
 
 int makeVoiceUid(String mobile) {
   final d = mobile.replaceAll(RegExp(r'[^0-9]'), '');
@@ -31,7 +38,7 @@ int makeVoiceUid(String mobile) {
 
 String cleanVoiceToken(String body) {
   var t = body.trim();
-  if (t.isEmpty) return "";
+  if (t.isEmpty) { tokenDebug = "khali response"; return ""; }
   if (t.startsWith("{")) {
     try {
       final m = jsonDecode(t) as Map<String, dynamic>;
@@ -39,13 +46,18 @@ String cleanVoiceToken(String body) {
         final v = m[k]?.toString()?? "";
         if (v.isNotEmpty &&!v.startsWith("{")) { t = v; break; }
       }
-    } catch (_) {}
+      if (t.startsWith("{")) {
+        final e = (m["error"]?? m["message"]?? "").toString();
+        tokenDebug = e.isNotEmpty? e.substring(0, e.length > 60? 60 : e.length) : "token key nahi mili";
+        return "";
+      }
+    } catch (_) { tokenDebug = "galat JSON"; return ""; }
   }
   t = t.trim();
   if (t.length >= 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")))) {
     t = t.substring(1, t.length - 1).trim();
   }
-  if (t.startsWith("<")) return "";
+  if (t.startsWith("<")) { tokenDebug = "HTML mila (token nahi)"; return ""; }
   return t;
 }
 
@@ -58,8 +70,12 @@ Future<String> fetchVoiceToken(String channel, int uid) async {
       if (res.statusCode == 200) {
         final t = cleanVoiceToken(res.body);
         if (t.isNotEmpty) return t;
+      } else {
+        tokenDebug = "HTTP ${res.statusCode}";
       }
-    } catch (_) {}
+    } catch (e) {
+      tokenDebug = "network fail";
+    }
     await Future.delayed(const Duration(seconds: 1));
   }
   return "";
@@ -311,12 +327,18 @@ class _Present {
 }
 
 class _ChatMsg {
+  final String key;
   final String name;
   final String mobile;
   final String text;
   final String role;
   final int at;
-  _ChatMsg({required this.name, required this.mobile, required this.text, required this.role, required this.at});
+  final String type; // text | image
+  final String imageUrl;
+  final bool viewOnce;
+  final Map<String, dynamic> viewedBy;
+  _ChatMsg({this.key = "", required this.name, required this.mobile, required this.text, required this.role, required this.at,
+    this.type = "text", this.imageUrl = "", this.viewOnce = false, this.viewedBy = const {}});
 }
 
 // ================= VOICE ROOM =================
@@ -345,6 +367,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   bool speakerOn = true;
   bool _keepAlive = false;
   String status = "Checking...";
+  int myJoinedAt = 0;
+  String roomNotice = "";
   List<_Seat> seats = List.generate(10, (i) => _Seat(index: i));
   List<_Present> present = [];
   List<_ChatMsg> chats = [];
@@ -361,6 +385,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   StreamSubscription<DatabaseEvent>? kickSub;
   StreamSubscription<DatabaseEvent>? inviteSub;
   StreamSubscription<DatabaseEvent>? lockSub;
+  StreamSubscription<DatabaseEvent>? noticeSub;
   DatabaseReference? myPresentRef;
 
   DatabaseReference get roomRef => FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}");
@@ -374,6 +399,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     myMobile = prefs.getString("mobile")?? "";
     myName = prefs.getString("name")?? "Guest";
     myUid = makeVoiceUid(myMobile);
+    if (widget.rejoin) { micOn = globalMicOn; speakerOn = globalSpeakerOn; }
     _enter();
   }
 
@@ -381,6 +407,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     try { FirebaseDatabase.instance.goOnline(); } catch (_) {}
     // FIX 1: naam hamesha registration wala
     myName = await getLockedName(myMobile, myName);
+    if (!widget.rejoin) myJoinedAt = DateTime.now().millisecondsSinceEpoch;
     if (!mounted) return;
     setState(() => status = "Kick check...");
     final kickSnap = await roomRef.child("kicks/$myMobile").get();
@@ -416,7 +443,10 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     ownerMobile = (info["ownerMobile"]?? "").toString();
     roomLocked = info["locked"] == true;
     if (!mounted) return;
-    setState(() => roomName = (info["name"]?? info["ownerName"]?? "?").toString());
+    setState(() {
+      roomName = (info["name"]?? info["ownerName"]?? "?").toString();
+      roomNotice = (info["notice"]?? "").toString();
+    });
 
     // FIX 8: lock room - password check (owner ko nahi)
     if (roomLocked && myMobile!= ownerMobile &&!widget.rejoin) {
@@ -450,25 +480,27 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       } catch (_) {}
     }
     try { myIdNo = await getOrCreateRoomNo(myMobile); } catch (_) {}
-
-    try {
-      final ss = await roomRef.child("seats").get();
-      final sv = ss.value;
-      Future<void> cleanOne(String key, dynamic v) async {
-        if (v is Map && myMobile.isNotEmpty) {
-          final m = Map<String, dynamic>.from(v);
-          if ((m["mobile"]?? "").toString() == myMobile) {
-            await roomRef.child("seats/$key").remove();
-            _bumpSeated(-1);
+        // FIX: Keep karke wapas aaye ho to apni seat mat udao
+    if (!widget.rejoin) {
+      try {
+        final ss = await roomRef.child("seats").get();
+        final sv = ss.value;
+        Future<void> cleanOne(String key, dynamic v) async {
+          if (v is Map && myMobile.isNotEmpty) {
+            final m = Map<String, dynamic>.from(v);
+            if ((m["mobile"]?? "").toString() == myMobile) {
+              await roomRef.child("seats/$key").remove();
+              _bumpSeated(-1);
+            }
           }
         }
-      }
-      if (sv is Map) {
-        for (final e in sv.entries) { await cleanOne(e.key.toString(), e.value); }
-      } else if (sv is List) {
-        for (int i = 0; i < sv.length; i++) { await cleanOne(i.toString(), sv[i]); }
-      }
-    } catch (_) {}
+        if (sv is Map) {
+          for (final e in sv.entries) { await cleanOne(e.key.toString(), e.value); }
+        } else if (sv is List) {
+          for (int i = 0; i < sv.length; i++) { await cleanOne(i.toString(), sv[i]); }
+        }
+      } catch (_) {}
+    }
 
     _listenAll();
     // FIX 3: Keep karke wapas aaye ho to dobara join mat karo
@@ -589,7 +621,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       _toast("Room unlock ho gaya 🔓");
     }
   }
-    void _listenAll() {
+
+  void _listenAll() {
     seatsSub = roomRef.child("seats").onValue.listen((e) {
       if (!mounted) return;
       final list = List.generate(10, (i) => _Seat(index: i));
@@ -692,12 +725,27 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         val.forEach((k, v) {
           if (v is Map) {
             final m = Map<String, dynamic>.from(v);
-            list.add(_ChatMsg(name: (m["name"]?? "?").toString(), mobile: (m["mobile"]?? "").toString(),
-                text: (m["text"]?? "").toString(), role: (m["role"]?? "").toString(), at: (m["at"]?? 0) as int));
+            final vb = m["viewedBy"];
+            int at;
+            try { at = (m["at"]?? 0) as int; } catch (_) { at = int.tryParse((m["at"]?? "0").toString())?? 0; }
+            list.add(_ChatMsg(
+              key: k.toString(),
+              name: (m["name"]?? "?").toString(),
+              mobile: (m["mobile"]?? "").toString(),
+              text: (m["text"]?? "").toString(),
+              role: (m["role"]?? "").toString(),
+              at: at,
+              type: (m["type"]?? "text").toString(),
+              imageUrl: (m["imageUrl"]?? "").toString(),
+              viewOnce: m["viewOnce"] == true,
+              viewedBy: vb is Map? Map<String, dynamic>.from(vb) : <String, dynamic>{},
+            ));
           }
         });
       }
       list.sort((a, b) => a.at.compareTo(b.at));
+      // FIX: fresh chat - room me abhi aaye ho to purane message mat dikhao
+      if (myJoinedAt > 0) list.removeWhere((m) => m.at!= 0 && m.at < myJoinedAt - 10000);
       setState(() => chats = list);
       Future.delayed(const Duration(milliseconds: 100), () {
         if (chatScroll.hasClients) chatScroll.jumpTo(chatScroll.position.maxScrollExtent);
@@ -755,6 +803,12 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         ],
       ));
     });
+
+    noticeSub = roomRef.child("info/notice").onValue.listen((e) {
+      if (!mounted) return;
+      final n = e.snapshot.value?.toString()?? "";
+      if (n!= roomNotice) setState(() => roomNotice = n);
+    });
   }
 
   // FIX 5: voice connect fix - communication profile, sahi options
@@ -774,7 +828,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     setState(() => status = "Token...");
     final token = await fetchVoiceToken("voiceroom_${widget.roomNo}", myUid);
     if (!mounted) return;
-    if (token.isEmpty) { setState(() => status = "Token nahi mila - Worker check karo"); return; }
+    if (token.isEmpty) { setState(() => status = "Token fail [$tokenDebug] - Worker URL browser me kholo"); return; }
     try {
       final eng = createAgoraRtcEngine();
       globalVoiceEngine = eng;
@@ -883,7 +937,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
 
   Future<void> _toggleMic() async {
     if (mySeat >= 0 && seats[mySeat].micLocked) { _toast("Mic lock hai"); return; }
-    setState(() => micOn =!micOn);
+    setState(() { micOn =!micOn; globalMicOn = micOn; });
     if (mySeat >= 0) {
       await globalVoiceEngine?.muteLocalAudioStream(!micOn);
       try { await roomRef.child("seats/$mySeat").update({"muted":!micOn}); } catch (_) {}
@@ -891,11 +945,10 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   }
 
   Future<void> _toggleSpeaker() async {
-    setState(() => speakerOn =!speakerOn);
+    setState(() { speakerOn =!speakerOn; globalSpeakerOn = speakerOn; });
     await globalVoiceEngine?.setEnableSpeakerphone(speakerOn);
   }
-
-  Future<void> _setRole(String mobile, String name, String role) async {
+    Future<void> _setRole(String mobile, String name, String role) async {
     final locked = await getLockedName(mobile, name);
     await roomRef.child("roles/$mobile").update({"role": role, "name": locked});
     final si = seats.indexWhere((s) => s.mobile == mobile);
@@ -1009,7 +1062,126 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     chatCtrl.clear();
     await roomRef.child("chat").push().set({
       "name": myName, "mobile": myMobile, "text": t, "role": myRole, "at": ServerValue.timestamp,
+      "type": "text",
     });
+  }
+
+  // FIX: chat me photo bhejo - normal ya view-once (3 sec)
+  Future<void> _pickAndSendImage() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF2A1420),
+        title: const Text("Photo bhejo", style: TextStyle(color: Colors.white)),
+        content: const Text("Kaunsi photo bhejni hai?", style: TextStyle(color: Colors.white70, fontSize: 13)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, "once"),
+              child: const Text("View-once (3 sec)")),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, "normal"),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+              child: const Text("Normal photo", style: TextStyle(color: Colors.black))),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    try {
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1080);
+      if (x == null) return;
+      _toast("Photo upload ho rahi hai...");
+      final bytes = await x.readAsBytes();
+      final path = "vchat/${widget.roomNo}/${DateTime.now().millisecondsSinceEpoch}.jpg";
+      final ref = FirebaseStorage.instance.ref(path);
+      await ref.putData(bytes, SettableMetadata(contentType: "image/jpeg"));
+      final url = await ref.getDownloadURL();
+      await roomRef.child("chat").push().set({
+        "name": myName, "mobile": myMobile, "text": "", "role": myRole, "at": ServerValue.timestamp,
+        "type": "image", "imageUrl": url, "viewOnce": choice == "once", "viewedBy": {},
+      });
+    } catch (e) {
+      _toast("Photo fail: $e");
+    }
+  }
+
+  Widget _chatContent(_ChatMsg m) {
+    if (m.type == "image" && m.imageUrl.isNotEmpty) {
+      final seen = m.viewedBy[myMobile] == true;
+      if (m.viewOnce && seen) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+          child: Text("Dekh liya", style: TextStyle(color: Colors.white38, fontSize: 12, fontStyle: FontStyle.italic)),
+        );
+      }
+      return InkWell(
+        onTap: () => _openImage(m),
+        child: Stack(alignment: Alignment.topRight, children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(m.imageUrl, height: 150, fit: BoxFit.cover,
+                loadingBuilder: (c, w, p) => p == null
+                  ? w
+                    : const SizedBox(height: 150, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+                errorBuilder: (c, e, st) => const SizedBox(
+                    height: 60, child: Center(child: Icon(Icons.broken_image, color: Colors.white38)))),
+          ),
+          if (m.viewOnce)
+            Container(
+              margin: const EdgeInsets.all(6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
+              child: const Text("3s", style: TextStyle(color: Colors.white, fontSize: 10)),
+            ),
+        ]),
+      );
+    }
+    return Text(m.text, style: const TextStyle(color: Colors.white, fontSize: 13));
+  }
+
+  void _openImage(_ChatMsg m) {
+    if (m.type!= "image" || m.imageUrl.isEmpty) return;
+    if (m.viewOnce && m.viewedBy[myMobile] == true) { _toast("Ye photo ek baar dekh li gayi"); return; }
+    Navigator.push(context, MaterialPageRoute(builder: (_) => _PhotoViewScreen(
+      url: m.imageUrl,
+      viewOnce: m.viewOnce,
+      onViewed: () async {
+        try { await roomRef.child("chat/${m.key}/viewedBy/$myMobile").set(true); } catch (_) {}
+      },
+    )));
+  }
+
+  // FIX: owner room notice likhe / badle
+  Future<void> _editNotice() async {
+    if (!isOwner) return;
+    final ctrl = TextEditingController(text: roomNotice);
+    final res = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF2A1420),
+        title: const Text("Room Notice", style: TextStyle(color: Colors.amber)),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 3,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+              hintText: "Sabko kya dikhana hai? (khali chhodo = hata do)",
+              hintStyle: const TextStyle(color: Colors.white30),
+              filled: true,
+              fillColor: Colors.black38,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+              child: const Text("Save", style: TextStyle(color: Colors.black))),
+        ],
+      ),
+    );
+    if (res == null) return;
+    await roomRef.child("info").update({"notice": res});
+    setState(() => roomNotice = res);
+    _toast(res.isEmpty? "Notice hata diya" : "Notice lag gaya");
   }
 
   Future<void> _clearChat() async {
@@ -1027,7 +1199,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   }
 
   // FIX 3: back dabane par Keep / Leave option
-  Future<bool> _onBackPressed() async {
+  Future<String?> _askKeepOrLeave() async {
     final res = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: const Color(0xFF2A1420),
@@ -1059,6 +1231,11 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         ]),
       ),
     );
+    return res;
+  }
+
+  Future<bool> _onBackPressed() async {
+    final res = await _askKeepOrLeave();
     if (res == "keep") {
       _keepAlive = true;
       minimizedRoomNo = widget.roomNo;
@@ -1072,6 +1249,21 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     return false;
   }
 
+  // FIX: upar wala exit button bhi Keep/Leave puchega
+  Future<void> _exitPressed() async {
+    final res = await _askKeepOrLeave();
+    if (res == null ||!mounted) return;
+    if (res == "keep") {
+      _keepAlive = true;
+      minimizedRoomNo = widget.roomNo;
+    } else {
+      _keepAlive = false;
+      minimizedRoomNo = null;
+      await _leave(pop: false);
+    }
+    if (mounted) Navigator.pop(context);
+  }
+
   Future<void> _leave({bool pop = true}) async {
     minimizedRoomNo = null;
     try { if (mySeat >= 0) { await roomRef.child("seats/$mySeat").remove(); _bumpSeated(-1); } } catch (_) {}
@@ -1082,7 +1274,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         return Transaction.success(n < 0? 0 : n);
       });
     } catch (_) {}
-    for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub, lockSub]) {
+    for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub, lockSub, noticeSub]) {
       try { await s?.cancel(); } catch (_) {}
     }
     try { await globalVoiceEngine?.leaveChannel(); } catch (_) {}
@@ -1096,7 +1288,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   void dispose() {
     // FIX 3: Keep kiya to engine zinda rakho
     if (_keepAlive) {
-      for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub, lockSub]) {
+      for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub, lockSub, noticeSub]) {
         try { s?.cancel(); } catch (_) {}
       }
       // seat aur present rakho taaki wapas aane par sab waisa hi mile
@@ -1108,7 +1300,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     chatScroll.dispose();
     super.dispose();
   }
-    void _toast(String m) {
+
+  void _toast(String m) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), duration: const Duration(seconds: 2)));
   }
@@ -1157,6 +1350,20 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
           child: SafeArea(
             child: Column(children: [
               _header(),
+              if (roomNotice.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.amber.withOpacity(0.4))),
+                  child: Row(children: [
+                    const Icon(Icons.campaign, color: Colors.amber, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(roomNotice, style: const TextStyle(color: Colors.amber, fontSize: 12))),
+                  ]),
+                ),
               _seatsGrid(),
               _tabs(),
               Expanded(
@@ -1208,16 +1415,21 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
           ),
         if (isOwner)
           IconButton(
+            icon: const Icon(Icons.campaign, color: Colors.amber),
+            tooltip: "Notice likho",
+            onPressed: _editNotice,
+          ),
+        if (isOwner)
+          IconButton(
             icon: const Icon(Icons.block, color: Colors.redAccent),
             tooltip: "Kick list",
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _KickListScreen(roomNo: widget.roomNo))),
           ),
-        IconButton(icon: const Icon(Icons.logout, color: Colors.white70), onPressed: _leave),
+        IconButton(icon: const Icon(Icons.logout, color: Colors.white70), onPressed: _exitPressed),
       ]),
     );
   }
-
-  Widget _seatsGrid() {
+    Widget _seatsGrid() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: GridView.builder(
@@ -1405,7 +1617,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     return Column(children: [
       Expanded(
         child: chats.isEmpty
-          ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
+         ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
             : ListView.builder(
                 controller: chatScroll,
                 padding: const EdgeInsets.all(12),
@@ -1425,7 +1637,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text("${m.name}${m.role.isNotEmpty? " (${m.role.toUpperCase()})" : ""}",
                             style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
-                        Text(m.text, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                        const SizedBox(height: 2),
+                        _chatContent(m),
                       ]),
                     ),
                   );
@@ -1441,10 +1654,17 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
         child: Row(children: [
+          InkWell(
+            onTap: _pickAndSendImage,
+            child: Container(padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(color: Colors.white12, shape: BoxShape.circle),
+                child: const Icon(Icons.image, color: Colors.amber, size: 18)),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: chatCtrl,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
               decoration: InputDecoration(
                   hintText: "Type karo...",
                   hintStyle: const TextStyle(color: Colors.white30),
@@ -1504,7 +1724,11 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       decoration: BoxDecoration(color: Colors.black.withOpacity(0.45),
           borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20))),
       child: Column(children: [
-        Text(status, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+        InkWell(
+          onTap: () { if (!joined) _joinAgora(); },
+          child: Text(status + (joined? "" : " (tap: retry)"),
+              style: const TextStyle(color: Colors.white38, fontSize: 10)),
+        ),
         const SizedBox(height: 6),
         Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
           _bigBtn(icon: micOn? Icons.mic : Icons.mic_off, label: micOn? "Mic" : "Mute",
@@ -1587,6 +1811,89 @@ class _KickListScreenState extends State<_KickListScreen> {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+// ================= PHOTO VIEWER =================
+class _PhotoViewScreen extends StatefulWidget {
+  final String url;
+  final bool viewOnce;
+  final VoidCallback onViewed;
+  const _PhotoViewScreen({required this.url, required this.viewOnce, required this.onViewed});
+  @override
+  State<_PhotoViewScreen> createState() => _PhotoViewScreenState();
+}
+
+class _PhotoViewScreenState extends State<_PhotoViewScreen> {
+  int sec = 3;
+  Timer? _t;
+  bool saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.viewOnce) {
+      _t = Timer.periodic(const Duration(seconds: 1), (x) {
+        if (!mounted) { x.cancel(); return; }
+        if (sec <= 1) {
+          x.cancel();
+          widget.onViewed();
+          if (mounted) Navigator.pop(context);
+        } else {
+          setState(() => sec--);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() { _t?.cancel(); super.dispose(); }
+
+  Future<void> _save() async {
+    setState(() => saving = true);
+    try {
+      final res = await http.get(Uri.parse(widget.url));
+      if (res.statusCode == 200) {
+        await ImageGallerySaver.saveImage(Uint8List.fromList(res.bodyBytes));
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+             .showSnackBar(const SnackBar(content: Text("Gallery me save ho gaya")));
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Download fail (${res.statusCode})")));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+    if (mounted) setState(() => saving = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text(widget.viewOnce? "$sec sec" : "Photo",
+            style: const TextStyle(color: Colors.white)),
+        actions: [
+          if (!widget.viewOnce)
+            saving
+               ? const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+                : IconButton(icon: const Icon(Icons.download, color: Colors.white), onPressed: _save),
+        ],
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          child: Image.network(widget.url,
+              errorBuilder: (c, e, st) =>
+                  const Icon(Icons.broken_image, color: Colors.white38, size: 60)),
+        ),
       ),
     );
   }
