@@ -366,6 +366,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   DatabaseReference get roomRef => FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}");
   bool get isOwner => myRole == "owner";
   bool get isAdmin => myRole == "admin" || isOwner;
+
   @override
   void initState() {
     super.initState();
@@ -396,7 +397,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
               style: const TextStyle(color: Colors.white)),
           actions: [TextButton(onPressed: () { Navigator.pop(context); Navigator.pop(context); }, child: const Text("OK"))],
         ));
-        setState(() => status = "Kicked out");  return;
+        setState(() => status = "Kicked out");
+        return;
       } else {
         await roomRef.child("kicks/$myMobile").remove();
       }
@@ -587,8 +589,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       _toast("Room unlock ho gaya 🔓");
     }
   }
-
-  void _listenAll() {
+    void _listenAll() {
     seatsSub = roomRef.child("seats").onValue.listen((e) {
       if (!mounted) return;
       final list = List.generate(10, (i) => _Seat(index: i));
@@ -754,7 +755,49 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         ],
       ));
     });
-  }          final nt = await fetchVoiceToken("voiceroom_${widget.roomNo}", myUid);
+  }
+
+  // FIX 5: voice connect fix - communication profile, sahi options
+  Future<void> _joinAgora() async {
+    setState(() => status = "Mic permission...");
+    await [Permission.microphone].request();
+    if (!mounted) return;
+    // Keep se wapas aaye ho to engine pehle se hai
+    if (globalVoiceEngine!= null && globalVoiceRoom == widget.roomNo) {
+      setState(() { joined = true; status = "Connected"; });
+      _applyPublish();
+      return;
+    }
+    try { await globalVoiceEngine?.leaveChannel(); } catch (_) {}
+    try { await globalVoiceEngine?.release(); } catch (_) {}
+    globalVoiceEngine = null;
+    setState(() => status = "Token...");
+    final token = await fetchVoiceToken("voiceroom_${widget.roomNo}", myUid);
+    if (!mounted) return;
+    if (token.isEmpty) { setState(() => status = "Token nahi mila - Worker check karo"); return; }
+    try {
+      final eng = createAgoraRtcEngine();
+      globalVoiceEngine = eng;
+      globalVoiceRoom = widget.roomNo;
+      globalVoiceUid = myUid;
+      await eng.initialize(RtcEngineContext(appId: voiceRoomAppId));
+      await eng.enableAudio();
+      await eng.setEnableSpeakerphone(true);
+      // FIX 2: bolne wale ka pata chale - volume indication tez
+      await eng.enableAudioVolumeIndication(interval: 200, smooth: 3, reportVad: true);
+      eng.registerEventHandler(RtcEngineEventHandler(
+        onJoinChannelSuccess: (c, e) { if (mounted) setState(() { joined = true; status = "Connected"; }); _applyPublish(); },
+        onAudioVolumeIndication: (c, speakers, t, vad) {
+          if (!mounted) return;
+          final s = <int>{};
+          for (var sp in speakers) { if ((sp.volume?? 0) > 5) s.add(sp.uid == 0? myUid : sp.uid!); }
+          if (s.length!= speaking.length ||!s.containsAll(speaking)) {
+            setState(() => speaking = s);
+          }
+        },
+        onError: (err, msg) { if (mounted) setState(() => status = "Agora error $err: $msg"); },
+        onTokenPrivilegeWillExpire: (c, tok) async {
+          final nt = await fetchVoiceToken("voiceroom_${widget.roomNo}", myUid);
           if (nt.isNotEmpty) { try { await globalVoiceEngine?.renewToken(nt); } catch (_) {} }
         },
       ));
@@ -1019,7 +1062,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     if (res == "keep") {
       _keepAlive = true;
       minimizedRoomNo = widget.roomNo;
-      return true;
+      return true; // pop, lekin _leave mat karo
     } else if (res == "leave") {
       _keepAlive = false;
       minimizedRoomNo = null;
@@ -1056,6 +1099,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub, lockSub]) {
         try { s?.cancel(); } catch (_) {}
       }
+      // seat aur present rakho taaki wapas aane par sab waisa hi mile
     } else {
       _leave(pop: false);
     }
@@ -1064,8 +1108,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     chatScroll.dispose();
     super.dispose();
   }
-
-  void _toast(String m) {
+    void _toast(String m) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), duration: const Duration(seconds: 2)));
   }
@@ -1128,7 +1171,9 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
         ),
       ),
     );
-    Widget _header() {
+  }
+
+  Widget _header() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Row(children: [
@@ -1150,7 +1195,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
                 padding: EdgeInsets.only(left: 6),
                 child: Icon(Icons.lock, color: Colors.amber, size: 18),
               ),
-            ]),            Text("ID:${widget.roomNo}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            ]),
+            Text("ID:${widget.roomNo}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
           ]),
         ),
         // FIX 8: owner lock/unlock button
