@@ -814,6 +814,20 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
 int _joinRetry = 0;
 
 Future<void> _joinAgora() async {
+  if (!mounted || joined) return;
+  // Engine null hai (Leave ke baad) to yahin naya banao
+  if (globalVoiceEngine == null) {
+    try {
+      if (mounted) setState(() => status = "Engine bana raha...");
+      final e = createAgoraRtcEngine();
+      await e.initialize(RtcEngineContext(appId: voiceRoomAppId));
+      globalVoiceEngine = e;
+      globalVoiceRoom = widget.roomNo;
+    } catch (_) {
+      if (mounted) setState(() => status = "Engine fail (tap: retry)");
+      return;
+    }
+  }
   final eng = globalVoiceEngine;
   if (eng == null || !mounted || joined) return;
   final channel = "voiceroom_${widget.roomNo}";
