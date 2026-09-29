@@ -1856,7 +1856,7 @@ class _PhotoViewScreenState extends State<_PhotoViewScreen> {
     try {
       final res = await http.get(Uri.parse(widget.url));
       if (res.statusCode == 200) {
-        await ImageGallerySaver.saveImage(Uint8List.fromList(res.bodyBytes));
+        await Gal.putImageBytes(Uint8List.fromList(res.bodyBytes));
         if (mounted) {
           ScaffoldMessenger.of(context)
              .showSnackBar(const SnackBar(content: Text("Gallery me save ho gaya")));
