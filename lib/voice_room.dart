@@ -860,6 +860,7 @@ Future<void> _joinAgora() async {
   try {
     if (mounted) setState(() => status = "Connecting...");
     final token = await fetchVoiceToken(channel, myUid);
+    print("JOIN TRY: channel=$channel uid=$myUid token_len=${token.length} debug=$tokenDebug");
     if (token.isEmpty) throw Exception("token nahi mila");
     await eng.setDefaultAudioRouteToSpeakerphone(true);
     await eng.enableAudio();
