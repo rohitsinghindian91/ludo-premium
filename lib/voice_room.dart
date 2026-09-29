@@ -810,7 +810,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       if (n!= roomNotice) setState(() => roomNotice = n);
     });
   }
-  // ================= FINAL JOIN (clean) =================
+// ================= VOICE JOIN (final) =================
 int _joinRetry = 0;
 
 Future<void> _joinAgora() async {
@@ -819,12 +819,8 @@ Future<void> _joinAgora() async {
   final channel = "voiceroom_${widget.room.id}";
   try {
     if (mounted) setState(() => status = "Connecting...");
-    // FIX: token aur join me SAME uid (pehle mismatch tha -> invalid token)
-    final tok = await http
-        .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
-        .timeout(const Duration(seconds: 10));
-    final token = tok.body.trim();
-    if (token.isEmpty) throw Exception("token khaali aaya");
+    final token = await fetchVoiceToken(channel, myUid);
+    if (token.isEmpty) throw Exception("token nahi mila");
     await eng.setDefaultAudioRouteToSpeakerphone(true);
     await eng.enableAudio();
     await eng.enableAudioVolumeIndication(intervalMs: 200, smooth: 3, reportVad: true);
@@ -835,10 +831,10 @@ Future<void> _joinAgora() async {
         if (mounted) setState(() { joined = true; status = "Connected"; });
         _applyPublish();
       },
-      onAudioVolumeIndication: (c, speakers, total) {
+      onAudioVolumeIndication: (c, speakers, total, _) {
         final set = <int>{};
         for (final sp in speakers) {
-          if (sp.volume > 5) set.add(sp.uid == 0 ? uid : sp.uid);
+          if (sp.volume > 5) set.add(sp.uid == 0 ? myUid : sp.uid);
         }
         if (mounted) setState(() => speaking = set);
       },
@@ -847,12 +843,9 @@ Future<void> _joinAgora() async {
         if (mounted) setState(() => status = "Dobara connect ho raha...");
         _autoRetry();
       },
-      onTokenPrivilegeWillExpire: (c) async {
+      onTokenPrivilegeWillExpire: (c, _) async {
         try {
-          final t2 = await http
-              .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
-              .timeout(const Duration(seconds: 10));
-          final nt = t2.body.trim();
+          final nt = await fetchVoiceToken(channel, myUid);
           if (nt.isNotEmpty) await eng.renewToken(nt);
         } catch (_) {}
       },
@@ -860,12 +853,12 @@ Future<void> _joinAgora() async {
     await eng.joinChannel(
       token: token,
       channelId: channel,
-      uid: uid, // FIX: pehle yahan 0 tha!
+      uid: myUid,
       options: const ChannelMediaOptions(
         clientRoleType: ClientRoleType.clientRoleBroadcaster,
         channelProfile: ChannelProfileType.channelProfileCommunication,
         autoSubscribeAudio: true,
-        publishMicrophoneTrack: false, // mic button se on hoga
+        publishMicrophoneTrack: false,
       ),
     );
   } catch (e) {
@@ -873,7 +866,6 @@ Future<void> _joinAgora() async {
   }
 }
 
-// Apne aap retry (2 sec gap, 5 baar) — tap karne ki zaroorat nahi!
 Future<void> _autoRetry() async {
   if (!mounted || joined) return;
   _joinRetry++;
