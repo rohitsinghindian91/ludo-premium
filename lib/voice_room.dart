@@ -1139,6 +1139,26 @@ Future<void> _pickAndSendImage() async {
           child: Text("Dekh liya", style: TextStyle(color: Colors.white38, fontSize: 12, fontStyle: FontStyle.italic)),
         );
       }
+            // View-once: kholne se pehle saaf photo mat dikhao
+      if (m.viewOnce && !seen) {
+        return InkWell(
+          onTap: () => _openImage(m),
+          child: Container(
+            height: 150,
+            width: 200,
+            decoration: BoxDecoration(
+                color: Colors.black45,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.withOpacity(0.4))),
+            child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(Icons.visibility_off, color: Colors.amber, size: 28),
+              SizedBox(height: 6),
+              Text("3s photo", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text("Tap karke dekho", style: TextStyle(color: Colors.white54, fontSize: 10)),
+            ]),
+          ),
+        );
+      }
       return InkWell(
         onTap: () => _openImage(m),
         child: Stack(alignment: Alignment.topRight, children: [
