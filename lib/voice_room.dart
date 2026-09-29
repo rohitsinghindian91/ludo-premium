@@ -1065,43 +1065,53 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       "type": "text",
     });
   }
-
+// Photo Cloudinary par bhejega, URL wapas dega
+Future<String> _uploadToCloudinary(Uint8List bytes) async {
+  final req = http.MultipartRequest(
+    "POST",
+    Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"),
+  )
+    ..fields['upload_preset'] = 'ludo_chat'
+    ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chat.jpg'));
+  final streamed = await req.send();
+  final res = await http.Response.fromStream(streamed);
+  if (streamed.statusCode != 200) throw Exception("Cloudinary: ${res.body}");
+  return json.decode(res.body)['secure_url'] as String;
+}
   // FIX: chat me photo bhejo - normal ya view-once (3 sec)
-  Future<void> _pickAndSendImage() async {
-    final choice = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF2A1420),
-        title: const Text("Photo bhejo", style: TextStyle(color: Colors.white)),
-        content: const Text("Kaunsi photo bhejni hai?", style: TextStyle(color: Colors.white70, fontSize: 13)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, "once"),
-              child: const Text("View-once (3 sec)")),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(context, "normal"),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-              child: const Text("Normal photo", style: TextStyle(color: Colors.black))),
-        ],
-      ),
-    );
-    if (choice == null) return;
-    try {
-      final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1080);
-      if (x == null) return;
-      _toast("Photo upload ho rahi hai...");
-      final bytes = await x.readAsBytes();
-      final path = "vchat/${widget.roomNo}/${DateTime.now().millisecondsSinceEpoch}.jpg";
-      final ref = FirebaseStorage.instance.ref(path);
-      await ref.putData(bytes, SettableMetadata(contentType: "image/jpeg"));
-      final url = await ref.getDownloadURL();
-      await roomRef.child("chat").push().set({
-        "name": myName, "mobile": myMobile, "text": "", "role": myRole, "at": ServerValue.timestamp,
-        "type": "image", "imageUrl": url, "viewOnce": choice == "once", "viewedBy": {},
-      });
-    } catch (e) {
-      _toast("Photo fail: $e");
-    }
+  // FIX: chat me photo bhejo - normal ya view-once (3 sec) [Cloudinary]
+Future<void> _pickAndSendImage() async {
+  final choice = await showDialog<String>(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF2A1420),
+      title: const Text("Photo bhejo", style: TextStyle(color: Colors.white)),
+      content: const Text("Kaunsi photo bhejni hai?", style: TextStyle(color: Colors.white70)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, "once"),
+          child: const Text("View-once (3 sec)")),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, "normal"),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+          child: const Text("Normal photo", style: TextStyle(color: Colors.black))),
+      ],
+    ),
+  );
+  if (choice == null) return;
+  try {
+    final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1080);
+    if (x == null) return;
+    _toast("Photo upload ho rahi hai...");
+    final bytes = await x.readAsBytes();
+    final url = await _uploadToCloudinary(bytes);
+    await roomRef.child("chat").push().set({
+      "name": myName, "mobile": myMobile, "text": "", "role": myRole, "at": ServerValue.timestamp,
+      "type": "image", "imageUrl": url, "viewOnce": choice == "once", "viewedBy": {},
+    });
+  } catch (e) {
+    _toast("Photo fail: $e");
   }
+}
 
   Widget _chatContent(_ChatMsg m) {
     if (m.type == "image" && m.imageUrl.isNotEmpty) {
