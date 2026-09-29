@@ -815,6 +815,16 @@ int _joinRetry = 0;
 
 Future<void> _joinAgora() async {
   if (!mounted || joined) return;
+  try {
+  var st = await Permission.microphone.status;
+  if (!st.isGranted) {
+    st = await Permission.microphone.request();
+  }
+  if (!st.isGranted) {
+    if (mounted) setState(() => status = "Mic permission do (tap: retry)");
+    return;
+  }
+} catch (_) {}
   if (globalVoiceEngine != null && globalVoiceRoom != widget.roomNo) {
   try { await globalVoiceEngine?.leaveChannel(); } catch (_) {}
   try { await globalVoiceEngine?.release(); } catch (_) {}
@@ -1780,7 +1790,7 @@ if (mounted) setState(() { chats.clear(); });
       child: Column(children: [
         InkWell(
           onTap: () { if (!joined) { _joinRetry = 0; _joinAgora(); } },
-          child: Text(status + (joined? "" : " (tap: retry)"),
+          child: Text(status + " | " + tokenDebug + (joined? "" : " (tap: retry)"),
               style: const TextStyle(color: Colors.white38, fontSize: 10)),
         ),
         const SizedBox(height: 6),
