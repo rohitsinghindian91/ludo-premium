@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'package:gal/gal.dart';
 
 class FriendsScreen extends StatefulWidget {
   final String mobile;
@@ -97,6 +103,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   }
 }
 
+// ============ PRIVATE CHAT: text + photo (view-once/normal) + 2 min delete for everyone ============
 class PrivateChatScreen extends StatefulWidget {
   final String myMobile; final String friendMobile; final String friendName; final String myName;
   const PrivateChatScreen({super.key, required this.myMobile, required this.friendMobile, required this.friendName, required this.myName});
@@ -105,20 +112,217 @@ class PrivateChatScreen extends StatefulWidget {
 
 class _PrivateChatScreenState extends State<PrivateChatScreen> {
   final msgCtrl = TextEditingController();
+
   String getChatId(){ List<String> s=[widget.myMobile, widget.friendMobile]; s.sort(); return s.join("_"); }
+
+  CollectionReference<Map<String,dynamic>> get msgCol =>
+      FirebaseFirestore.instance.collection("friend_chats").doc(getChatId()).collection("messages");
+
+  void _toast(String s){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s), duration: const Duration(seconds: 2))); }
+
+  // Cloudinary par photo upload
+  Future<String> _uploadToCloudinary(Uint8List bytes) async {
+    final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
+    ..fields['upload_preset'] = 'ludo_chat'
+    ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chat.jpg'));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (streamed.statusCode!= 200) throw Exception("Cloudinary: ${res.body}");
+    return json.decode(res.body)['secure_url'] as String;
+  }
+
   Future<void> sendMsg() async {
     if(msgCtrl.text.trim().isEmpty) return;
-    String text=msgCtrl.text.trim(); msgCtrl.clear();
-    await FirebaseFirestore.instance.collection("friend_chats").doc(getChatId()).collection("messages").add({"from": widget.myMobile, "fromName": widget.myName, "to": widget.friendMobile, "msg": text, "time": FieldValue.serverTimestamp()});
+    String text = msgCtrl.text.trim(); msgCtrl.clear();
+    await msgCol.add({
+      "from": widget.myMobile, "fromName": widget.myName, "to": widget.friendMobile,
+      "type": "text", "msg": text, "viewedBy": {}, "time": FieldValue.serverTimestamp(),
+    });
+  }
+
+  // Photo bhejo - view-once (3 sec) ya normal
+  Future<void> _pickAndSendImage() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Photo bhejo"),
+        content: const Text("Kaunsi photo bhejni hai?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, "once"), child: const Text("View-once (3 sec)")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, "normal"), child: const Text("Normal photo")),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    try {
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1080);
+      if (x == null) return;
+      _toast("Photo upload ho rahi hai...");
+      final bytes = await x.readAsBytes();
+      final url = await _uploadToCloudinary(bytes);
+      await msgCol.add({
+        "from": widget.myMobile, "fromName": widget.myName, "to": widget.friendMobile,
+        "type": "image", "imageUrl": url, "viewOnce": choice == "once", "viewedBy": {},
+        "time": FieldValue.serverTimestamp(),
+      });
+    } catch (e) { _toast("Photo fail: $e"); }
+  }
+
+  // 2 minute ke andar hi delete for everyone milega
+  bool _canDelete(Timestamp? t){
+    if (t == null) return true;
+    return DateTime.now().difference(t.toDate()).inMinutes < 2;
+  }
+
+  Future<void> _askDelete(String docId) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Delete karein?"),
+        content: const Text("Ye message dono ke inbox se delete ho jayega."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Delete for everyone")),
+        ],
+      ),
+    );
+    if (yes == true) { await msgCol.doc(docId).delete(); _toast("Delete ho gaya"); }
+  }
+
+  // Normal photo gallery me save karo (gal package)
+  Future<void> _savePhoto(String url) async {
+    try {
+      _toast("Save ho rahi hai...");
+      final hasAccess = await Gal.hasAccess();
+      if (!hasAccess) await Gal.requestAccess();
+      final res = await http.get(Uri.parse(url));
+      await Gal.putImageBytes(Uint8List.fromList(res.bodyBytes), name: "chat_${DateTime.now().millisecondsSinceEpoch}");
+      _toast("Gallery me save ho gayi ✅");
+    } catch (e) { _toast("Save fail: $e"); }
+  }
+
+  void _openPhoto(QueryDocumentSnapshot<Map<String,dynamic>> doc){
+    final d = doc.data();
+    final url = (d["imageUrl"]?? "").toString();
+    if (url.isEmpty) return;
+    final bool viewOnce = d["viewOnce"] == true;
+    final bool isMe = d["from"] == widget.myMobile;
+    final Map viewedBy = Map.from(d["viewedBy"]?? {});
+    if (viewOnce &&!isMe && viewedBy[widget.myMobile] == true) { _toast("Ye photo ek baar dekh li gayi"); return; }
+    Navigator.push(context, MaterialPageRoute(builder: (_) => _PhotoViewScreen(
+      url: url, viewOnce: viewOnce, showSave:!viewOnce,
+      onSave: () => _savePhoto(url),
+      onViewed: (!viewOnce || isMe)? null : () {
+        msgCol.doc(doc.id).update({"viewedBy.${widget.myMobile}": true});
+      },
+    )));
+  }
+
+  Widget _bubble(QueryDocumentSnapshot<Map<String,dynamic>> doc){
+    final d = doc.data();
+    final bool isMe = d["from"] == widget.myMobile;
+    final String type = (d["type"]?? "text").toString();
+    final Timestamp? t = d["time"] as Timestamp?;
+    final bool canDel = isMe && _canDelete(t);
+
+    Widget content;
+    if (type == "image") {
+      final String url = (d["imageUrl"]?? "").toString();
+      final bool viewOnce = d["viewOnce"] == true;
+      final Map viewedBy = Map.from(d["viewedBy"]?? {});
+      final bool seen = viewedBy[widget.myMobile] == true;
+      if (viewOnce && seen &&!isMe) {
+        content = const Text("Dekh liya 👀", style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic));
+      } else {
+        content = GestureDetector(
+          onTap: () => _openPhoto(doc),
+          child: Stack(alignment: Alignment.topRight, children: [
+            ClipRRect(borderRadius: BorderRadius.circular(8),
+              child: Image.network(url, height: 150, fit: BoxFit.cover,
+                loadingBuilder: (c, w, p) => p == null? w : const SizedBox(height: 150, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+                errorBuilder: (c, e, s) => const SizedBox(height: 60, child: Center(child: Icon(Icons.broken_image, color: Colors.white38))))),
+            if (viewOnce) Container(margin: const EdgeInsets.all(6), padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
+              child: const Text("3s", style: TextStyle(color: Colors.white, fontSize: 10))),
+          ]),
+        );
+      }
+    } else {
+      content = Text(d["msg"]?? "", style: TextStyle(color: isMe? Colors.black : Colors.white));
+    }
+
+    return Align(
+      alignment: isMe? Alignment.centerRight : Alignment.centerLeft,
+      child: GestureDetector(
+        onLongPress: canDel? () => _askDelete(doc.id) : null,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(color: isMe? Colors.amber : const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)),
+          child: content,
+        ),
+      ),
+    );
+  }
+
+  @override Widget build(BuildContext context){
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(backgroundColor: const Color(0xFF151A2B), title: Text(widget.friendName, style: const TextStyle(color: Colors.white))),
+      body: Column(children: [
+        Expanded(child: StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
+          stream: msgCol.orderBy("time", descending: false).snapshots(),
+          builder: (context, snap){
+            if (snap.hasError) return Center(child: Padding(padding: const EdgeInsets.all(16), child: Text("Error: ${snap.error}", style: const TextStyle(color: Colors.white54))));
+            if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.amber));
+            final docs = snap.data?.docs?? [];
+            if (docs.isEmpty) return const Center(child: Text("Abhi koi message nahi — pehla message bhejo 👋", style: TextStyle(color: Colors.white54)));
+            return ListView.builder(padding: const EdgeInsets.all(12), itemCount: docs.length, itemBuilder: (c,i) => _bubble(docs[i]));
+          },
+        )),
+        Container(padding: const EdgeInsets.all(8), color: const Color(0xFF151A2B), child: Row(children: [
+          IconButton(icon: const Icon(Icons.photo, color: Colors.amber), onPressed: _pickAndSendImage),
+          Expanded(child: TextField(controller: msgCtrl, style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(hintText: "Message...", hintStyle: const TextStyle(color: Colors.white38), filled: true, fillColor: const Color(0xFF0A0E1A), border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none)))),
+          const SizedBox(width: 8),
+          CircleAvatar(backgroundColor: Colors.amber, child: IconButton(icon: const Icon(Icons.send, color: Colors.black), onPressed: sendMsg)),
+        ]))
+      ])
+    );
+  }
+}
+
+// Photo dekhne wali screen - view-once 3 sec me band, normal me Save button
+class _PhotoViewScreen extends StatefulWidget {
+  final String url; final bool viewOnce; final bool showSave;
+  final VoidCallback? onSave; final VoidCallback? onViewed;
+  const _PhotoViewScreen({required this.url, required this.viewOnce, this.showSave = false, this.onSave, this.onViewed});
+  @override State<_PhotoViewScreen> createState() => _PhotoViewScreenState();
+}
+
+class _PhotoViewScreenState extends State<_PhotoViewScreen> {
+  int sec = 3;
+  @override void initState(){
+    super.initState();
+    if (widget.viewOnce) {
+      widget.onViewed?.call();
+      Timer.periodic(const Duration(seconds: 1), (t){
+        if (!mounted) { t.cancel(); return; }
+        if (sec <= 1) { t.cancel(); Navigator.pop(context); }
+        else { setState(()=> sec--); }
+      });
+    }
   }
   @override Widget build(BuildContext context){
     return Scaffold(
-      backgroundColor: Color(0xFF0A0E1A),
-      appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text(widget.friendName, style: TextStyle(color: Colors.white))),
-      body: Column(children: [
-        Expanded(child: StreamBuilder(stream: FirebaseFirestore.instance.collection("friend_chats").doc(getChatId()).collection("messages").orderBy("time", descending: false).snapshots(), builder: (context,snap){ if(!snap.hasData) return Center(child: CircularProgressIndicator()); var docs=snap.data!.docs; return ListView.builder(padding: EdgeInsets.all(12), itemCount: docs.length, itemBuilder: (c,i){ var d=docs[i].data(); bool isMe=d["from"]==widget.myMobile; return Align(alignment: isMe? Alignment.centerRight: Alignment.centerLeft, child: Container(margin: EdgeInsets.symmetric(vertical:4), padding: EdgeInsets.symmetric(horizontal:14, vertical:10), decoration: BoxDecoration(color: isMe? Colors.amber: Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)), child: Text(d["msg"]??"", style: TextStyle(color: isMe? Colors.black: Colors.white)))); }); })),
-        Container(padding: EdgeInsets.all(8), color: Color(0xFF151A2B), child: Row(children: [Expanded(child: TextField(controller: msgCtrl, style: TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "Message...", filled: true, fillColor: Color(0xFF0A0E1A), border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none)))), SizedBox(width:8), CircleAvatar(backgroundColor: Colors.amber, child: IconButton(icon: Icon(Icons.send, color: Colors.black), onPressed: sendMsg)) ]))
-      ])
+      backgroundColor: Colors.black,
+      appBar: AppBar(backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white),
+        title: widget.viewOnce? Text("$sec sec", style: const TextStyle(color: Colors.white)) : null,
+        actions: [ if (widget.showSave) IconButton(icon: const Icon(Icons.download, color: Colors.white), onPressed: widget.onSave) ],
+      ),
+      body: Center(child: Image.network(widget.url)),
     );
   }
 }
