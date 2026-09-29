@@ -747,7 +747,15 @@ Set<String> _oldChatKeys = {};
       }
       list.sort((a, b) => a.at.compareTo(b.at));
       // FIX: fresh chat - room me abhi aaye ho to purane message mat dikhao
-      if (myJoinedAt > 0) list.removeWhere((m) => m.at!= 0 && m.at < myJoinedAt - 10000);
+      if (!widget.rejoin) {
+  if (_chatFirstLoad) {
+    _oldChatKeys = list.map((m) => m.key).toSet();
+    _chatFirstLoad = false;
+  }
+  list.removeWhere((m) => _oldChatKeys.contains(m.key));
+} else {
+  _chatFirstLoad = false;
+      }
       setState(() => chats = list);
       Future.delayed(const Duration(milliseconds: 100), () {
         if (chatScroll.hasClients) chatScroll.jumpTo(chatScroll.position.maxScrollExtent);
