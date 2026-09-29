@@ -14,7 +14,7 @@ import 'package:gal/gal.dart';
 import 'main.dart' hide Text;
 
 // ================= CONFIG =================
-const String voiceRoomAppId = "023565215b9e4722b8fff10c0340c699";
+const String voiceRoomAppId = "abec454452ca4fbba9bbd6296dbf4509";
 const String voiceRoomTokenServer = "https://patient-wave-cb8c.rohitsinghindian91.workers.dev";
 
 // Keep-option: minimize karke bahar aane par room yaad rahe
