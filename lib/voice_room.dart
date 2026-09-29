@@ -368,6 +368,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   bool _keepAlive = false;
   String status = "Checking...";
   int myJoinedAt = 0;
+  bool _chatFirstLoad = true;
+Set<String> _oldChatKeys = {};
   String roomNotice = "";
   List<_Seat> seats = List.generate(10, (i) => _Seat(index: i));
   List<_Present> present = [];
@@ -869,10 +871,8 @@ Future<void> _joinAgora() async {
         if (mounted) setState(() => speaking = set);
       },
       onError: (code, msg) {
-        if (joined) return;
-        if (mounted) setState(() => status = "Dobara connect ho raha...");
-        _autoRetry();
-      },
+  if (mounted) setState(() => status = "Error $code: $msg (tap: retry)");
+},
       onTokenPrivilegeWillExpire: (c, _) async {
         try {
           final nt = await fetchVoiceToken(channel, myUid);
@@ -912,7 +912,7 @@ Future<void> _autoRetry() async {
   Future<void> _applyPublish() async {
   final eng = globalVoiceEngine;
   if (eng == null ||!joined) return;
-  final shouldPublish = micOn && mySeat >= 0;
+  final shouldPublish = micOn; // testing ke liye seat check hataya
   try {
     await eng.updateChannelMediaOptions(ChannelMediaOptions(
       publishMicrophoneTrack: shouldPublish,
