@@ -815,6 +815,12 @@ int _joinRetry = 0;
 
 Future<void> _joinAgora() async {
   if (!mounted || joined) return;
+  if (globalVoiceEngine != null && globalVoiceRoom != widget.roomNo) {
+  try { await globalVoiceEngine?.leaveChannel(); } catch (_) {}
+  try { await globalVoiceEngine?.release(); } catch (_) {}
+  globalVoiceEngine = null;
+  globalVoiceRoom = null;
+  }
   // Engine null hai (Leave ke baad) to yahin naya banao
   if (globalVoiceEngine == null) {
     try {
@@ -895,15 +901,15 @@ Future<void> _autoRetry() async {
 
   Future<void> _applyPublish() async {
   final eng = globalVoiceEngine;
-  if (eng == null || !joined) return;
-  // FIX: sirf mute/unmute kaafi nahi — mic ka track publish bhi toggle karna padta hai
+  if (eng == null ||!joined) return;
+  final shouldPublish = micOn && mySeat >= 0;
   try {
     await eng.updateChannelMediaOptions(ChannelMediaOptions(
-      publishMicrophoneTrack: micOn,
+      publishMicrophoneTrack: shouldPublish,
     ));
   } catch (_) {}
   try {
-    await eng.muteLocalAudioStream(!micOn);
+    await eng.muteLocalAudioStream(!shouldPublish);
   } catch (_) {}
   }
 
@@ -953,12 +959,12 @@ Future<void> _autoRetry() async {
   }
 
   Future<void> _toggleMic() async {
-    if (mySeat >= 0 && seats[mySeat].micLocked) { _toast("Mic lock hai"); return; }
-    setState(() { micOn =!micOn; globalMicOn = micOn; });
-    if (mySeat >= 0) {
-      await _applyPublish();
-      try { await roomRef.child("seats/$mySeat").update({"muted":!micOn}); } catch (_) {}
-    }
+  if (mySeat >= 0 && seats[mySeat].micLocked) { _toast("Mic lock hai"); return; }
+  setState(() { micOn =!micOn; globalMicOn = micOn; });
+  await _applyPublish();
+  if (mySeat >= 0) {
+    try { await roomRef.child("seats/$mySeat").update({"muted":!micOn}); } catch (_) {}
+  }
   }
 
   Future<void> _toggleSpeaker() async {
@@ -1313,6 +1319,7 @@ Future<void> _pickAndSendImage() async {
 
   Future<void> _leave({bool pop = true}) async {
     minimizedRoomNo = null;
+if (mounted) setState(() { chats.clear(); });
     try { if (mySeat >= 0) { await roomRef.child("seats/$mySeat").remove(); _bumpSeated(-1); } } catch (_) {}
     try { await myPresentRef?.remove(); } catch (_) {}
     try {
