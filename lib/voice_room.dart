@@ -861,7 +861,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       await step("D4 OK");
 
       await step("D5: speakerphone...");
-      await eng.setEnableSpeakerphone(true);
+      await eng.setDefaultAudioRouteToSpeakerphone(true);
       await step("D5 OK");
 
       await step("D6: volume indication...");
