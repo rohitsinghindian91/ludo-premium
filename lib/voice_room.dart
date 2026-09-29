@@ -816,14 +816,14 @@ int _joinRetry = 0;
 Future<void> _joinAgora() async {
   final eng = globalVoiceEngine;
   if (eng == null || !mounted || joined) return;
-  final channel = "voiceroom_${widget.room.id}";
+  final channel = "voiceroom_${widget.roomNo}";
   try {
     if (mounted) setState(() => status = "Connecting...");
     final token = await fetchVoiceToken(channel, myUid);
     if (token.isEmpty) throw Exception("token nahi mila");
     await eng.setDefaultAudioRouteToSpeakerphone(true);
     await eng.enableAudio();
-    await eng.enableAudioVolumeIndication(intervalMs: 200, smooth: 3, reportVad: true);
+    await eng.enableAudioVolumeIndication(interval: 200, smooth: 3, reportVad: true);
     eng.registerEventHandler(RtcEngineEventHandler(
       onJoinChannelSuccess: (c, e) {
         _joinRetry = 0;
@@ -834,7 +834,7 @@ Future<void> _joinAgora() async {
       onAudioVolumeIndication: (c, speakers, total, _) {
         final set = <int>{};
         for (final sp in speakers) {
-          if (sp.volume > 5) set.add(sp.uid == 0 ? myUid : sp.uid);
+          if ((sp.volume ?? 0) > 5) set.add(sp.uid == 0 ? myUid : (sp.uid ?? myUid));
         }
         if (mounted) setState(() => speaking = set);
       },
