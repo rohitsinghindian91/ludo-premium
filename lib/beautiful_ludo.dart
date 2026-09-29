@@ -34,7 +34,7 @@ Future<String> getLockedName() async {
   return loginName;
 }
 
-const String agoraAppId = "023565215b9e4722b8fff10c0340c699";
+const String agoraAppId = "abec454452ca4fbba9bbd6296dbf4509";
 const String agoraTokenServer = "https://patient-wave-cb8c.rohitsinghindian91.workers.dev";
 
 // VOICE FIX: Worker plain text de ya JSON {"token":"..."} de ya quotes me de - teeno format chalega
