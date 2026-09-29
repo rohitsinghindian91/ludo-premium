@@ -942,7 +942,7 @@ Future<void> _autoRetry() async {
     if (mySeat >= 0 && seats[mySeat].micLocked) { _toast("Mic lock hai"); return; }
     setState(() { micOn =!micOn; globalMicOn = micOn; });
     if (mySeat >= 0) {
-      await globalVoiceEngine?.muteLocalAudioStream(!micOn);
+      await _applyPublish();
       try { await roomRef.child("seats/$mySeat").update({"muted":!micOn}); } catch (_) {}
     }
   }
@@ -1738,7 +1738,7 @@ Future<void> _pickAndSendImage() async {
           borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20))),
       child: Column(children: [
         InkWell(
-          onTap: () { if (!joined) _joinAgora(); },
+          onTap: () { if (!joined) { _joinRetry = 0; _joinAgora(); } },
           child: Text(status + (joined? "" : " (tap: retry)"),
               style: const TextStyle(color: Colors.white38, fontSize: 10)),
         ),
