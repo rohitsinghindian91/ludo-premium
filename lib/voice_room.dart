@@ -810,110 +810,95 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       if (n!= roomNotice) setState(() => roomNotice = n);
     });
   }
-  // ================= DIAGNOSTIC JOIN =================
-  // Har step par screen par status dikhega - exact fail line pata chalegi
-  Future<void> _joinAgora() async {
-    String cur = "";
-    Future<void> step(String s) async {
-      cur = s;
-      if (!mounted) return;
-      setState(() => status = s);
-    }
+  // ================= FINAL JOIN (clean) =================
+int _joinRetry = 0;
 
-    await step("D0: Mic permission...");
-    await [Permission.microphone].request();
-    if (!mounted) return;
-
-    // Keep se wapas aaye ho to engine pehle se hai
-    if (globalVoiceEngine != null && globalVoiceRoom == widget.roomNo) {
-      await step("D0b: purana engine reuse");
-      setState(() { joined = true; status = "Connected"; });
-      _applyPublish();
-      return;
-    }
-    try { await globalVoiceEngine?.leaveChannel(); } catch (_) {}
-    try { await globalVoiceEngine?.release(); } catch (_) {}
-    globalVoiceEngine = null;
-
-    await step("D1: Token la raha hun...");
-    final token = await fetchVoiceToken("voiceroom_${widget.roomNo}", myUid);
-    if (!mounted) return;
-    if (token.isEmpty) {
-      setState(() => status = "D1 FAIL: Token khali [$tokenDebug]");
-      return;
-    }
-    await step("D1 OK: token mil gaya (Worker sahi hai)");
-
-    try {
-      await step("D2: engine bana raha hun...");
-      final eng = createAgoraRtcEngine();
-      globalVoiceEngine = eng;
-      globalVoiceRoom = widget.roomNo;
-      globalVoiceUid = myUid;
-      await step("D2 OK");
-
-      await step("D3: initialize (App ID check)...");
-      await eng.initialize(RtcEngineContext(appId: voiceRoomAppId));
-      await step("D3 OK: engine initialized!");
-
-      await step("D4: enableAudio...");
-      await eng.enableAudio();
-      await step("D4 OK");
-
-      await step("D5: speakerphone...");
-      await eng.setDefaultAudioRouteToSpeakerphone(true);
-      await step("D5 OK");
-
-      await step("D6: volume indication...");
-      await eng.enableAudioVolumeIndication(interval: 200, smooth: 3, reportVad: true);
-      await step("D6 OK");
-
-      await step("D7: event handler...");
-      eng.registerEventHandler(RtcEngineEventHandler(
-        onJoinChannelSuccess: (c, e) { if (mounted) setState(() { joined = true; status = "Connected"; }); _applyPublish(); },
-        onAudioVolumeIndication: (c, speakers, t, vad) {
-          if (!mounted) return;
-          final s = <int>{};
-          for (var sp in speakers) { if ((sp.volume ?? 0) > 5) s.add(sp.uid == 0 ? myUid : sp.uid!); }
-          if (s.length != speaking.length || !s.containsAll(speaking)) {
-            setState(() => speaking = s);
-          }
-        },
-        onError: (err, msg) { if (mounted) setState(() => status = "Agora onError: $err $msg"); },
-        onTokenPrivilegeWillExpire: (c, tok) async {
-          final nt = await fetchVoiceToken("voiceroom_${widget.roomNo}", myUid);
-          if (nt.isNotEmpty) { try { await globalVoiceEngine?.renewToken(nt); } catch (_) {} }
-        },
-      ));
-      await step("D7 OK");
-
-      await step("D8: joinChannel...");
-      final opts = ChannelMediaOptions(
+Future<void> _joinAgora() async {
+  final eng = globalVoiceEngine;
+  if (eng == null || !mounted || joined) return;
+  final channel = "voiceroom_${widget.room.id}";
+  try {
+    if (mounted) setState(() => status = "Connecting...");
+    // FIX: token aur join me SAME uid (pehle mismatch tha -> invalid token)
+    final tok = await http
+        .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
+        .timeout(const Duration(seconds: 10));
+    final token = tok.body.trim();
+    if (token.isEmpty) throw Exception("token khaali aaya");
+    await eng.setDefaultAudioRouteToSpeakerphone(true);
+    await eng.enableAudio();
+    await eng.enableAudioVolumeIndication(intervalMs: 200, smooth: 3, reportVad: true);
+    eng.registerEventHandler(RtcEngineEventHandler(
+      onJoinChannelSuccess: (c, e) {
+        _joinRetry = 0;
+        try { eng.setEnableSpeakerphone(true); } catch (_) {}
+        if (mounted) setState(() { joined = true; status = "Connected"; });
+        _applyPublish();
+      },
+      onAudioVolumeIndication: (c, speakers, total) {
+        final set = <int>{};
+        for (final sp in speakers) {
+          if (sp.volume > 5) set.add(sp.uid == 0 ? uid : sp.uid);
+        }
+        if (mounted) setState(() => speaking = set);
+      },
+      onError: (code, msg) {
+        if (joined) return;
+        if (mounted) setState(() => status = "Dobara connect ho raha...");
+        _autoRetry();
+      },
+      onTokenPrivilegeWillExpire: (c) async {
+        try {
+          final t2 = await http
+              .get(Uri.parse("$voiceRoomTokenServer/?channel=$channel&uid=$uid"))
+              .timeout(const Duration(seconds: 10));
+          final nt = t2.body.trim();
+          if (nt.isNotEmpty) await eng.renewToken(nt);
+        } catch (_) {}
+      },
+    ));
+    await eng.joinChannel(
+      token: token,
+      channelId: channel,
+      uid: uid, // FIX: pehle yahan 0 tha!
+      options: const ChannelMediaOptions(
+        clientRoleType: ClientRoleType.clientRoleBroadcaster,
         channelProfile: ChannelProfileType.channelProfileCommunication,
         autoSubscribeAudio: true,
-        publishMicrophoneTrack: false,
-      );
-      await eng.joinChannel(token: token, channelId: "voiceroom_${widget.roomNo}", uid: myUid, options: opts);
-      await step("D8 OK: join ho gaya, success ka wait...");
-    } on AgoraRtcException catch (e) {
-      if (mounted) setState(() => status = "FAIL after '$cur' -> code=${e.code}");
-      try { await globalVoiceEngine?.release(); } catch (_) {}
-      globalVoiceEngine = null;
-      globalVoiceRoom = null;
-    } catch (e) {
-      if (mounted) setState(() => status = "FAIL after '$cur' -> $e");
-    }
+        publishMicrophoneTrack: false, // mic button se on hoga
+      ),
+    );
+  } catch (e) {
+    _autoRetry();
   }
+}
+
+// Apne aap retry (2 sec gap, 5 baar) — tap karne ki zaroorat nahi!
+Future<void> _autoRetry() async {
+  if (!mounted || joined) return;
+  _joinRetry++;
+  if (_joinRetry > 5) {
+    if (mounted) setState(() => status = "Connect nahi hua (tap: retry)");
+    return;
+  }
+  await Future.delayed(const Duration(seconds: 2));
+  if (!mounted || joined) return;
+  try { await globalVoiceEngine?.leaveChannel(); } catch (_) {}
+  _joinAgora();
+}
 
   Future<void> _applyPublish() async {
-    final eng = globalVoiceEngine;
-    if (eng == null) return;
-    if (mySeat >= 0) {
-      await eng.updateChannelMediaOptions(const ChannelMediaOptions(publishMicrophoneTrack: true));
-      await eng.muteLocalAudioStream(!micOn);
-    } else {
-      await eng.updateChannelMediaOptions(const ChannelMediaOptions(publishMicrophoneTrack: false));
-    }
+  final eng = globalVoiceEngine;
+  if (eng == null || !joined) return;
+  // FIX: sirf mute/unmute kaafi nahi — mic ka track publish bhi toggle karna padta hai
+  try {
+    await eng.updateChannelMediaOptions(ChannelMediaOptions(
+      publishMicrophoneTrack: micOn,
+    ));
+  } catch (_) {}
+  try {
+    await eng.muteLocalAudioStream(!micOn);
+  } catch (_) {}
   }
 
   Future<void> _sitOn(int i, {bool adminBypass = false}) async {
