@@ -36,14 +36,14 @@ class Splash extends StatefulWidget {
 }
 
 class _SplashState extends State<Splash> {
-  @override
-  void initState() { super.initState(); checkUser(); }
+  @override void initState() { super.initState(); checkUser(); }
   Future<void> checkUser() async {
     var m = prefs.getString("mobile");
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     if (m!= null && m.isNotEmpty) {
-      bool banned = await isUserBanned(m); // BAN CHECK
+      // FIX: device ban bhi check karo (admin ne "Forever + Device" kiya ho to)
+      bool banned = await isUserBanned(m) || await isDeviceBanned();
       if (banned) {
         if (!mounted) return;
         _showBanDialogSplash();
@@ -155,13 +155,25 @@ class _OtpPageState extends State<OtpPage> {
       return;
     }
     setState(() => load = true);
+    // FIX: DEVICE ID - device ban ke liye permanent device id banao/sambhalo
+    String? devId = prefs.getString("device_id");
+    if (devId == null || devId.isEmpty) {
+      devId = "dev_${DateTime.now().millisecondsSinceEpoch}_${widget.mobile.substring(6)}";
+      await prefs.setString("device_id", devId);
+    }
     var doc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
     if (!doc.exists) {
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({
         "name": widget.name, "mobile": widget.mobile, "password": widget.password,
         "referralCode": widget.mobile, "referredBy": widget.referral, "wallet": 0, "upi": "",
+        "deviceId": devId,
         "isPremium": false, "premiumExpiry": null, "premiumDistributed": false, "createdAt": FieldValue.serverTimestamp(),
       });
+    } else {
+      // purane user ke paas deviceId nahi hoga to ab save kar do
+      if ((doc.data()?["deviceId"]?? "").toString().isEmpty) {
+        await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({"deviceId": devId}, SetOptions(merge: true));
+      }
     }
     await prefs.setString("mobile", widget.mobile);
     await prefs.setString("name", widget.name);
@@ -172,7 +184,8 @@ class _OtpPageState extends State<OtpPage> {
 
     setState(() => load = false);
     if (!mounted) return;
-    bool banned = await isUserBanned(widget.mobile); // BAN CHECK
+    // FIX: device ban bhi check karo
+    bool banned = await isUserBanned(widget.mobile) || await isDeviceBanned();
     if (banned) {
       showDialog(context: context, barrierDismissible: false,
         builder: (_) => AlertDialog(
@@ -217,6 +230,16 @@ Future<bool> isUserBanned(String mobile) async {
   } catch (e) { return false; }
 }
 
+// FIX: DEVICE BAN CHECK - admin ne "Forever + Device" kiya ho to ye device block rahega
+Future<bool> isDeviceBanned() async {
+  try {
+    String? devId = prefs.getString("device_id");
+    if (devId == null || devId.isEmpty) return false;
+    var q = await FirebaseFirestore.instance.collection("banned_devices").where("deviceId", isEqualTo: devId).limit(1).get();
+    return q.docs.isNotEmpty;
+  } catch (e) { return false; }
+}
+
 class HomeScreen extends StatefulWidget {
   final String mobile;
   const HomeScreen({super.key, required this.mobile});
@@ -225,7 +248,15 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int wallet = 0; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = "";
-  @override void initState() { super.initState(); listenUser(); }
+  @override void initState() { super.initState(); checkDeviceBan(); listenUser(); }
+  // FIX: device ban ho to turant bahar nikalo
+  Future<void> checkDeviceBan() async {
+    if (await isDeviceBanned()) {
+      await prefs.clear();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false);
+    }
+  }
   void listenUser() {
     FirebaseFirestore.instance.collection("users").doc(widget.mobile).snapshots().listen((d) async {
       if (!d.exists) return; var data = d.data()!; if (!mounted) return;
@@ -249,16 +280,27 @@ class _HomeScreenState extends State<HomeScreen> {
   }
   Future<void> distributePremium() async {
     try {
+      // FIX: amount ab hardcoded nahi - admin panel ke Plan Chart (config/plan) se aayega
+      int l1Amt = 100, l2Amt = 50, l3Amt = 25;
+      try {
+        var planDoc = await FirebaseFirestore.instance.collection("config").doc("plan").get();
+        if (planDoc.exists) {
+          var pd = planDoc.data()!;
+          l1Amt = (pd["l1"] as num?)?.toInt()?? 100;
+          l2Amt = (pd["l2"] as num?)?.toInt()?? 50;
+          l3Amt = (pd["l3"] as num?)?.toInt()?? 25;
+        }
+      } catch (_) {}
       var me = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get(); if (!me.exists) return; var data = me.data()!; if (data["premiumDistributed"] == true) return; String l1 = data["referredBy"]?? "";
       if (l1.isNotEmpty) {
         var l1Doc = await FirebaseFirestore.instance.collection("users").doc(l1).get(); if (l1Doc.exists) {
-          await FirebaseFirestore.instance.collection("users").doc(l1).update({"wallet": FieldValue.increment(100)});
-          await FirebaseFirestore.instance.collection("earnings").add({"to": l1, "from": widget.mobile, "amount": 100, "type": "L1 Premium", "time": FieldValue.serverTimestamp()});
+          await FirebaseFirestore.instance.collection("users").doc(l1).update({"wallet": FieldValue.increment(l1Amt)});
+          await FirebaseFirestore.instance.collection("earnings").add({"to": l1, "from": widget.mobile, "amount": l1Amt, "type": "L1 Premium", "time": FieldValue.serverTimestamp()});
           String l2 = l1Doc.data()?["referredBy"]?? ""; if (l2.isNotEmpty) {
             var l2Doc = await FirebaseFirestore.instance.collection("users").doc(l2).get(); if (l2Doc.exists) {
-              await FirebaseFirestore.instance.collection("users").doc(l2).update({"wallet": FieldValue.increment(50)});
-              await FirebaseFirestore.instance.collection("earnings").add({"to": l2, "from": widget.mobile, "amount": 50, "type": "L2 Premium", "time": FieldValue.serverTimestamp()});
-              String l3 = l2Doc.data()?["referredBy"]?? ""; if (l3.isNotEmpty) { var l3Doc = await FirebaseFirestore.instance.collection("users").doc(l3).get(); if (l3Doc.exists) { await FirebaseFirestore.instance.collection("users").doc(l3).update({"wallet": FieldValue.increment(25)}); await FirebaseFirestore.instance.collection("earnings").add({"to": l3, "from": widget.mobile, "amount": 25, "type": "L3 Premium", "time": FieldValue.serverTimestamp()}); } }
+              await FirebaseFirestore.instance.collection("users").doc(l2).update({"wallet": FieldValue.increment(l2Amt)});
+              await FirebaseFirestore.instance.collection("earnings").add({"to": l2, "from": widget.mobile, "amount": l2Amt, "type": "L2 Premium", "time": FieldValue.serverTimestamp()});
+              String l3 = l2Doc.data()?["referredBy"]?? ""; if (l3.isNotEmpty) { var l3Doc = await FirebaseFirestore.instance.collection("users").doc(l3).get(); if (l3Doc.exists) { await FirebaseFirestore.instance.collection("users").doc(l3).update({"wallet": FieldValue.increment(l3Amt)}); await FirebaseFirestore.instance.collection("earnings").add({"to": l3, "from": widget.mobile, "amount": l3Amt, "type": "L3 Premium", "time": FieldValue.serverTimestamp()}); } }
             }
           }
         }
@@ -267,7 +309,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) { debugPrint("dist error $e"); }
   }
   void openPremium() { Navigator.push(context, MaterialPageRoute(builder: (_) => PremiumPayScreen(mobile: widget.mobile, onPaid: (){}))); }
-  void doLogout() async { await prefs.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r)=>false); }
+  void doLogout() async { await prefs.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false); }
   void openHelp() async { Uri url = Uri.parse("https://wa.me/447397293594?text=Help ${widget.mobile}"); await launchUrl(url, mode: LaunchMode.externalApplication); }
   @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
@@ -289,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> {
       Row(children: [Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => WalletScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00BCD4)), child: const Text("UPI SET KARE", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)))), const SizedBox(width: 8), Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => MyTeamScreen(mobile: widget.mobile))); }, child: const Text("MY TEAM")))]),
       const SizedBox(height: 12),
       Row(children: [Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => PlanScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("PLAN CHART", style: TextStyle(color: Colors.black)))), const SizedBox(width: 8), Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => FriendsScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.blue), child: const Text("FRIENDS", style: TextStyle(color: Colors.white))))]),
-            const SizedBox(height: 12),
+      const SizedBox(height: 12),
       SizedBox(
         width: double.infinity,
         height: 50,
@@ -316,10 +358,18 @@ class _WalletScreenState extends State<WalletScreen> {
   Future<void> loadWallet() async { var d = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get(); if (d.exists) { setState(() { wallet = d.data()!["wallet"]?? 0; upiCtrl.text = d.data()!["upi"]?? ""; existingUpi = d.data()!["upi"]?? ""; myPassword = d.data()!["password"]?? ""; loading = false; }); } }
   Future<void> saveUpi() async {
     String newUpi = upiCtrl.text.trim(); if (newUpi.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI dalo"))); return; }
-    if (existingUpi.isEmpty) { await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi}); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Set Ho Gaya"))); Navigator.pop(context); return; }
+    if (existingUpi.isEmpty) {
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi});
+      // FIX: UPI history likho taaki admin panel me dikhe
+      await FirebaseFirestore.instance.collection("upi_history").add({"mobile": widget.mobile, "oldUpi": "", "newUpi": newUpi, "by": "user", "time": FieldValue.serverTimestamp()});
+      if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Set Ho Gaya"))); Navigator.pop(context); return;
+    }
     TextEditingController passCtrl = TextEditingController(); bool? ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(backgroundColor: const Color(0xFF1E1E2E), title: const Text("Password Daalo", style: TextStyle(color: Colors.white, fontSize: 13)), content: TextField(controller: passCtrl, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(filled: true, fillColor: const Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")), ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("Verify"))]));
     if (ok!= true) return; if (passCtrl.text.trim()!= myPassword) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password galat"))); return; }
-    await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi}); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Change Ho Gaya"))); Navigator.pop(context);
+    await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi});
+    // FIX: UPI history likho taaki admin panel me dikhe
+    await FirebaseFirestore.instance.collection("upi_history").add({"mobile": widget.mobile, "oldUpi": existingUpi, "newUpi": newUpi, "by": "user", "time": FieldValue.serverTimestamp()});
+    if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Change Ho Gaya"))); Navigator.pop(context);
   }
   @override Widget build(BuildContext context) { return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Wallet"), backgroundColor: Colors.amber), body: loading? const Center(child: CircularProgressIndicator()) : Padding(padding: const EdgeInsets.all(20), child: Column(children: [Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontSize: 36, fontWeight: FontWeight.bold)), const SizedBox(height: 20), TextField(controller: upiCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: "UPI ID", filled: true, fillColor: const Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))), const SizedBox(height: 20), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: saveUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SAVE")))]))); }
 }
@@ -350,8 +400,8 @@ class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderSt
     if (list.isEmpty) { return Center(child: Text(emptyMsg, style: const TextStyle(color: Colors.white54))); }
     return ListView.builder(itemCount: list.length, itemBuilder: (ctx, i) {
       var data = list[i].data() as Map<String, dynamic>; String name = data["name"]?? "User"; String mob = data["mobile"]?? ""; String last4 = mob.length >= 4? mob.substring(mob.length - 4) : mob; String prem = data["isPremium"] == true? "PREMIUM" : "FREE";
-      return Container(margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ListTile(leading: CircleAvatar(backgroundColor: Colors.amber, child: Text(name.isNotEmpty? name[0].toUpperCase() : "U", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold))), title: Text("$name (${"*"*6}$last4)", style: const TextStyle(color: Colors.white, fontSize: 13)), subtitle: Text(prem, style: TextStyle(color: prem=="PREMIUM"? Colors.greenAccent : Colors.white54, fontSize: 10))));
+      return Container(margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ListTile(leading: CircleAvatar(backgroundColor: Colors.amber, child: Text(name.isNotEmpty? name[0].toUpperCase() : "U", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold))), title: Text("$name (${"*" * 6}$last4)", style: const TextStyle(color: Colors.white, fontSize: 13)), subtitle: Text(prem, style: TextStyle(color: prem == "PREMIUM"? Colors.greenAccent : Colors.white54, fontSize: 10))));
     });
   }
-  @override Widget build(BuildContext context) { return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("My Team"), backgroundColor: Colors.amber, bottom: TabBar(controller: tabCtrl, tabs: const [Tab(text: "L1"), Tab(text: "L2"), Tab(text: "L3"), Tab(text: "Income")])), body: loading? const Center(child: CircularProgressIndicator()) : TabBarView(controller: tabCtrl, children: [buildList(l1, "L1 empty"), buildList(l2, "L2 empty"), buildList(l3, "L3 empty"), ListView.builder(itemCount: earn.length, itemBuilder: (ctx,i){ var d = earn[i].data() as Map; return ListTile(title: Text("Rs ${d["amount"]} - ${d["type"]}", style: const TextStyle(color: Colors.white)), subtitle: Text("${d["from"]}", style: const TextStyle(color: Colors.white54))); })])); }
+  @override Widget build(BuildContext context) { return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("My Team"), backgroundColor: Colors.amber, bottom: TabBar(controller: tabCtrl, tabs: const [Tab(text: "L1"), Tab(text: "L2"), Tab(text: "L3"), Tab(text: "Income")])), body: loading? const Center(child: CircularProgressIndicator()) : TabBarView(controller: tabCtrl, children: [buildList(l1, "L1 empty"), buildList(l2, "L2 empty"), buildList(l3, "L3 empty"), ListView.builder(itemCount: earn.length, itemBuilder: (ctx, i) { var d = earn[i].data() as Map; return ListTile(title: Text("Rs ${d["amount"]} - ${d["type"]}", style: const TextStyle(color: Colors.white)), subtitle: Text("${d["from"]}", style: const TextStyle(color: Colors.white54))); })])); }
 }
