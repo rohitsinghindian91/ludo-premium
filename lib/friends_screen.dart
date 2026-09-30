@@ -27,20 +27,30 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
 
   Future<void> loadAll() async {
     setState((){ loading = true; });
-    var me = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
-    myName = me.data()?["name"]?? "You";
-    myIdNo = me.data()?["voiceRoomNo"]?.toString()?? "";
-    var p = await FirebaseFirestore.instance.collection("friend_requests").where("to", isEqualTo: widget.mobile).where("status", isEqualTo: "pending").get();
-    var f = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("friends").get();
-    List<Map<String, dynamic>> temp = [];
-    for(var doc in f.docs){
-      String fm = doc.data()["mobile"];
-      var userDoc = await FirebaseFirestore.instance.collection("users").doc(fm).get();
-      String fname = userDoc.data()?["name"]?? "Friend";
-      String fid = userDoc.data()?["voiceRoomNo"]?.toString()?? "";
-      temp.add({"mobile": fm, "name": fname, "idNo": fid});
+    try {
+      var me = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
+      myName = me.data()?["name"]?? "You";
+      myIdNo = me.data()?["voiceRoomNo"]?.toString()?? "";
+      // FIX: composite index se bachne ke liye sirf "to" par query, status ka filter code me
+      var p = await FirebaseFirestore.instance.collection("friend_requests").where("to", isEqualTo: widget.mobile).get();
+      var pendingDocs = p.docs.where((d) => (d.data() as Map<String, dynamic>)["status"] == "pending").toList();
+      var f = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("friends").get();
+      List<Map<String, dynamic>> temp = [];
+      for(var doc in f.docs){
+        var fdata = doc.data() as Map<String, dynamic>;
+        String fm = fdata["mobile"]?.toString()?? doc.id;
+        var userDoc = await FirebaseFirestore.instance.collection("users").doc(fm).get();
+        String fname = userDoc.data()?["name"]?? "Friend";
+        String fid = userDoc.data()?["voiceRoomNo"]?.toString()?? "";
+        temp.add({"mobile": fm, "name": fname, "idNo": fid});
+      }
+      if(!mounted) return;
+      setState((){ pending = pendingDocs; friendsWithName = temp; loading = false; });
+    } catch (e) {
+      if(!mounted) return;
+      setState(()=> loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Load fail: $e")));
     }
-    setState((){ pending = p.docs; friendsWithName = temp; loading = false; });
   }
 
   // ID NUMBER se search - 7 digit ka permanent ID (voice room number)
@@ -49,34 +59,55 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     String s = searchCtrl.text.trim();
     if(s.length!=7) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("7 digit ka ID number dalo"))); return; }
     if(s==myIdNo) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ye tumhari apni ID hai"))); return; }
-    var q = await FirebaseFirestore.instance.collection("users").where("voiceRoomNo", isEqualTo: s).limit(1).get();
-    if(q.docs.isEmpty){ setState(()=> searchResult=[]); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Is ID ka koi user nahi mila"))); return; }
-    var doc = q.docs.first;
-    if(doc.id==widget.mobile){ setState(()=> searchResult=[]); return; }
-    setState(()=> searchResult=[doc]);
+    try {
+      var q = await FirebaseFirestore.instance.collection("users").where("voiceRoomNo", isEqualTo: s).limit(1).get();
+      if(q.docs.isEmpty){ setState(()=> searchResult=[]); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Is ID ka koi user nahi mila"))); return; }
+      var doc = q.docs.first;
+      if(doc.id==widget.mobile){ setState(()=> searchResult=[]); return; }
+      setState(()=> searchResult=[doc]);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Search fail: $e")));
+    }
   }
 
   Future<void> sendRequest(String toMobile) async {
-    var q = await FirebaseFirestore.instance.collection("friend_requests").where("from", isEqualTo: widget.mobile).where("to", isEqualTo: toMobile).where("status", isEqualTo: "pending").get();
-    if(q.docs.isNotEmpty){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Pehle se bhej rakhi hai"))); return; }
-    var fr = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("friends").doc(toMobile).get();
-    if(fr.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Pehle se friend hai"))); return; }
-    await FirebaseFirestore.instance.collection("friend_requests").add({"from": widget.mobile, "to": toMobile, "fromName": myName, "status": "pending", "time": FieldValue.serverTimestamp()});
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request bhej di")));
+    try {
+      // FIX: composite index se bachne ke liye 2 filter hataye, pending check code me
+      var q = await FirebaseFirestore.instance.collection("friend_requests").where("from", isEqualTo: widget.mobile).get();
+      bool alreadySent = q.docs.any((d){
+        var m = d.data() as Map<String, dynamic>;
+        return m["to"] == toMobile && m["status"] == "pending";
+      });
+      if(alreadySent){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Pehle se bhej rakhi hai"))); return; }
+      var fr = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("friends").doc(toMobile).get();
+      if(fr.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Pehle se friend hai"))); return; }
+      await FirebaseFirestore.instance.collection("friend_requests").add({"from": widget.mobile, "to": toMobile, "fromName": myName, "status": "pending", "time": FieldValue.serverTimestamp()});
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request bhej di")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fail: $e")));
+    }
   }
 
   Future<void> acceptRequest(DocumentSnapshot req) async {
-    var data = req.data() as Map<String,dynamic>;
-    String from = data["from"]; String to = data["to"];
-    await FirebaseFirestore.instance.collection("users").doc(to).collection("friends").doc(from).set({"mobile": from, "addedAt": FieldValue.serverTimestamp()});
-    await FirebaseFirestore.instance.collection("users").doc(from).collection("friends").doc(to).set({"mobile": to, "addedAt": FieldValue.serverTimestamp()});
-    await FirebaseFirestore.instance.collection("friend_requests").doc(req.id).update({"status": "accepted"});
-    loadAll();
+    try {
+      var data = req.data() as Map<String,dynamic>;
+      String from = data["from"]; String to = data["to"];
+      await FirebaseFirestore.instance.collection("users").doc(to).collection("friends").doc(from).set({"mobile": from, "addedAt": FieldValue.serverTimestamp()});
+      await FirebaseFirestore.instance.collection("users").doc(from).collection("friends").doc(to).set({"mobile": to, "addedAt": FieldValue.serverTimestamp()});
+      await FirebaseFirestore.instance.collection("friend_requests").doc(req.id).update({"status": "accepted"});
+      loadAll();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fail: $e")));
+    }
   }
 
   Future<void> rejectRequest(DocumentSnapshot req) async {
-    await FirebaseFirestore.instance.collection("friend_requests").doc(req.id).update({"status": "rejected"});
-    loadAll();
+    try {
+      await FirebaseFirestore.instance.collection("friend_requests").doc(req.id).update({"status": "rejected"});
+      loadAll();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fail: $e")));
+    }
   }
 
   @override Widget build(BuildContext context){
@@ -123,8 +154,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   // Cloudinary par photo upload
   Future<String> _uploadToCloudinary(Uint8List bytes) async {
     final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
-    ..fields['upload_preset'] = 'ludo_chat'
-    ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chat.jpg'));
+  ..fields['upload_preset'] = 'ludo_chat'
+  ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chat.jpg'));
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
     if (streamed.statusCode!= 200) throw Exception("Cloudinary: ${res.body}");
@@ -133,11 +164,13 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
 
   Future<void> sendMsg() async {
     if(msgCtrl.text.trim().isEmpty) return;
-    String text = msgCtrl.text.trim(); msgCtrl.clear();
-    await msgCol.add({
-      "from": widget.myMobile, "fromName": widget.myName, "to": widget.friendMobile,
-      "type": "text", "msg": text, "viewedBy": {}, "time": FieldValue.serverTimestamp(),
-    });
+    try {
+      String text = msgCtrl.text.trim(); msgCtrl.clear();
+      await msgCol.add({
+        "from": widget.myMobile, "fromName": widget.myName, "to": widget.friendMobile,
+        "type": "text", "msg": text, "viewedBy": {}, "time": FieldValue.serverTimestamp(),
+      });
+    } catch (e) { _toast("Bhej nahi paya: $e"); }
   }
 
   // Photo bhejo - view-once (3 sec) ya normal
