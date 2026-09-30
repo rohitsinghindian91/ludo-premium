@@ -34,6 +34,12 @@ Future<String> getLockedName() async {
   return loginName;
 }
 
+// TAG DISPLAY HELPER - naam ke saath tag dikhao (jaise "Rohit [VIP]")
+String nameWithTag(String name, String tag) {
+  if (tag.isEmpty) return name;
+  return "$name [$tag]";
+}
+
 const String agoraAppId = "abec454452ca4fbba9bbd6296dbf4509";
 const String agoraTokenServer = "https://patient-wave-cb8c.rohitsinghindian91.workers.dev";
 
@@ -64,8 +70,8 @@ Future<String> fetchAgoraToken(String channel, int uid) async {
   for (int a = 0; a < 3; a++) {
     try {
       final res = await http
-      .get(Uri.parse("$agoraTokenServer/?channel=$channel&uid=$uid"))
-      .timeout(const Duration(seconds: 10));
+     .get(Uri.parse("$agoraTokenServer/?channel=$channel&uid=$uid"))
+     .timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
         final t = cleanAgoraToken(res.body);
         if (t.isNotEmpty) return t;
@@ -266,11 +272,22 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   late AnimationController _diceController; final safe = [0, 10, 20, 30]; final startPos = [0, 20]; final homeEntry = [39, 19];
   DatabaseReference? roomRef; DatabaseReference? chatRef;
   String? myMobile; String myName = "You"; String p0Name = "Player0"; String p1Name = "Player1";
+  // TAG + POWERS (admin panel se set hoga)
+  String myTag = ""; List<String> myPowers = [];
   final List<String> botNames = ["Jyoti","Simran","Kajal","Pinki","Sonia","Ritika","Anjali","Sweety","Pooja","Deepika"]; String selectedBotName = "Jyoti";
   @override void initState() { selectedBotName = botNames[_rng.nextInt(botNames.length)]; _diceController = AnimationController(vsync: this, duration: Duration(milliseconds: 800)); initAgoraAndRoom(); if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 800), () => botTurn()); }
 
   Future<void> initAgoraAndRoom() async {
     await ensurePrefs(); myMobile = ludoPrefs.getString("mobile"); myName = await getLockedName(); // LOCKED permanent naam
+    // TAG + POWERS load - admin panel se set hoga
+    try {
+      var udoc = await FirebaseFirestore.instance.collection("users").doc(myMobile).get();
+      if (udoc.exists) {
+        myTag = udoc.data()?["tag"]?.toString()?? "";
+        myPowers = List<String>.from(udoc.data()?["powers"]?? []);
+        if (mounted) setState(() {});
+      }
+    } catch (_) {}
     if(widget.mode == GameMode.online){
       initVoice(); // BINA AWAIT - voice background me judegi, fail/hang ho to bhi game nahi rukega
       getRtdb().goOnline();
@@ -395,7 +412,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
       String freshToken = "";
       try {
         freshToken = await fetchAgoraToken(widget.roomId, widget.myPlayer == 0? 1 : 2)
-      .timeout(const Duration(seconds: 15));
+     .timeout(const Duration(seconds: 15));
         vsay(freshToken.isEmpty? "Voice: KHALI token mila!" : "Voice: token mil gaya (${freshToken.length} chars)");
       } catch (e) { vsay("Voice: token FAILED - $e"); }
       if(freshToken.isEmpty){ vsay("Voice RUKA: token nahi mila - Worker check karo"); return; } // khali token pe aage badho hi mat
@@ -426,7 +443,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   void _showWinnerDialog(){
     if(_winnerDialogShown ||!mounted) return;
     _winnerDialogShown = true;
-    String winnerName = widget.mode == GameMode.online? (turn == 0? p0Name : p1Name) : (turn == 0? myName : p1Name);
+    String winnerName = widget.mode == GameMode.online? (turn == 0? p0Name : p1Name) : (turn == 0? nameWithTag(myName, myTag) : p1Name);
     bool iWon;
     if(widget.mode == GameMode.offline){ iWon = true; }
     else if(widget.mode == GameMode.bot){ iWon = turn == 0; }
@@ -491,10 +508,10 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   Widget goti(int p, int t, double s) { int v = pos[p][t]; double boxSize = s * 0.14, pad = s * 0.02; Offset o; if (v == -1) { bool myHome = p == widget.myPlayer; double bx = myHome? s - 10 - boxSize + pad : 10 + pad, by = myHome? s - 10 - boxSize + pad : 10 + pad; o = Offset(bx + (t % 2) * (boxSize / 2.2), by + (t ~/ 2) * (boxSize / 2.2)); } else if (v == 45) { o = Offset(s / 2 + (t % 2 == 0? -8 : 8), s / 2 + (t < 2? -8 : 8)); } else if (v >= 40) { o = getHomePathPos(p, v - 40, s); } else { double r = s * 0.25, ang = (v / 40) * 2 * pi - pi / 2; o = Offset(s / 2 + r * cos(ang), s / 2 + r * sin(ang)); } bool act = p == turn && canMove && isValidMove(p, t, dice) &&!gameOver && isMyTurn; return Positioned(left: o.dx - 11, top: o.dy - 11, child: GestureDetector(onTap: act? () => moveGoti(t) : null, child: Container(width: act? 28 : 20, height: act? 28 : 20, decoration: BoxDecoration(color: p == 0? Colors.green : Colors.red, shape: BoxShape.circle, border: Border.all(color: act? Colors.yellow : Colors.white, width: act? 2.5 : 1.5))))); }
   @override Widget build(BuildContext context) {
     double s = (MediaQuery.of(context).size.width < 400? MediaQuery.of(context).size.width : 400) - 20; double box = s * 0.14;
-    String turnName = widget.mode == GameMode.online? (turn == 0? p0Name : p1Name) : (turn == 0? myName : p1Name);
+    String turnName = widget.mode == GameMode.online? (turn == 0? p0Name : p1Name) : (turn == 0? nameWithTag(myName, myTag) : p1Name);
     // PERSPECTIVE: har user ko APNA ghar (4 goti wala box) + APNA dice hamesha neeche dikhega - teeno mode me
     int bottomPlayer = widget.myPlayer, topPlayer = 1 - widget.myPlayer;
-    return Scaffold(backgroundColor: Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text(widget.mode == GameMode.offline? "OFFLINE - $myName" : widget.mode == GameMode.bot? "$myName vs $p1Name" : "ROOM ${widget.roomId} - $p0Name vs $p1Name", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)), actions: [IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent), onPressed: () async { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$p0Name vs $p1Name"))); }), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber), onPressed: () => setState(() => showChat =!showChat))]),
+    return Scaffold(backgroundColor: Color(0xFF0A0E1A), appBar: AppBar(backgroundColor: Color(0xFF151A2B), title: Text(widget.mode == GameMode.offline? "OFFLINE - ${nameWithTag(myName, myTag)}" : widget.mode == GameMode.bot? "${nameWithTag(myName, myTag)} vs $p1Name" : "ROOM ${widget.roomId} - $p0Name vs $p1Name", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)), actions: [IconButton(icon: Icon(Icons.person_add_alt_1, color: Colors.greenAccent), onPressed: () async { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$p0Name vs $p1Name"))); }), IconButton(icon: Icon(showChat? Icons.close : Icons.chat, color: Colors.amber), onPressed: () => setState(() => showChat =!showChat))]),
       body: Column(children: [
         Container(margin: EdgeInsets.symmetric(horizontal: 8, vertical: 6), padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Turn: $turnName", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)), Text(isMyTurn? "YOUR TURN - TAP DICE" : "WAIT - $turnName", style: TextStyle(fontSize: 11, color: isMyTurn? Colors.greenAccent : Colors.white54, fontWeight: FontWeight.bold))])),
         if(widget.mode == GameMode.online) _presenceBanner(),
