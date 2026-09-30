@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html><body style="background:#000;color:#fff;font-family:sans-serif;padding:20px">
+<h3>🔍 Firebase Test</h3>
+<div id="out" style="font-size:20px">Loading...</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyAdpsbH2w8T-iMh6pfBIBmjrgybXtgS9zY",
+  authDomain: "ludo-premium-50-e427e.firebaseapp.com",
+  databaseURL: "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "ludo-premium-50-e427e",
+  storageBucket: "ludo-premium-50-e427e.firebasestorage.app",
+  messagingSenderId: "472725834005",
+  appId: "1:472725834005:web:cacf6803be22d6708e411c"
+};
+try {
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const snap = await getDocs(collection(db, "users"));
+  document.getElementById("out").innerHTML = "✅ Users mile: <b>" + snap.size + "</b>";
+} catch(e) {
+  document.getElementById("out").innerHTML = "❌ ERROR: " + e.message;
+}
+</script>
+</body></html>
