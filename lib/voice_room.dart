@@ -343,7 +343,6 @@ class _ChatMsg {
   _ChatMsg({this.key = "", required this.name, required this.mobile, required this.text, required this.role, required this.at,
     this.type = "text", this.imageUrl = "", this.viewOnce = false, this.viewedBy = const {}});
 }
-
 // ================= VOICE ROOM =================
 class VoiceRoomScreen extends StatefulWidget {
   final String roomNo;
@@ -372,7 +371,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   String status = "Checking...";
   int myJoinedAt = 0;
   bool _chatFirstLoad = true;
-Set<String> _oldChatKeys = {};
+  Set<String> _oldChatKeys = {};
   String roomNotice = "";
   List<_Seat> seats = List.generate(10, (i) => _Seat(index: i));
   List<_Present> present = [];
@@ -453,8 +452,14 @@ Set<String> _oldChatKeys = {};
       roomNotice = (info["notice"]?? "").toString();
     });
 
-    // FIX 8: lock room - password check (owner ko nahi)
-    if (roomLocked && myMobile!= ownerMobile &&!widget.rejoin) {
+    // FIX: powers pehle load karo - join_locked check ke liye zaroori
+    try {
+      final me = await FirebaseFirestore.instance.collection("users").doc(myMobile).get();
+      _cachedMe = me.data()?? {};
+    } catch (_) {}
+
+    // FIX 8: lock room - password check (owner ko nahi, join_locked power walo ko nahi)
+    if (roomLocked && myMobile!= ownerMobile &&!widget.rejoin &&!hasPower(_cachedMe, "join_locked")) {
       final ok = await _askRoomPassword();
       if (!ok) {
         if (mounted) Navigator.pop(context);
@@ -475,10 +480,6 @@ Set<String> _oldChatKeys = {};
       myRole = "owner";
       await roomRef.child("roles/$myMobile").set({"role": "owner", "name": myName});
     }
-        try {
-      final me = await FirebaseFirestore.instance.collection("users").doc(myMobile).get();
-      _cachedMe = me.data()?? {};
-    } catch (_) {}
     if (myGender.isEmpty) {
       try {
         final u = await FirebaseFirestore.instance.collection("users").doc(myMobile).get();
@@ -489,7 +490,7 @@ Set<String> _oldChatKeys = {};
       } catch (_) {}
     }
     try { myIdNo = await getOrCreateRoomNo(myMobile); } catch (_) {}
-        // FIX: Keep karke wapas aaye ho to apni seat mat udao
+    // FIX: Keep karke wapas aaye ho to apni seat mat udao
     if (!widget.rejoin) {
       try {
         final ss = await roomRef.child("seats").get();
@@ -630,8 +631,7 @@ Set<String> _oldChatKeys = {};
       _toast("Room unlock ho gaya 🔓");
     }
   }
-
-  void _listenAll() {
+    void _listenAll() {
     seatsSub = roomRef.child("seats").onValue.listen((e) {
       if (!mounted) return;
       final list = List.generate(10, (i) => _Seat(index: i));
@@ -755,13 +755,13 @@ Set<String> _oldChatKeys = {};
       list.sort((a, b) => a.at.compareTo(b.at));
       // FIX: fresh chat - room me abhi aaye ho to purane message mat dikhao
       if (!widget.rejoin) {
-  if (_chatFirstLoad) {
-    _oldChatKeys = list.map((m) => m.key).toSet();
-    _chatFirstLoad = false;
-  }
-  list.removeWhere((m) => _oldChatKeys.contains(m.key));
-} else {
-  _chatFirstLoad = false;
+        if (_chatFirstLoad) {
+          _oldChatKeys = list.map((m) => m.key).toSet();
+          _chatFirstLoad = false;
+        }
+        list.removeWhere((m) => _oldChatKeys.contains(m.key));
+      } else {
+        _chatFirstLoad = false;
       }
       setState(() => chats = list);
       Future.delayed(const Duration(milliseconds: 100), () {
@@ -826,27 +826,27 @@ Set<String> _oldChatKeys = {};
       final n = e.snapshot.value?.toString()?? "";
       if (n!= roomNotice) setState(() => roomNotice = n);
     });
-  }
+    }
 // ================= VOICE JOIN (final) =================
 int _joinRetry = 0;
 
 Future<void> _joinAgora() async {
   if (!mounted || joined) return;
   try {
-  var st = await Permission.microphone.status;
-  if (!st.isGranted) {
-    st = await Permission.microphone.request();
-  }
-  if (!st.isGranted) {
-    if (mounted) setState(() => status = "Mic permission do (tap: retry)");
-    return;
-  }
-} catch (_) {}
-  if (globalVoiceEngine != null && globalVoiceRoom != widget.roomNo) {
-  try { await globalVoiceEngine?.leaveChannel(); } catch (_) {}
-  try { await globalVoiceEngine?.release(); } catch (_) {}
-  globalVoiceEngine = null;
-  globalVoiceRoom = null;
+    var st = await Permission.microphone.status;
+    if (!st.isGranted) {
+      st = await Permission.microphone.request();
+    }
+    if (!st.isGranted) {
+      if (mounted) setState(() => status = "Mic permission do (tap: retry)");
+      return;
+    }
+  } catch (_) {}
+  if (globalVoiceEngine!= null && globalVoiceRoom!= widget.roomNo) {
+    try { await globalVoiceEngine?.leaveChannel(); } catch (_) {}
+    try { await globalVoiceEngine?.release(); } catch (_) {}
+    globalVoiceEngine = null;
+    globalVoiceRoom = null;
   }
   // Engine null hai (Leave ke baad) to yahin naya banao
   if (globalVoiceEngine == null) {
@@ -862,7 +862,7 @@ Future<void> _joinAgora() async {
     }
   }
   final eng = globalVoiceEngine;
-  if (eng == null || !mounted || joined) return;
+  if (eng == null ||!mounted || joined) return;
   final channel = "voiceroom_${widget.roomNo}";
   try {
     if (mounted) setState(() => status = "Connecting...");
@@ -882,13 +882,13 @@ Future<void> _joinAgora() async {
       onAudioVolumeIndication: (c, speakers, total, _) {
         final set = <int>{};
         for (final sp in speakers) {
-          if ((sp.volume ?? 0) > 5) set.add(sp.uid == 0 ? myUid : (sp.uid ?? myUid));
+          if ((sp.volume?? 0) > 5) set.add(sp.uid == 0? myUid : (sp.uid?? myUid));
         }
         if (mounted) setState(() => speaking = set);
       },
       onError: (code, msg) {
-  if (mounted) setState(() => status = "Error $code: $msg (tap: retry)");
-},
+        if (mounted) setState(() => status = "Error $code: $msg (tap: retry)");
+      },
       onTokenPrivilegeWillExpire: (c, _) async {
         try {
           final nt = await fetchVoiceToken(channel, myUid);
@@ -926,17 +926,17 @@ Future<void> _autoRetry() async {
 }
 
   Future<void> _applyPublish() async {
-  final eng = globalVoiceEngine;
-  if (eng == null ||!joined) return;
-  final shouldPublish = micOn && mySeat >= 0;
-  try {
-    await eng.updateChannelMediaOptions(ChannelMediaOptions(
-      publishMicrophoneTrack: shouldPublish,
-    ));
-  } catch (_) {}
-  try {
-    await eng.muteLocalAudioStream(!shouldPublish);
-  } catch (_) {}
+    final eng = globalVoiceEngine;
+    if (eng == null ||!joined) return;
+    final shouldPublish = micOn && mySeat >= 0;
+    try {
+      await eng.updateChannelMediaOptions(ChannelMediaOptions(
+        publishMicrophoneTrack: shouldPublish,
+      ));
+    } catch (_) {}
+    try {
+      await eng.muteLocalAudioStream(!shouldPublish);
+    } catch (_) {}
   }
 
   Future<void> _sitOn(int i, {bool adminBypass = false}) async {
@@ -985,19 +985,20 @@ Future<void> _autoRetry() async {
   }
 
   Future<void> _toggleMic() async {
-  if (mySeat >= 0 && seats[mySeat].micLocked) { _toast("Mic lock hai"); return; }
-  setState(() { micOn =!micOn; globalMicOn = micOn; });
-  await _applyPublish();
-  if (mySeat >= 0) {
-    try { await roomRef.child("seats/$mySeat").update({"muted":!micOn}); } catch (_) {}
-  }
+    if (mySeat >= 0 && seats[mySeat].micLocked) { _toast("Mic lock hai"); return; }
+    setState(() { micOn =!micOn; globalMicOn = micOn; });
+    await _applyPublish();
+    if (mySeat >= 0) {
+      try { await roomRef.child("seats/$mySeat").update({"muted":!micOn}); } catch (_) {}
+    }
   }
 
   Future<void> _toggleSpeaker() async {
     setState(() { speakerOn =!speakerOn; globalSpeakerOn = speakerOn; });
     await globalVoiceEngine?.setEnableSpeakerphone(speakerOn);
   }
-    Future<void> _setRole(String mobile, String name, String role) async {
+
+  Future<void> _setRole(String mobile, String name, String role) async {
     final locked = await getLockedName(mobile, name);
     await roomRef.child("roles/$mobile").update({"role": role, "name": locked});
     final si = seats.indexWhere((s) => s.mobile == mobile);
@@ -1016,9 +1017,9 @@ Future<void> _autoRetry() async {
     await roomRef.child("seats/$i").update({"locked": lock});
     _toast(lock? "Seat lock" : "Seat unlock");
   }
-    
+
   Future<void> _lockMic(int i, bool lock) async {
-        bool iAmVipMute = hasPower(_cachedMe, "can_mute_anyone");
+    bool iAmVipMute = hasPower(_cachedMe, "can_mute_anyone");
     final targetMobile1 = seats[i].mobile;
     if(targetMobile1.isNotEmpty){
       try{
@@ -1034,7 +1035,18 @@ Future<void> _autoRetry() async {
     _toast(lock? "Mic lock" : "Mic unlock");
   }
 
+  // FIX: no_mic_leave power - isko mic se koi nahi utar sakta (sirf can_remove_mic wala utar sakta hai)
   Future<void> _removeFromSeat(int i) async {
+    final targetMobile = seats[i].mobile;
+    if (targetMobile.isNotEmpty &&!hasPower(_cachedMe, "can_remove_mic")) {
+      try {
+        final t = await FirebaseFirestore.instance.collection("users").doc(targetMobile).get();
+        if (hasPower(t.data()?? {}, "no_mic_leave")) {
+          _toast("Isko mic se nahi utar sakte ⛔");
+          return;
+        }
+      } catch (_) {}
+    }
     await roomRef.child("seats/$i").remove();
     _bumpSeated(-1);
     _toast("Seat se hataya");
@@ -1046,7 +1058,7 @@ Future<void> _autoRetry() async {
   }
 
   Future<void> _kick(String mobile, String name, int days) async {
-        bool iAmVipKick = hasPower(_cachedMe, "can_kick_anyone");
+    bool iAmVipKick = hasPower(_cachedMe, "can_kick_anyone");
     try {
       final t = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
       if(hasPower(t.data()?? {}, "no_kick") &&!iAmVipKick){
@@ -1063,6 +1075,7 @@ Future<void> _autoRetry() async {
     _toast("$name kick ${days < 0? "forever" : "$days din"}");
   }
 
+  // ✅ FIXED: q2 line me isEqualTo lagaya
   Future<void> _addFriend(String toMobile, String toName) async {
     try {
       final fs = FirebaseFirestore.instance;
@@ -1075,8 +1088,7 @@ Future<void> _autoRetry() async {
       _toast("$toName ko friend request bheji");
     } catch (e) { _toast("Error: $e"); }
   }
-
-  void _chooseGender() {
+    void _chooseGender() {
     showDialog(context: context, builder: (_) => AlertDialog(
       backgroundColor: const Color(0xFF2A1420),
       title: const Text("Apna gender chuno", style: TextStyle(color: Colors.white)),
@@ -1132,53 +1144,54 @@ Future<void> _autoRetry() async {
       "type": "text",
     });
   }
-// Photo Cloudinary par bhejega, URL wapas dega
-Future<String> _uploadToCloudinary(Uint8List bytes) async {
-  final req = http.MultipartRequest(
-    "POST",
-    Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"),
-  )
-    ..fields['upload_preset'] = 'ludo_chat'
-    ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chat.jpg'));
-  final streamed = await req.send();
-  final res = await http.Response.fromStream(streamed);
-  if (streamed.statusCode != 200) throw Exception("Cloudinary: ${res.body}");
-  return json.decode(res.body)['secure_url'] as String;
-}
-  // FIX: chat me photo bhejo - normal ya view-once (3 sec)
-  // FIX: chat me photo bhejo - normal ya view-once (3 sec) [Cloudinary]
-Future<void> _pickAndSendImage() async {
-  final choice = await showDialog<String>(
-    context: context,
-    builder: (_) => AlertDialog(
-      backgroundColor: const Color(0xFF2A1420),
-      title: const Text("Photo bhejo", style: TextStyle(color: Colors.white)),
-      content: const Text("Kaunsi photo bhejni hai?", style: TextStyle(color: Colors.white70)),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, "once"),
-          child: const Text("View-once (3 sec)")),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, "normal"),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-          child: const Text("Normal photo", style: TextStyle(color: Colors.black))),
-      ],
-    ),
-  );
-  if (choice == null) return;
-  try {
-    final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1080);
-    if (x == null) return;
-    _toast("Photo upload ho rahi hai...");
-    final bytes = await x.readAsBytes();
-    final url = await _uploadToCloudinary(bytes);
-    await roomRef.child("chat").push().set({
-      "name": myName, "mobile": myMobile, "text": "", "role": myRole, "at": ServerValue.timestamp,
-      "type": "image", "imageUrl": url, "viewOnce": choice == "once", "viewedBy": {},
-    });
-  } catch (e) {
-    _toast("Photo fail: $e");
+
+  // Photo Cloudinary par bhejega, URL wapas dega
+  Future<String> _uploadToCloudinary(Uint8List bytes) async {
+    final req = http.MultipartRequest(
+      "POST",
+      Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"),
+    )
+     ..fields['upload_preset'] = 'ludo_chat'
+     ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chat.jpg'));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (streamed.statusCode!= 200) throw Exception("Cloudinary: ${res.body}");
+    return json.decode(res.body)['secure_url'] as String;
   }
-}
+
+  // FIX: chat me photo bhejo - normal ya view-once (3 sec) [Cloudinary]
+  Future<void> _pickAndSendImage() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF2A1420),
+        title: const Text("Photo bhejo", style: TextStyle(color: Colors.white)),
+        content: const Text("Kaunsi photo bhejni hai?", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, "once"),
+            child: const Text("View-once (3 sec)")),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, "normal"),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+            child: const Text("Normal photo", style: TextStyle(color: Colors.black))),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    try {
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1080);
+      if (x == null) return;
+      _toast("Photo upload ho rahi hai...");
+      final bytes = await x.readAsBytes();
+      final url = await _uploadToCloudinary(bytes);
+      await roomRef.child("chat").push().set({
+        "name": myName, "mobile": myMobile, "text": "", "role": myRole, "at": ServerValue.timestamp,
+        "type": "image", "imageUrl": url, "viewOnce": choice == "once", "viewedBy": {},
+      });
+    } catch (e) {
+      _toast("Photo fail: $e");
+    }
+  }
 
   Widget _chatContent(_ChatMsg m) {
     if (m.type == "image" && m.imageUrl.isNotEmpty) {
@@ -1189,8 +1202,8 @@ Future<void> _pickAndSendImage() async {
           child: Text("Dekh liya", style: TextStyle(color: Colors.white38, fontSize: 12, fontStyle: FontStyle.italic)),
         );
       }
-            // View-once: kholne se pehle saaf photo mat dikhao
-      if (m.viewOnce && !seen) {
+      // View-once: kholne se pehle saaf photo mat dikhao
+      if (m.viewOnce &&!seen) {
         return InkWell(
           onTap: () => _openImage(m),
           child: Container(
@@ -1216,7 +1229,7 @@ Future<void> _pickAndSendImage() async {
             borderRadius: BorderRadius.circular(8),
             child: Image.network(m.imageUrl, height: 150, fit: BoxFit.cover,
                 loadingBuilder: (c, w, p) => p == null
-                  ? w
+                   ? w
                     : const SizedBox(height: 150, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
                 errorBuilder: (c, e, st) => const SizedBox(
                     height: 60, child: Center(child: Icon(Icons.broken_image, color: Colors.white38)))),
@@ -1363,7 +1376,7 @@ Future<void> _pickAndSendImage() async {
 
   Future<void> _leave({bool pop = true}) async {
     minimizedRoomNo = null;
-if (mounted) setState(() { chats.clear(); });
+    if (mounted) setState(() { chats.clear(); });
     try { if (mySeat >= 0) { await roomRef.child("seats/$mySeat").remove(); _bumpSeated(-1); } } catch (_) {}
     try { await myPresentRef?.remove(); } catch (_) {}
     try {
@@ -1433,8 +1446,7 @@ if (mounted) setState(() { chats.clear(); });
       ),
     );
   }
-
-  // ================= UI =================
+    // ================= UI =================
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -1509,7 +1521,7 @@ if (mounted) setState(() { chats.clear(); });
           IconButton(
             icon: Icon(roomLocked? Icons.lock_open : Icons.lock, color: Colors.amber),
             tooltip: roomLocked? "Room unlock karo" : "Room lock karo",
-            onPressed: _toggleRoomLock,
+            onTap: _toggleRoomLock,
           ),
         if (isOwner)
           IconButton(
@@ -1527,7 +1539,8 @@ if (mounted) setState(() { chats.clear(); });
       ]),
     );
   }
-    Widget _seatsGrid() {
+
+  Widget _seatsGrid() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: GridView.builder(
@@ -1568,24 +1581,24 @@ if (mounted) setState(() { chats.clear(); });
             maxLines: 1, overflow: TextOverflow.ellipsis,
             style: TextStyle(color: s.empty? Colors.white24 : Colors.white, fontSize: 10)),
         if(!s.empty)
-FutureBuilder(
-  future: FirebaseFirestore.instance.collection("users").doc(s.mobile).get(),
-  builder: (c, snap){
-    final tag = snap.data?.data()?["tag"]?.toString()?? "";
-    if(tag.isEmpty) return SizedBox.shrink();
-    return Container(
-      margin: EdgeInsets.only(top:2),
-      padding: EdgeInsets.symmetric(horizontal:6, vertical:2),
-      decoration: BoxDecoration(
-        color: Colors.amber,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(tag,
-        style: TextStyle(fontSize:9, fontWeight: FontWeight.bold, color: Colors.black),
-      ),
-    );
-  },
-),
+          FutureBuilder(
+            future: FirebaseFirestore.instance.collection("users").doc(s.mobile).get(),
+            builder: (c, snap){
+              final tag = snap.data?.data()?["tag"]?.toString()?? "";
+              if(tag.isEmpty) return SizedBox.shrink();
+              return Container(
+                margin: EdgeInsets.only(top:2),
+                padding: EdgeInsets.symmetric(horizontal:6, vertical:2),
+                decoration: BoxDecoration(
+                  color: Colors.amber,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(tag,
+                  style: TextStyle(fontSize:9, fontWeight: FontWeight.bold, color: Colors.black),
+                ),
+              );
+            },
+          ),
       ]),
     );
   }
@@ -1684,8 +1697,13 @@ FutureBuilder(
                 addTile(Icons.delete_forever, Colors.red, "Kick - Forever", () => _kick(mobile, showName, -1));
               }
             } else if (isAdmin) {
-              if (!targetIsOwner && role!= "admin") {
-                addTile(Icons.block, Colors.red, "Kick - 3 din", () => _kick(mobile, showName, 3));
+              // FIX: can_remove_mic / can_kick_anyone power wala admin, admin ko bhi handle kar sakta hai
+              final bool vipRemove = hasPower(_cachedMe, "can_remove_mic");
+              final bool vipKick = hasPower(_cachedMe, "can_kick_anyone");
+              if (!targetIsOwner && (role!= "admin" || vipKick || vipRemove)) {
+                if (role!= "admin" || vipKick) {
+                  addTile(Icons.block, Colors.red, "Kick - 3 din", () => _kick(mobile, showName, 3));
+                }
                 if (role!= "member") addTile(Icons.person_add, Colors.green, "Member banao", () => _setRole(mobile, showName, "member"));
                 if (isSeated) {
                   final st = seats[seatIndex];
@@ -1734,7 +1752,7 @@ FutureBuilder(
     return Column(children: [
       Expanded(
         child: chats.isEmpty
-         ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
+           ? const Center(child: Text("Koi chat nahi - pehla message bhejo!", style: TextStyle(color: Colors.white38)))
             : ListView.builder(
                 controller: chatScroll,
                 padding: const EdgeInsets.all(12),
@@ -1781,7 +1799,7 @@ FutureBuilder(
           Expanded(
             child: TextField(
               controller: chatCtrl,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
               decoration: InputDecoration(
                   hintText: "Type karo...",
                   hintStyle: const TextStyle(color: Colors.white30),
@@ -1871,7 +1889,6 @@ FutureBuilder(
     );
   }
 }
-
 // ================= KICK LIST =================
 class _KickListScreen extends StatefulWidget {
   final String roomNo;
