@@ -53,6 +53,41 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     }
   }
 
+  // SABHI CHATS CLEAR (sirf mere liye) - Firestore se delete NAHI hota, admin panel me sab safe rahega
+  Future<void> _clearAllChats() async {
+    if (friendsWithName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Koi chat nahi hai")));
+      return;
+    }
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Sabhi chats clear karein?"),
+        content: Text("${friendsWithName.length} friends ke saath ki chat SIRF tumhare phone se clear hogi.\nDosto ko sab dikhta rahega."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Sab clear karo")),
+        ],
+      ),
+    );
+    if (yes!= true) return;
+    try {
+      for (var f in friendsWithName) {
+        final fm = f["mobile"].toString();
+        final s = [widget.mobile, fm]..sort();
+        await FirebaseFirestore.instance.collection("friend_chats").doc(s.join("_"))
+           .set({"clearedBy": {widget.mobile: FieldValue.serverTimestamp()}}, SetOptions(merge: true));
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sabhi chats clear ho gayi ✅")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fail: $e")));
+    }
+  }
+
   // ID NUMBER se search - 7 digit ka permanent ID (voice room number)
   // Mobile number kisi ko nahi dikhega, sirf ID se dhoondo aur add karo
   Future<void> searchUser() async {
@@ -114,6 +149,10 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     return Scaffold(
       backgroundColor: Color(0xFF0A0E1A),
       appBar: AppBar(backgroundColor: Colors.amber, title: Text("FRIENDS", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)),
+        actions: [
+          IconButton(icon: Icon(Icons.delete_sweep, color: Colors.black), tooltip: "Sabhi chats clear karo",
+            onPressed: _clearAllChats),
+        ],
         bottom: TabBar(controller: tabCtrl, labelColor: Colors.black, tabs: [Tab(text: "ADD"), Tab(text: "REQUESTS (${pending.length})"), Tab(text: "MY FRIENDS (${friendsWithName.length})")])),
       body: loading? Center(child: CircularProgressIndicator(color: Colors.amber)):
       TabBarView(controller: tabCtrl, children: [
@@ -134,7 +173,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   }
 }
 
-// ============ PRIVATE CHAT: text + photo (view-once/normal) + 2 min delete for everyone ============
+// ============ PRIVATE CHAT: text + photo (view-once/normal) + soft delete + clear chat (sirf mere liye) ============
 class PrivateChatScreen extends StatefulWidget {
   final String myMobile; final String friendMobile; final String friendName; final String myName;
   const PrivateChatScreen({super.key, required this.myMobile, required this.friendMobile, required this.friendName, required this.myName});
@@ -143,19 +182,97 @@ class PrivateChatScreen extends StatefulWidget {
 
 class _PrivateChatScreenState extends State<PrivateChatScreen> {
   final msgCtrl = TextEditingController();
+  DateTime? _clearedAt; // is time se pehle ke msgs sirf mere liye hidden (Firestore se delete NAHI hote)
 
   String getChatId(){ List<String> s=[widget.myMobile, widget.friendMobile]; s.sort(); return s.join("_"); }
 
   CollectionReference<Map<String,dynamic>> get msgCol =>
       FirebaseFirestore.instance.collection("friend_chats").doc(getChatId()).collection("messages");
 
+  @override
+  void initState() {
+    super.initState();
+    _loadClearedAt();
+  }
+
+  // Maine kab chat clear ki thi - us time se pehle ke msgs mujhe nahi dikhenge
+  // (Firestore se delete NAHI hota - admin panel me sab dikhta rahega)
+  Future<void> _loadClearedAt() async {
+    try {
+      final d = await FirebaseFirestore.instance.collection("friend_chats").doc(getChatId()).get();
+      final cb = d.data()?["clearedBy"];
+      if (cb is Map && cb[widget.myMobile] is Timestamp) {
+        if (mounted) setState(() => _clearedAt = (cb[widget.myMobile] as Timestamp).toDate());
+      }
+    } catch (_) {}
+  }
+
   void _toast(String s){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s), duration: const Duration(seconds: 2))); }
+
+  // TIME FORMAT: 10:45 PM
+  String _fmtTime(Timestamp? t){
+    if (t == null) return "";
+    final dt = t.toDate();
+    int h = dt.hour;
+    final m = dt.minute.toString().padLeft(2, '0');
+    final ap = h >= 12? "PM" : "AM";
+    h = h % 12; if (h == 0) h = 12;
+    return "$h:$m $ap";
+  }
+
+  // DATE LABEL: Today / Yesterday / 28 Sep 2026
+  String _dayLabel(DateTime dt){
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final d = DateTime(dt.year, dt.month, dt.day);
+    final diff = today.difference(d).inDays;
+    if (diff == 0) return "Today";
+    if (diff == 1) return "Yesterday";
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return "${dt.day} ${months[dt.month - 1]} ${dt.year}";
+  }
+
+  // DATE CHIP: ek din ki chat ke upar ek patti
+  Widget _dateChip(String label){
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)),
+        child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  // CHAT CLEAR (sirf mere liye) - Firestore se delete NAHI hota, admin panel me sab safe
+  Future<void> _clearChat() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Chat clear karein?"),
+        content: const Text("Is friend ke saath ki saari chat SIRF tumhare phone se clear hogi.\nSaamne wale ko sab dikhta rahega."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Clear karo")),
+        ],
+      ),
+    );
+    if (yes!= true) return;
+    try {
+      await FirebaseFirestore.instance.collection("friend_chats").doc(getChatId())
+         .set({"clearedBy": {widget.myMobile: FieldValue.serverTimestamp()}}, SetOptions(merge: true));
+      if (mounted) setState(() => _clearedAt = DateTime.now());
+      _toast("Chat clear ho gayi ✅");
+    } catch (e) { _toast("Fail: $e"); }
+  }
 
   // Cloudinary par photo upload
   Future<String> _uploadToCloudinary(Uint8List bytes) async {
     final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
-  ..fields['upload_preset'] = 'ludo_chat'
-  ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chat.jpg'));
+ ..fields['upload_preset'] = 'ludo_chat'
+ ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chat.jpg'));
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
     if (streamed.statusCode!= 200) throw Exception("Cloudinary: ${res.body}");
@@ -221,7 +338,11 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
         ],
       ),
     );
-    if (yes == true) { await msgCol.doc(docId).delete(); _toast("Delete ho gaya"); }
+    // SOFT DELETE - dono ke inbox se gayab, lekin Firestore me doc rehta hai (admin panel me dikhega)
+    if (yes == true) {
+      await msgCol.doc(docId).set({"hiddenFor": {widget.myMobile: true, widget.friendMobile: true}}, SetOptions(merge: true));
+      _toast("Delete ho gaya");
+    }
   }
 
   // Normal photo gallery me save karo (gal package)
@@ -294,7 +415,18 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(color: isMe? Colors.amber : const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)),
-          child: content,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              content,
+              if (_fmtTime(t).isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(_fmtTime(t), style: TextStyle(color: isMe? Colors.black54 : Colors.white38, fontSize: 10)),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -303,16 +435,47 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   @override Widget build(BuildContext context){
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(backgroundColor: const Color(0xFF151A2B), title: Text(widget.friendName, style: const TextStyle(color: Colors.white))),
+      appBar: AppBar(backgroundColor: const Color(0xFF151A2B), title: Text(widget.friendName, style: const TextStyle(color: Colors.white)),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onSelected: (v){ if(v=="clear") _clearChat(); },
+            itemBuilder: (_) => [const PopupMenuItem(value: "clear", child: Text("Chat clear karo"))],
+          ),
+        ],
+      ),
       body: Column(children: [
         Expanded(child: StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
           stream: msgCol.orderBy("time", descending: false).snapshots(),
           builder: (context, snap){
             if (snap.hasError) return Center(child: Padding(padding: const EdgeInsets.all(16), child: Text("Error: ${snap.error}", style: const TextStyle(color: Colors.white54))));
             if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.amber));
-            final docs = snap.data?.docs?? [];
+            final allDocs = snap.data?.docs?? [];
+            // mere liye hidden/clear kiye gaye msgs mat dikhao (Firestore se delete NAHI hote - admin ko dikhte rahenge)
+            final docs = allDocs.where((doc){
+              final dd = doc.data();
+              final hiddenFor = dd["hiddenFor"];
+              if (hiddenFor is Map && hiddenFor[widget.myMobile] == true) return false;
+              if (_clearedAt!= null) {
+                final t = dd["time"];
+                if (t is Timestamp &&!t.toDate().isAfter(_clearedAt!)) return false;
+              }
+              return true;
+            }).toList();
             if (docs.isEmpty) return const Center(child: Text("Abhi koi message nahi — pehla message bhejo 👋", style: TextStyle(color: Colors.white54)));
-            return ListView.builder(padding: const EdgeInsets.all(12), itemCount: docs.length, itemBuilder: (c,i) => _bubble(docs[i]));
+            // DATE HEADER: ek din ki chat ke upar ek baar - Today / Yesterday / date
+            List<Widget> items = [];
+            String lastDay = "";
+            for (var doc in docs) {
+              final mt = doc.data()["time"];
+              final DateTime? mdt = mt is Timestamp? mt.toDate() : null;
+              if (mdt!= null) {
+                final dayKey = "${mdt.year}-${mdt.month}-${mdt.day}";
+                if (dayKey!= lastDay) { lastDay = dayKey; items.add(_dateChip(_dayLabel(mdt))); }
+              }
+              items.add(_bubble(doc));
+            }
+            return ListView(padding: const EdgeInsets.all(12), children: items);
           },
         )),
         Container(padding: const EdgeInsets.all(8), color: const Color(0xFF151A2B), child: Row(children: [
