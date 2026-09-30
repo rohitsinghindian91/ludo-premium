@@ -259,7 +259,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
   void listenUser() {
     FirebaseFirestore.instance.collection("users").doc(widget.mobile).snapshots().listen((d) async {
-      if (!d.exists) return; var data = d.data()!; if (!mounted) return;
+            // FIX: admin ne mobile change kiya ya account delete kiya to auto-logout
+      if (!d.exists) {
+        await prefs.clear();
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false);
+        return;
+      }
+      var data = d.data()!; if (!mounted) return;
       if (data["banned"] == true) { // REALTIME BAN CHECK
         bool stillBanned = true;
         if (data["banExpiry"]!= null) {
