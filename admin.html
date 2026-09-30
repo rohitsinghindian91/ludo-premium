@@ -2,18 +2,137 @@
 <html>
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LUDO PREMIUM ADMIN</title>
-<style>body{background:#0A0E1A;color:#fff;font-family:sans-serif;padding:10px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border:1px solid #333;padding:8px;font-size:12px;text-align:left}th{background:#1E293B;position:sticky;top:0}tr:nth-child(even){background:#151A2B}.premium{color:#22c55e;font-weight:bold}.free{color:#ef4444}.btn{padding:4px 8px;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:bold}.btn-true{background:#22c55e;color:#000}.btn-false{background:#ef4444;color:#fff}</style>
+<title>LUDO PREMIUM - FULL ADMIN</title>
+<style>
+body{background:#0A0E1A;color:#fff;font-family:sans-serif;padding:10px;margin:0}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.tab{padding:8px 14px;background:#1E293B;border-radius:8px;cursor:pointer;font-size:12px;font-weight:bold;border:none;color:#fff}
+.tab.active{background:#fbbf24;color:#000}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{border:1px solid #333;padding:8px;font-size:12px;text-align:left;vertical-align:top}
+th{background:#1E293B;position:sticky;top:0}
+tr:nth-child(even){background:#151A2B}
+.btn{padding:4px 8px;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:bold;margin:2px}
+.btn-true{background:#22c55e;color:#000}.btn-false{background:#ef4444;color:#fff}
+.btn-ban{background:#7f1d1d;color:#fff}.btn-unban{background:#2563eb;color:#fff}.btn-y{background:#fbbf24;color:#000}
+input,select,textarea{background:#0A0E1A;color:#fff;border:1px solid #333;border-radius:6px;padding:7px;width:100%;box-sizing:border-box;margin-bottom:6px}
+.card{background:#151A2B;border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid #333}
+.premium{color:#22c55e;font-weight:bold}.free{color:#ef4444}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:99;justify-content:center;align-items:center}
+.modal>div{background:#151A2B;padding:18px;border-radius:12px;max-width:440px;width:92%;max-height:92vh;overflow:auto}
+img.ev{max-width:100%;border-radius:8px;margin-top:6px}
+small{color:#888}.section{display:none}.section.active{display:block}
+#powList label{display:block;margin:5px 0;font-size:13px}
+#powList input{width:auto;margin-right:6px}
+</style>
 </head>
 <body>
-<h2>ADMIN - Latest Registration Uper ⬆️</h2>
-<div>Total Users: <span id="total">0</span> | Premium: <span id="prem">0</span></div>
-<table><thead><tr><th>#</th><th>Mobile</th><th>My Code</th><th>Joined With (Refer By)</th><th>Wallet</th><th>UPI</th><th>Premium</th><th>Joined At</th><th>Action</th></tr></thead><tbody id="tbody"></tbody></table>
+<h2 style="margin:4px 0">🎮 LUDO PREMIUM - FULL ADMIN</h2>
+<div>Total: <span id="total">0</span> | Premium: <span id="prem">0</span> | Banned: <span id="banned">0</span> | Live Ludo: <span id="liveL">0</span> | Live Voice: <span id="liveV">0</span></div>
+
+<div class="tabs">
+<button class="tab active" onclick="showTab('users',this)">👥 Users</button>
+<button class="tab" onclick="showTab('ludo',this)">🎲 Live Ludo</button>
+<button class="tab" onclick="showTab('voice',this)">🎤 Voice Rooms</button>
+<button class="tab" onclick="showTab('chats',this)">💬 Inbox Chat</button>
+<button class="tab" onclick="showTab('team',this)">🌳 Team</button>
+<button class="tab" onclick="showTab('premreq',this)">💎 Premium Req</button>
+<button class="tab" onclick="showTab('wallet',this)">💰 Wallet/UPI</button>
+<button class="tab" onclick="showTab('suchna',this)">📢 Suchna</button>
+<button class="tab" onclick="showTab('plan',this)">📊 Plan</button>
+</div>
+
+<div id="users" class="section active">
+<input id="search" placeholder="Search mobile / name / code..." oninput="renderUsers()" style="max-width:300px">
+<table><thead><tr><th>#</th><th>User</th><th>Wallet/UPI</th><th>Premium</th><th>Ban</th><th>Action</th></tr></thead><tbody id="tbody"></tbody></table>
+</div>
+
+<div id="ludo" class="section"><h3>🎲 Live Ludo Rooms <button class="btn btn-y" onclick="loadLudo()">Refresh</button></h3><div id="ludoBody"></div></div>
+<div id="voice" class="section"><h3>🎤 Live Voice Rooms <button class="btn btn-y" onclick="loadVoice()">Refresh</button></h3><div id="voiceBody"></div></div>
+
+<div id="chats" class="section">
+<h3>💬 Inbox Chats</h3>
+<input id="chatSearch" placeholder="mobile number..." style="max-width:300px">
+<button class="btn btn-y" onclick="loadChats()">Dekho</button><div id="chatBody"></div>
+</div>
+
+<div id="team" class="section">
+<h3>🌳 Team Tree</h3>
+<input id="teamSearch" placeholder="user ka mobile..." style="max-width:300px">
+<button class="btn btn-y" onclick="loadTeam()">Dekho</button><div id="teamBody"></div>
+</div>
+
+<div id="premreq" class="section"><h3>💎 Premium Requests</h3><button class="btn btn-y" onclick="loadPremReq()">Refresh</button><div id="premBody"></div></div>
+
+<div id="wallet" class="section">
+<h3>💰 Wallet / UPI / History</h3>
+<button class="tab" onclick="loadEarnings()">Earnings</button>
+<button class="tab" onclick="loadUpiHist()">UPI History</button>
+<button class="tab" onclick="loadPremHist()">Premium History</button>
+<button class="tab" onclick="loadBanHist()">Ban History</button>
+<div id="walletBody"></div>
+</div>
+
+<div id="suchna" class="section">
+<h3>📢 Jaruri Suchna Editor</h3>
+<div class="card"><textarea id="suchnaText" rows="12" placeholder="Ek line me ek point..."></textarea>
+<button class="btn btn-true" onclick="saveSuchna()">SAVE</button>
+<button class="btn btn-y" onclick="loadSuchna()">Reload</button></div>
+</div>
+
+<div id="plan" class="section">
+<h3>📊 Plan Chart Config</h3>
+<div class="card">
+<label>L1 Rs</label><input id="planL1" type="number">
+<label>L2 Rs</label><input id="planL2" type="number">
+<label>L3 Rs</label><input id="planL3" type="number">
+<label>Premium Price Rs</label><input id="planPrice" type="number">
+<button class="btn btn-true" onclick="savePlan()">SAVE PLAN</button>
+<button class="btn btn-y" onclick="loadPlan()">Reload</button></div>
+</div>
+
+<!-- BAN MODAL -->
+<div class="modal" id="banModal"><div>
+<h3 id="banTitle" style="color:#fbbf24">BAN User</h3>
+<select id="banDur">
+<option value="1">1 Day</option><option value="3">3 Day</option><option value="7">7 Day</option>
+<option value="30">1 Month</option><option value="90">3 Month</option>
+<option value="forever">Forever</option><option value="forever_device">Forever + Device</option>
+</select>
+<textarea id="banReason" rows="3" placeholder="Reason / feedback..."></textarea>
+<label>Evidence Photo</label><input type="file" id="banPhoto" accept="image/*">
+<img class="ev" id="banPreview" style="display:none">
+<button class="btn btn-ban" onclick="confirmBan()">BAN KARO</button>
+<button class="btn btn-unban" onclick="closeBan()">Cancel</button>
+</div></div>
+
+<!-- POWER MODAL -->
+<div class="modal" id="powerModal"><div>
+<h3 style="color:#fbbf24">Tag + Powers</h3>
+<label>Tag (ID ke neeche dikhega)</label>
+<input id="powTag" placeholder="VIP / OWNER / STAR">
+<label><b>Protect Powers (isko koi haath na lagaye)</b></label>
+<div id="powList">
+<label><input type="checkbox" value="no_kick">Koi kick nahi kar sakta</label>
+<label><input type="checkbox" value="no_mic_leave">Admin/Owner mic se nahi utar sakta</label>
+<label><input type="checkbox" value="join_locked">Kisi bhi lock room me ja sakta hai</label>
+<label><input type="checkbox" value="no_block">Koi block nahi kar sakta</label>
+<label><input type="checkbox" value="chat_without_add">Bina add kiye har user chat kar sakta hai</label>
+<label><input type="checkbox" value="no_mute">Koi mute/unmute nahi kar sakta</label>
+<label><input type="checkbox" value="mic_no_approval">Bina membership mic pe ja sakta hai</label>
+<label><input type="checkbox" value="can_mute_anyone"><b style="color:#fbbf24">Kisi bhi admin/member ko mute-unmute kar sakta hai</b></label>
+<label><input type="checkbox" value="can_remove_mic"><b style="color:#fbbf24">Kisi ko bhi mic se leave kara sakta hai</b></label>
+<label><input type="checkbox" value="can_kick_anyone"><b style="color:#fbbf24">Kisi ko bhi kick maar sakta hai (admin ko bhi)</b></label>
+</div>
+<button class="btn btn-true" onclick="savePowers()">SAVE</button>
+<button class="btn btn-unban" onclick="document.getElementById('powerModal').style.display='none'">Cancel</button>
+</div></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, updateDoc, Timestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, Timestamp, query, orderBy, where, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
+// 👇 APNI ASLI FIREBASE CONFIG YAHAN DAALO
 const firebaseConfig = {
   apiKey: "AIzaSyC3vGx...",
   authDomain: "ludo-premium-50-e427e.firebaseapp.com",
@@ -25,51 +144,184 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-async function load(){
-  const tbody = document.getElementById("tbody");
-  tbody.innerHTML = "<tr><td colspan=9>Loading...</td></tr>";
-  try{
-    const q = query(collection(db,"users"), orderBy("createdAt","desc"));
-    let snap;
-    try{ snap = await getDocs(q); }catch(e){ snap = await getDocs(collection(db,"users")); } // agar createdAt nahi hai to bina order ke
-    let users = [];
-    snap.forEach(d=> users.push({id:d.id, ...d.data()}));
-    // Agar createdAt se order fail hua to client side sort latest uper
-    users.sort((a,b)=>{
-      const at = a.createdAt?.seconds || 0;
-      const bt = b.createdAt?.seconds || 0;
-      return bt - at;
-    });
-    let premCount = users.filter(u=>u.isPremium).length;
-    document.getElementById("total").innerText = users.length;
-    document.getElementById("prem").innerText = premCount;
-    tbody.innerHTML = "";
-    users.forEach((u,i)=>{
-      const joined = u.referredBy ? u.referredBy : "Direct / No Refer";
-      const created = u.createdAt ? new Date(u.createdAt.seconds*1000).toLocaleString() : "Old User";
-      tbody.innerHTML += `<tr>
-        <td>${i+1}</td>
-        <td>${u.mobile || u.id}</td>
-        <td><b style="color:#fbbf24">${u.referralCode || u.id}</b></td>
-        <td><span style="color:${u.referredBy ? '#22c55e' : '#666'}">${joined}</span><br><small style="font-size:9px;color:#888">Lock - 1st time only</small></td>
-        <td>₹${u.wallet || 0}</td>
-        <td>${u.upi || '-'}</td>
-        <td class="${u.isPremium?'premium':'free'}">${u.isPremium?'TRUE ✅':'FALSE ❌'}</td>
-        <td>${created}</td>
-        <td>
-          <button class="btn btn-true" onclick="setPremium('${u.id}',true)">TRUE</button>
-          <button class="btn btn-false" onclick="setPremium('${u.id}',false)">FALSE</button>
-        </td>
-      </tr>`;
-    });
-  }catch(e){ tbody.innerHTML = `<tr><td colspan=9>Error: ${e.message}</td></tr>`; }
+let allUsers = [], banTarget = null, banPhotoData = "", powTarget = null;
+
+window.showTab = (id, el)=>{
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.tabs.tab').forEach(t=>t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  if(id==='ludo') loadLudo(); if(id==='voice') loadVoice();
+  if(id==='premreq') loadPremReq(); if(id==='suchna') loadSuchna(); if(id==='plan') loadPlan();
+};
+
+document.getElementById("banPhoto").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ev=>{ banPhotoData = ev.target.result; const p=document.getElementById("banPreview"); p.src=banPhotoData; p.style.display="block"; };
+  r.readAsDataURL(f);
+});
+
+async function init(){
+  let snap;
+  try{ snap = await getDocs(query(collection(db,"users"), orderBy("createdAt","desc"))); }
+  catch(e){ snap = await getDocs(collection(db,"users")); }
+  allUsers = []; snap.forEach(d=>allUsers.push({id:d.id,...d.data()}));
+  const now = new Date();
+  for(const u of allUsers){
+    if(u.banned && u.banExpiry){ const exp=new Date(u.banExpiry.seconds*1000); if(exp<now){ await updateDoc(doc(db,"users",u.id),{banned:false,banExpiry:null}); u.banned=false; } }
+  }
+  allUsers.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+  renderUsers();
 }
-window.setPremium = async (id, val)=>{
-  const exp = new Date(); exp.setMonth(exp.getMonth()+1);
-  await updateDoc(doc(db,"users",id), {isPremium: val, premiumExpiry: Timestamp.fromDate(exp), premiumDistributed: val?false:true});
-  load();
-}
-load();
+
+window.renderUsers = ()=>{
+  const s = document.getElementById("search").value.trim().toLowerCase();
+  const tb = document.getElementById("tbody");
+  const users = allUsers.filter(u=>{ if(!s) return true;
+    return (u.mobile||u.id||"").toLowerCase().includes(s)||(u.name||"").toLowerCase().includes(s)||(u.referralCode||"").toLowerCase().includes(s); });
+  document.getElementById("total").innerText = allUsers.length;
+  document.getElementById("prem").innerText = allUsers.filter(u=>u.isPremium).length;
+  document.getElementById("banned").innerText = allUsers.filter(u=>u.banned).length;
+  tb.innerHTML = "";
+  users.slice(0,200).forEach((u,i)=>{
+    const isBan = u.banned===true;
+    const pw = (u.powers||[]).length? `<br><small style="color:#fbbf24">⚡${(u.powers||[]).length} powers</small>` : "";
+    tb.innerHTML += `<tr style="${isBan?'background:#450a0a':''}">
+      <td>${i+1}</td>
+      <td><b>${u.name||""}</b><br>${u.mobile||u.id}<br><small>Code:<b style="color:#fbbf24">${u.referralCode||u.id}</b> | By:${u.referredBy||"Direct"}<br>Tag:<b style="color:#fbbf24">${u.tag||"-"}</b>${pw}<br>Dev:${(u.deviceId||"").substring(0,10)||"-"}</small></td>
+      <td>₹${u.wallet||0} <button class="btn btn-true" onclick="zeroWallet('${u.id}')">0</button><br><small>${u.upi||"-"}</small></td>
+      <td class="${u.isPremium?'premium':'free'}">${u.isPremium?"TRUE ✅":"FALSE ❌"}<br>
+      <button class="btn btn-true" onclick="setPremium('${u.id}',true)">ON</button>
+      <button class="btn btn-false" onclick="setPremium('${u.id}',false)">OFF</button></td>
+      <td><small>${isBan?(u.banType||"BAN"):"-"}</small></td>
+      <td>
+        <button class="btn btn-y" onclick="openPowers('${u.id}','${u.tag||""}','${(u.powers||[]).join(",")}')">TAG/POWER</button><br>
+        ${isBan?`<button class="btn btn-unban" onclick="unban('${u.id}')">UNBAN</button>`:`<button class="btn btn-ban" onclick="openBan('${u.id}','${u.mobile||u.id}')">BAN</button>`}
+      </td>
+    </tr>`;
+  });
+};
+
+// TAG + POWERS
+window.openPowers = (id, tag, csv)=>{
+  powTarget = id;
+  document.getElementById("powTag").value = tag || "";
+  const have = (csv||"").split(",").filter(Boolean);
+  document.querySelectorAll("#powList input").forEach(c=> c.checked = have.includes(c.value));
+  document.getElementById("powerModal").style.display = "flex";
+};
+window.savePowers = async ()=>{
+  const tag = document.getElementById("powTag").value.trim();
+  const powers = [...document.querySelectorAll("#powList input:checked")].map(c=>c.value);
+  await updateDoc(doc(db,"users",powTarget), {tag, powers});
+  const u = allUsers.find(x=>x.id===powTarget);
+  if(u){ u.tag = tag; u.powers = powers; }
+  document.getElementById("powerModal").style.display = "none";
+  renderUsers(); alert("Tag + Powers save ✅");
+};
+
+// BAN
+window.openBan=(id,m)=>{ banTarget=id; banPhotoData=""; document.getElementById("banPreview").style.display="none"; document.getElementById("banReason").value=""; const f=document.getElementById("banPhoto"); if(f) f.value=""; document.getElementById("banTitle").innerText="BAN: "+m; document.getElementById("banModal").style.display="flex"; };
+window.closeBan=()=>document.getElementById("banModal").style.display="none";
+window.confirmBan=async()=>{
+  const dur=document.getElementById("banDur").value, reason=document.getElementById("banReason").value.trim();
+  if(!reason){alert("Reason likho");return;}
+  let banExpiry=null; const now=new Date();
+  if(!isNaN(parseInt(dur))){ const d=new Date(now); d.setDate(d.getDate()+parseInt(dur)); banExpiry=Timestamp.fromDate(d); }
+  await updateDoc(doc(db,"users",banTarget),{banned:true,banType:dur,banReason:reason,banExpiry,bannedAt:serverTimestamp()});
+  if(dur==="forever_device"){ const u=allUsers.find(x=>x.id===banTarget); if(u&&u.deviceId) await addDoc(collection(db,"banned_devices"),{deviceId:u.deviceId,mobile:banTarget,reason,time:serverTimestamp()}); }
+  await addDoc(collection(db,"ban_history"),{mobile:banTarget,banType:dur,reason,photo:banPhotoData||"",time:serverTimestamp(),by:"admin",banExpiry});
+  const u=allUsers.find(x=>x.id===banTarget); if(u) Object.assign(u,{banned:true,banType:dur,banReason:reason,banExpiry});
+  closeBan(); renderUsers();
+};
+window.unban=async(id)=>{ if(!confirm("UNBAN?"))return; await updateDoc(doc(db,"users",id),{banned:false,banExpiry:null,banType:null}); const u=allUsers.find(x=>x.id===id); if(u){u.banned=false;} renderUsers(); };
+window.setPremium=async(id,val)=>{ if(!confirm(val?"Premium ON?":"Premium OFF?"))return;
+  const exp=new Date(); exp.setMonth(exp.getMonth()+1);
+  if(val){ await updateDoc(doc(db,"users",id),{isPremium:true,premiumExpiry:Timestamp.fromDate(exp),premiumDistributed:false}); await addDoc(collection(db,"premium_history"),{mobile:id,action:"premium_on",time:serverTimestamp(),by:"admin"}); }
+  else{ await updateDoc(doc(db,"users",id),{isPremium:false,premiumExpiry:null}); await addDoc(collection(db,"premium_history"),{mobile:id,action:"premium_off",time:serverTimestamp(),by:"admin"}); }
+  const u=allUsers.find(x=>x.id===id); if(u) u.isPremium=val; renderUsers(); };
+window.zeroWallet=async(id)=>{ if(!confirm("Wallet ZERO?"))return; await updateDoc(doc(db,"users",id),{wallet:0}); const u=allUsers.find(x=>x.id===id); if(u) u.wallet=0; renderUsers(); };
+
+// LIVE LUDO + CHAT
+window.loadLudo=async()=>{
+  const b=document.getElementById("ludoBody"); b.innerHTML="Loading...";
+  const snap=await getDocs(query(collection(db,"ludo_rooms"),where("status","==","live")));
+  document.getElementById("liveL").innerText=snap.size;
+  let h=""; snap.forEach(d=>{ const m=d.data();
+    h+=`<div class="card"><b>Room: ${d.id}</b> | Players: ${(m.players||[]).length}<br><button class="btn btn-y" onclick="loadRoomChat('${d.id}')">Chat Dekho</button><div id="rc-${d.id}"></div></div>`; });
+  b.innerHTML=h||"Koi live room nahi";
+};
+window.loadRoomChat=async(roomId)=>{
+  const el=document.getElementById("rc-"+roomId); el.innerHTML="...";
+  const snap=await getDocs(query(collection(db,"ludo_rooms",roomId,"chat"),orderBy("time","asc"),limit(100)));
+  let h=""; snap.forEach(d=>{ const m=d.data(); h+=`<div><small style="color:#fbbf24">${m.senderName||m.from}:</small> ${m.text||""}</div>`; });
+  el.innerHTML=h||"No chat";
+};
+
+// VOICE
+window.loadVoice=async()=>{
+  const b=document.getElementById("voiceBody"); b.innerHTML="Loading...";
+  let snap; try{ snap=await getDocs(query(collection(db,"voice_rooms"),where("status","==","live"))); }
+  catch(e){ try{ snap=await getDocs(collection(db,"voice_rooms")); }catch(e2){ b.innerHTML="voice_rooms nahi mili"; return; } }
+  document.getElementById("liveV").innerText=snap.size;
+  let h=""; snap.forEach(d=>{ h+=`<div class="card"><b>Room: ${d.id}</b><br><small>${JSON.stringify(d.data()).substring(0,150)}</small></div>`; });
+  b.innerHTML=h||"Koi live voice room nahi";
+};
+
+// CHATS / TEAM / REQ / WALLET / SUCHNA / PLAN
+window.loadChats=async()=>{
+  const mob=document.getElementById("chatSearch").value.trim();
+  const b=document.getElementById("chatBody"); b.innerHTML="Loading...";
+  let snap;
+  if(mob){ try{ snap=await getDocs(query(collection(db,"inbox_chats"),where("participants","array-contains",mob),orderBy("time","desc"),limit(100))); }
+    catch(e){ snap=await getDocs(query(collection(db,"inbox_chats"),where("from","==",mob),limit(100))); } }
+  else{ try{ snap=await getDocs(query(collection(db,"inbox_chats"),orderBy("time","desc"),limit(100))); }catch(e){ snap=await getDocs(query(collection(db,"inbox_chats"),limit(100))); } }
+  let h="<table><tr><th>From → To</th><th>Msg</th></tr>";
+  snap.forEach(d=>{ const m=d.data(); h+=`<tr><td>${m.from||""} → ${m.to||""}</td><td>${m.text||"[photo]"} ${m.photoUrl?`<a href="${m.photoUrl}" target="_blank" style="color:#fbbf24">photo</a>`:""}</td></tr>`; });
+  b.innerHTML=h+"</table>";
+};
+window.loadTeam=async()=>{
+  const mob=document.getElementById("teamSearch").value.trim();
+  const b=document.getElementById("teamBody"); if(!mob){b.innerHTML="Mobile daalo";return;} b.innerHTML="Loading...";
+  const l1=await getDocs(query(collection(db,"users"),where("referredBy","==",mob)));
+  let c2=0,c3=0,prem1=0,h1=""; l1.forEach(d=>{ const m=d.data(); if(m.isPremium)prem1++; h1+=`<div>L1: ${m.name||""} ${m.mobile||d.id} ${m.isPremium?"✅":"❌"}</div>`; });
+  for(const d of l1.docs){ const q2=await getDocs(query(collection(db,"users"),where("referredBy","==",d.id))); c2+=q2.size;
+    for(const d2 of q2.docs){ const q3=await getDocs(query(collection(db,"users"),where("referredBy","==",d2.id))); c3+=q3.size; } }
+  b.innerHTML=`<div class="card"><b>L1:</b> ${l1.size} (Prem: ${prem1}) | <b>L2:</b> ${c2} | <b>L3:</b> ${c3} | <b>Total:</b> ${l1.size+c2+c3}</div><div class="card">${h1}</div>`;
+};
+window.loadPremReq=async()=>{
+  const b=document.getElementById("premBody"); b.innerHTML="Loading...";
+  const snap=await getDocs(query(collection(db,"premium_requests"),where("status","==","CHECK")));
+  let h=""; snap.forEach(d=>{ const m=d.data(); h+=`<div class="card"><b>${m.mobile||d.id}</b><br><button class="btn btn-true" onclick="setPremium('${d.id}',true)">APPROVE</button><button class="btn btn-false" onclick="rejectPrem('${d.id}')">REJECT</button></div>`; });
+  b.innerHTML=h||"Koi pending nahi";
+};
+window.rejectPrem=async(id)=>{ await updateDoc(doc(db,"premium_requests",id),{status:"REJECTED"}); loadPremReq(); };
+window.loadEarnings=async()=>{ const b=document.getElementById("walletBody"); b.innerHTML="Loading...";
+  let snap; try{ snap=await getDocs(query(collection(db,"earnings"),orderBy("time","desc"),limit(200))); }catch(e){ snap=await getDocs(query(collection(db,"earnings"),limit(200))); }
+  let h="<table><tr><th>To</th><th>Amt</th><th>Type</th><th>From</th></tr>";
+  snap.forEach(d=>{ const m=d.data(); h+=`<tr><td>${m.to||""}</td><td>₹${m.amount||0}</td><td>${m.type||""}</td><td>${m.from||""}</td></tr>`; });
+  b.innerHTML=h+"</table>"; };
+window.loadUpiHist=async()=>{ const b=document.getElementById("walletBody"); b.innerHTML="Loading...";
+  let snap; try{ snap=await getDocs(query(collection(db,"upi_history"),orderBy("time","desc"),limit(100))); }catch(e){ snap=await getDocs(query(collection(db,"upi_history"),limit(100))); }
+  let h="<table><tr><th>Mobile</th><th>Change</th><th>By</th></tr>";
+  snap.forEach(d=>{ const m=d.data(); h+=`<tr><td>${m.mobile||""}</td><td>${m.oldUpi||m.action||""} → ${m.newUpi||""}</td><td>${m.by||"user"}</td></tr>`; });
+  b.innerHTML=h+"</table>"; };
+window.loadPremHist=async()=>{ const b=document.getElementById("walletBody"); b.innerHTML="Loading...";
+  let snap; try{ snap=await getDocs(query(collection(db,"premium_history"),orderBy("time","desc"),limit(100))); }catch(e){ snap=await getDocs(query(collection(db,"premium_history"),limit(100))); }
+  let h="<table><tr><th>Mobile</th><th>Action</th><th>Time</th></tr>";
+  snap.forEach(d=>{ const m=d.data(); h+=`<tr><td>${m.mobile||""}</td><td>${m.action||""}</td><td><small>${m.time?new Date(m.time.seconds*1000).toLocaleString():""}</small></td></tr>`; });
+  b.innerHTML=h+"</table>"; };
+window.loadBanHist=async()=>{ const b=document.getElementById("walletBody"); b.innerHTML="Loading...";
+  let snap; try{ snap=await getDocs(query(collection(db,"ban_history"),orderBy("time","desc"),limit(100))); }catch(e){ snap=await getDocs(collection(db,"ban_history")); }
+  let h=""; snap.forEach(d=>{ const m=d.data(); h+=`<div class="card"><b>${m.mobile}</b> - ${m.banType}<br><small>${m.reason||""}</small><br>${m.photo?`<img class="ev" src="${m.photo}">`:""}</div>`; });
+  b.innerHTML=h||"Koi history nahi"; };
+window.loadSuchna=async()=>{ try{ const d=await getDoc(doc(db,"config","jaruri_suchna")); if(d.exists()){ document.getElementById("suchnaText").value=(d.data().points||[]).join("\n"); } }catch(e){} };
+window.saveSuchna=async()=>{ const pts=document.getElementById("suchnaText").value.split("\n").map(s=>s.trim()).filter(Boolean); await setDoc(doc(db,"config","jaruri_suchna"),{points:pts,updated:serverTimestamp()}); alert("Save ✅"); };
+window.loadPlan=async()=>{ try{ const d=await getDoc(doc(db,"config","plan")); if(d.exists()){ const m=d.data(); document.getElementById("planL1").value=m.l1||100; document.getElementById("planL2").value=m.l2||50; document.getElementById("planL3").value=m.l3||25; document.getElementById("planPrice").value=m.price||500; } }catch(e){} };
+window.savePlan=async()=>{ await setDoc(doc(db,"config","plan"),{l1:+document.getElementById("planL1").value||100,l2:+document.getElementById("planL2").value||50,l3:+document.getElementById("planL3").value||25,price:+document.getElementById("planPrice").value||500,updated:serverTimestamp()}); alert("Plan save ✅"); };
+
+init();
 </script>
 </body>
 </html>
