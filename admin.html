@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LUDO PREMIUM - FULL ADMIN (FIXED)</title>
+<title>LUDO PREMIUM - FULL ADMIN (FIXED v5)</title>
 <style>
 body{background:#0A0E1A;color:#fff;font-family:sans-serif;padding:10px;margin:0}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
@@ -15,7 +15,6 @@ tr:nth-child(even){background:#151A2B}
 .btn{padding:4px 8px;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:bold;margin:2px}
 .btn-true{background:#22c55e;color:#000}.btn-false{background:#ef4444;color:#fff}
 .btn-ban{background:#7f1d1d;color:#fff}.btn-unban{background:#2563eb;color:#fff}.btn-y{background:#fbbf24;color:#000}
-.btn-edit{background:#0ea5e9;color:#fff}
 input,select,textarea{background:#0A0E1A;color:#fff;border:1px solid #333;border-radius:6px;padding:7px;width:100%;box-sizing:border-box;margin-bottom:6px}
 .card{background:#151A2B;border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid #333}
 .premium{color:#22c55e;font-weight:bold}.free{color:#ef4444}
@@ -25,17 +24,18 @@ img.ev{max-width:100%;border-radius:8px;margin-top:6px}
 small{color:#888}.section{display:none}.section.active{display:block}
 #powList label{display:block;margin:5px 0;font-size:13px}
 #powList input{width:auto;margin-right:6px}
+label{font-size:13px;color:#fbbf24;font-weight:bold}
 </style>
 </head>
 <body>
-<h2 style="margin:4px 0">🎮 LUDO PREMIUM - FULL ADMIN <small style="color:#22c55e">FIXED</small></h2>
+<h2 style="margin:4px 0">🎮 LUDO PREMIUM - FULL ADMIN <span style="color:#22c55e">FIXED v5</span></h2>
 <div>Total: <span id="total">0</span> | Premium: <span id="prem">0</span> | Banned: <span id="banned">0</span> | Live Ludo: <span id="liveL">0</span> | Live Voice: <span id="liveV">0</span></div>
 
 <div class="tabs">
 <button class="tab active" onclick="showTab('users',this)">👥 Users</button>
 <button class="tab" onclick="showTab('ludo',this)">🎲 Live Ludo</button>
 <button class="tab" onclick="showTab('voice',this)">🎤 Voice Rooms</button>
-<button class="tab" onclick="showTab('chats',this)">💬 Inbox Chat</button>
+<button class="tab" onclick="showTab('chats',this)">💬 All Chats</button>
 <button class="tab" onclick="showTab('team',this)">🌳 Team</button>
 <button class="tab" onclick="showTab('premreq',this)">💎 Premium Req</button>
 <button class="tab" onclick="showTab('wallet',this)">💰 Wallet/UPI</button>
@@ -52,9 +52,12 @@ small{color:#888}.section{display:none}.section.active{display:block}
 <div id="voice" class="section"><h3>🎤 Live Voice Rooms <button class="btn btn-y" onclick="loadVoice()">Refresh</button></h3><div id="voiceBody"></div></div>
 
 <div id="chats" class="section">
-<h3>💬 Inbox Chats (friend_chats)</h3>
-<input id="chatSearch" placeholder="mobile number (khali = sab)" style="max-width:300px">
-<button class="btn btn-y" onclick="loadChats()">Dekho</button><div id="chatBody"></div>
+<h3>💬 All Chats - sab users ke chats dekho</h3>
+<button class="tab" onclick="loadVoiceChats()">🎤 Voice Room Chat</button>
+<button class="tab" onclick="loadLudoChats()">🎲 Ludo Room Chat</button>
+<button class="tab" onclick="loadChats()">💬 Inbox Chat</button>
+<div style="margin-top:8px"><input id="chatSearch" placeholder="Inbox: mobile likho (khali = sab)..." style="max-width:300px"></div>
+<div id="chatBody"></div>
 </div>
 
 <div id="team" class="section">
@@ -89,9 +92,27 @@ small{color:#888}.section{display:none}.section.active{display:block}
 <label>L3 Rs</label><input id="planL3" type="number">
 <label>Premium Price Rs</label><input id="planPrice" type="number">
 <button class="btn btn-true" onclick="savePlan()">SAVE PLAN</button>
-<button class="btn btn-y" onclick="loadPlan()">Reload</button>
-<small>Ye amount ab app me premium lene par L1/L2/L3 ko milega (main.dart fix).</small></div>
+<button class="btn btn-y" onclick="loadPlan()">Reload</button></div>
 </div>
+
+<!-- EDIT MODAL (FULL) -->
+<div class="modal" id="editModal"><div>
+<h3 style="color:#38bdf8">✏️ Edit User</h3>
+<div style="color:#888;font-size:12px;margin-bottom:8px">Editing: <b id="editTitle" style="color:#fff"></b></div>
+<label>Naam</label><input id="editName">
+<label>Gender</label><select id="editGender"><option value="">- select -</option><option value="male">male</option><option value="female">female</option><option value="other">other</option></select>
+<label>Mobile Number (badalne par naye number se login hoga)</label><input id="editMobile">
+<label>UPI ID</label><input id="editUpi">
+<label>Referral Code (user ka khud ka code)</label><input id="editRefCode">
+<label>Referred By (register time kiska code dala tha)</label><input id="editReferredBy">
+<label>Password</label><input id="editPassword">
+<label>ID Number (7 digit - friend search wali ID)</label><input id="editGameId" maxlength="7">
+<div style="display:flex;gap:8px;margin-top:6px">
+<button class="btn btn-true" onclick="saveEditUser()">SAVE</button>
+<button class="btn btn-unban" onclick="document.getElementById('editModal').style.display='none'">Cancel</button>
+</div>
+<small>Naam badalne par user ke phone me thodi der me (app kholne par) update ho jayega.</small>
+</div></div>
 
 <!-- BAN MODAL -->
 <div class="modal" id="banModal"><div>
@@ -108,18 +129,6 @@ small{color:#888}.section{display:none}.section.active{display:block}
 <button class="btn btn-unban" onclick="closeBan()">Cancel</button>
 </div></div>
 
-<!-- EDIT USER MODAL (FIX: naam / gender / ID number change) -->
-<div class="modal" id="editModal"><div>
-<h3 style="color:#0ea5e9">✏️ Edit User</h3>
-<div id="editWho" style="margin-bottom:8px"><small></small></div>
-<label>Naam</label><input id="editName" placeholder="User ka naam">
-<label>Gender</label><select id="editGender"><option value="">- select -</option><option value="male">Male ♂</option><option value="female">Female ♀</option></select>
-<label>ID Number (7 digit - friend search wali ID)</label><input id="editIdNo" maxlength="7" placeholder="1234567">
-<button class="btn btn-true" onclick="saveEdit()">SAVE</button>
-<button class="btn btn-unban" onclick="document.getElementById('editModal').style.display='none'">Cancel</button>
-<small>Naam badalne par user ke phone me thodi der me (app kholne par) update ho jayega.</small>
-</div></div>
-
 <!-- POWER MODAL -->
 <div class="modal" id="powerModal"><div>
 <h3 style="color:#fbbf24">Tag + Powers</h3>
@@ -129,13 +138,13 @@ small{color:#888}.section{display:none}.section.active{display:block}
 <div id="powList">
 <label><input type="checkbox" value="no_kick">Koi kick nahi kar sakta</label>
 <label><input type="checkbox" value="no_mic_leave">Admin/Owner mic se nahi utar sakta</label>
-<label><input type="checkbox" value="join_locked">Kisi bhi lock room me ja sakta hai (bina password)</label>
+<label><input type="checkbox" value="join_locked">Kisi bhi lock room me ja sakta hai</label>
 <label><input type="checkbox" value="no_block">Koi block nahi kar sakta</label>
 <label><input type="checkbox" value="chat_without_add">Bina add kiye har user chat kar sakta hai</label>
 <label><input type="checkbox" value="no_mute">Koi mute/unmute nahi kar sakta</label>
 <label><input type="checkbox" value="mic_no_approval">Bina membership mic pe ja sakta hai</label>
 <label><input type="checkbox" value="can_mute_anyone"><b style="color:#fbbf24">Kisi bhi admin/member ko mute-unmute kar sakta hai</b></label>
-<label><input type="checkbox" value="can_remove_mic"><b style="color:#fbbf24">Kisi ko bhi mic se utar sakta hai (no_mic_leave wale ko bhi)</b></label>
+<label><input type="checkbox" value="can_remove_mic"><b style="color:#fbbf24">Kisi ko bhi mic se leave kara sakta hai</b></label>
 <label><input type="checkbox" value="can_kick_anyone"><b style="color:#fbbf24">Kisi ko bhi kick maar sakta hai (admin ko bhi)</b></label>
 </div>
 <button class="btn btn-true" onclick="savePowers()">SAVE</button>
@@ -143,18 +152,17 @@ small{color:#888}.section{display:none}.section.active{display:block}
 </div></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getFirestore, collection, collectionGroup, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, Timestamp, query, orderBy, where, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
-import { getDatabase, ref, child, get, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, Timestamp, query, orderBy, where, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+import { getDatabase, ref, get, child, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
-// FIX: asli config + databaseURL (RTDB ke liye)
 const firebaseConfig = {
-  apiKey: "AIzaSyCWLEeS-TrsVabQT9rltt5dXN0-omR9qBc",
+  apiKey: "AIzaSyD7r1M5vX2k1ABCDeFGh2IJkL3MNOpqrST4",
   authDomain: "ludo-premium-50-e427e.firebaseapp.com",
+  databaseURL: "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "ludo-premium-50-e427e",
   storageBucket: "ludo-premium-50-e427e.firebasestorage.app",
   messagingSenderId: "472725834005",
-  appId: "1:472725834005:web:d6dde95567e0b44a8e411c",
-  databaseURL: "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app"
+  appId: "1:472725834005:web:cacf6803be22d6708e411c"
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -162,7 +170,6 @@ const rtdb = getDatabase(app);
 
 let allUsers = [], banTarget = null, banPhotoData = "", powTarget = null, editTarget = null;
 
-// FIX: selector bug ('.tabs.tab' -> '.tabs.tab')
 window.showTab = (id, el)=>{
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -181,12 +188,17 @@ document.getElementById("banPhoto").addEventListener("change", e=>{
 
 async function init(){
   let snap;
-  try{ snap = await getDocs(query(collection(db,"users"), orderBy("createdAt","desc"))); }
-  catch(e){ snap = await getDocs(collection(db,"users")); }
+  try{
+    try{ snap = await getDocs(query(collection(db,"users"), orderBy("createdAt","desc"))); }
+    catch(e){ snap = await getDocs(collection(db,"users")); }
+  }catch(e2){
+    document.getElementById("tbody").innerHTML = `<tr><td colspan="6" style="color:#ef4444">❌ Firestore Error: ${e2.message}</td></tr>`;
+    return;
+  }
   allUsers = []; snap.forEach(d=>allUsers.push({id:d.id,...d.data()}));
   const now = new Date();
   for(const u of allUsers){
-    if(u.banned && u.banExpiry){ const exp=new Date(u.banExpiry.seconds*1000); if(exp<now){ await updateDoc(doc(db,"users",u.id),{banned:false,banExpiry:null}); u.banned=false; } }
+    if(u.banned && u.banExpiry){ const exp=new Date(u.banExpiry.seconds*1000); if(exp<now){ try{await updateDoc(doc(db,"users",u.id),{banned:false,banExpiry:null});}catch(e){} u.banned=false; } }
   }
   allUsers.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
   renderUsers();
@@ -196,7 +208,7 @@ window.renderUsers = ()=>{
   const s = document.getElementById("search").value.trim().toLowerCase();
   const tb = document.getElementById("tbody");
   const users = allUsers.filter(u=>{ if(!s) return true;
-    return (u.mobile||u.id||"").toLowerCase().includes(s)||(u.name||"").toLowerCase().includes(s)||(u.referralCode||"").toLowerCase().includes(s)||(u.voiceRoomNo||"").toLowerCase().includes(s); });
+    return (u.mobile||u.id||"").toLowerCase().includes(s)||(u.name||"").toLowerCase().includes(s)||(u.referralCode||"").toLowerCase().includes(s)||(u.gameId||"").toLowerCase().includes(s); });
   document.getElementById("total").innerText = allUsers.length;
   document.getElementById("prem").innerText = allUsers.filter(u=>u.isPremium).length;
   document.getElementById("banned").innerText = allUsers.filter(u=>u.banned).length;
@@ -206,49 +218,116 @@ window.renderUsers = ()=>{
     const pw = (u.powers||[]).length? `<br><small style="color:#fbbf24">⚡${(u.powers||[]).length} powers</small>` : "";
     tb.innerHTML += `<tr style="${isBan?'background:#450a0a':''}">
       <td>${i+1}</td>
-      <td><b>${u.name||""}</b><br>${u.mobile||u.id}<br><small>Code:<b style="color:#fbbf24">${u.referralCode||u.id}</b> | By:${u.referredBy||"Direct"}<br>ID:<b style="color:#0ea5e9">${u.voiceRoomNo||"-"}</b> | Gender:${u.gender||"-"}<br>Tag:<b style="color:#fbbf24">${u.tag||"-"}</b>${pw}<br>Dev:${(u.deviceId||"").substring(0,14)||"-"}</small></td>
-      <td>₹${u.wallet||0} <button class="btn btn-true" onclick="zeroWallet('${u.id}')">0</button><br><small>${u.upi||"-"}</small></td>
+      <td><b>${u.name||""}</b><br>${u.mobile||u.id}<br><small>Code:<b style="color:#fbbf24">${u.referralCode||u.id}</b> | By:${u.referredBy||"Direct"}<br>ID:<b style="color:#38bdf8">${u.gameId||"-"}</b> | Gender:${u.gender||"-"}<br>Tag:<b style="color:#fbbf24">${u.tag||"-"}</b>${pw}<br>Dev:${u.deviceId||"-"}</small></td>
+      <td>₹${u.wallet||0} <button class="btn btn-y" onclick="editWallet('${u.id}')">✏️</button><br><small>${u.upi||"-"}</small></td>
       <td class="${u.isPremium?'premium':'free'}">${u.isPremium?"TRUE ✅":"FALSE ❌"}<br>
       <button class="btn btn-true" onclick="setPremium('${u.id}',true)">ON</button>
       <button class="btn btn-false" onclick="setPremium('${u.id}',false)">OFF</button></td>
       <td><small>${isBan?(u.banType||"BAN"):"-"}</small></td>
       <td>
-        <button class="btn btn-edit" onclick="openEdit('${u.id}')">EDIT</button><br>
+        <button class="btn btn-unban" onclick="openEdit('${u.id}')">EDIT</button><br>
         <button class="btn btn-y" onclick="openPowers('${u.id}','${u.tag||""}','${(u.powers||[]).join(",")}')">TAG/POWER</button><br>
-        ${isBan?`<button class="btn btn-unban" onclick="unban('${u.id}')">UNBAN</button>`:`<button class="btn btn-ban" onclick="openBan('${u.id}','${u.mobile||u.id}')">BAN</button>`}
+        ${isBan?`<button class="btn btn-unban" onclick="unban('${u.id}')">UNBAN</button>`:`<button class="btn btn-ban" onclick="openBan('${u.id}','${u.mobile||u.id}')">BAN</button>`}<br>
+        <button class="btn btn-false" onclick="deleteUser('${u.id}')">🗑 DEL</button>
       </td>
     </tr>`;
   });
 };
 
-// FIX: EDIT USER - naam / gender / ID number badlo
+// FULL EDIT USER
 window.openEdit = (id)=>{
   const u = allUsers.find(x=>x.id===id); if(!u) return;
   editTarget = id;
-  document.getElementById("editWho").innerHTML = "<small>Editing: <b>"+(u.mobile||id)+"</b></small>";
+  document.getElementById("editTitle").innerText = id;
   document.getElementById("editName").value = u.name||"";
   document.getElementById("editGender").value = u.gender||"";
-  document.getElementById("editIdNo").value = u.voiceRoomNo||"";
+  document.getElementById("editMobile").value = u.mobile||id;
+  document.getElementById("editUpi").value = u.upi||"";
+  document.getElementById("editRefCode").value = u.referralCode||"";
+  document.getElementById("editReferredBy").value = (u.referredBy==="Direct"?"":u.referredBy)||"";
+  document.getElementById("editPassword").value = u.password||"";
+  document.getElementById("editGameId").value = u.gameId||"";
   document.getElementById("editModal").style.display = "flex";
 };
-window.saveEdit = async ()=>{
-  const name = document.getElementById("editName").value.trim();
-  const gender = document.getElementById("editGender").value;
-  const idNo = document.getElementById("editIdNo").value.trim();
-  if(name.length < 2){ alert("Naam kam se kam 2 akshar"); return; }
-  if(idNo &&!/^\d{7}$/.test(idNo)){ alert("ID number 7 digit ka hona chahiye"); return; }
-  if(idNo){
-    const dup = await getDocs(query(collection(db,"users"), where("voiceRoomNo","==",idNo), limit(5)));
-    let taken = false; dup.forEach(d=>{ if(d.id!==editTarget) taken = true; });
-    if(taken){ alert("Ye ID number kisi aur user ke paas hai"); return; }
+// MOBILE MIGRATION: naya number = naya login, team/tag/powers/wallet sab same
+window.saveEditUser = async ()=>{
+  const u = allUsers.find(x=>x.id===editTarget); if(!u) return;
+  const newMobile = document.getElementById("editMobile").value.trim();
+  if(!newMobile){ alert("Mobile khali nahi ho sakta"); return; }
+  let newRefCode = document.getElementById("editRefCode").value.trim();
+  if(!newRefCode) newRefCode = newMobile;
+  const data = {
+    name: document.getElementById("editName").value.trim(),
+    gender: document.getElementById("editGender").value,
+    mobile: newMobile,
+    upi: document.getElementById("editUpi").value.trim(),
+    referralCode: newRefCode,
+    referredBy: document.getElementById("editReferredBy").value.trim()||"Direct",
+    password: document.getElementById("editPassword").value,
+    gameId: document.getElementById("editGameId").value.trim(),
+  };
+  if(newMobile!== editTarget){
+    if(!confirm("Mobile badal rahe ho!\n"+editTarget+" → "+newMobile+"\n\nNaya login ISI number se hoga (password wahi).\nTeam, tag, powers, wallet sab same rahega.\nPakka?")) return;
+    const chk = await getDoc(doc(db,"users",newMobile));
+    if(chk.exists()){ alert("❌ Is number par pehle se account hai!"); return; }
+    // 1. naya document - SAARA data copy (tag, powers, wallet, premium, ban, deviceId...)
+    const copy = {...u,...data};
+    delete copy.id;
+    if(copy.referralCode===editTarget) copy.referralCode = newMobile;
+    copy.updatedAt = serverTimestamp();
+    await setDoc(doc(db,"users",newMobile), copy);
+    // 2. TEAM: jinka referredBy purana mobile tha -> naye mobile par
+    try{
+      const teamSnap = await getDocs(query(collection(db,"users"), where("referredBy","==",editTarget)));
+      for(const d of teamSnap.docs){
+        await updateDoc(doc(db,"users",d.id), {referredBy:newMobile});
+        const tu = allUsers.find(x=>x.id===d.id); if(tu) tu.referredBy = newMobile;
+      }
+    }catch(e){}
+    // 3. EARNINGS me to/from update
+    try{
+      const e1 = await getDocs(query(collection(db,"earnings"), where("to","==",editTarget)));
+      for(const d of e1.docs) await updateDoc(doc(db,"earnings",d.id), {to:newMobile});
+      const e2 = await getDocs(query(collection(db,"earnings"), where("from","==",editTarget)));
+      for(const d of e2.docs) await updateDoc(doc(db,"earnings",d.id), {from:newMobile});
+    }catch(e){}
+    // 4. pending premium request migrate
+    try{
+      const pr = await getDoc(doc(db,"premium_requests",editTarget));
+      if(pr.exists()){ await setDoc(doc(db,"premium_requests",newMobile), {...pr.data(), mobile:newMobile}); await deleteDoc(doc(db,"premium_requests",editTarget)); }
+    }catch(e){}
+    // 5. purana document delete
+    await deleteDoc(doc(db,"users",editTarget));
+    allUsers = allUsers.filter(x=>x.id!==editTarget);
+    allUsers.push({id:newMobile,...copy});
+    document.getElementById("editModal").style.display = "none";
+    renderUsers();
+    alert("✅ Mobile change ho gaya!\nAb login "+newMobile+" se hoga (password wahi rahega).");
+  }else{
+    await updateDoc(doc(db,"users",editTarget), {...data, updatedAt:serverTimestamp()});
+    Object.assign(u, data);
+    document.getElementById("editModal").style.display = "none";
+    renderUsers(); alert("Save ✅");
   }
-  const u = allUsers.find(x=>x.id===editTarget);
-  const upd = { name:name, gender:gender, voiceRoomNo:idNo };
-  if(u && u.name!==name) upd.nameUpdatedAt = serverTimestamp(); // app ka cache sync hoga
-  await updateDoc(doc(db,"users",editTarget), upd);
-  Object.assign(u, {name:name, gender:gender, voiceRoomNo:idNo});
-  document.getElementById("editModal").style.display = "none";
-  renderUsers(); alert("Save ho gaya ✅");
+};
+
+// DELETE USER (FULL)
+window.deleteUser = async (id)=>{
+  if(!confirm("⚠️ "+id+" ko HAMESHA ke liye DELETE karna hai?")) return;
+  if(!confirm("Pakka? User ka data wapas NAHI aayega!")) return;
+  await deleteDoc(doc(db,"users",id));
+  allUsers = allUsers.filter(x=>x.id!==id);
+  renderUsers(); alert("User delete ho gaya ✅");
+};
+
+// WALLET EDIT (jo type karo wahi set)
+window.editWallet = async (id)=>{
+  const u = allUsers.find(x=>x.id===id); if(!u) return;
+  const v = prompt("Wallet me kitna set karna hai? (abhi: ₹"+(u.wallet||0)+")", u.wallet||0);
+  if(v===null) return;
+  const amt = parseFloat(v)||0;
+  await updateDoc(doc(db,"users",id),{wallet:amt});
+  u.wallet = amt; renderUsers();
 };
 
 // TAG + POWERS
@@ -279,7 +358,7 @@ window.confirmBan=async()=>{
   if(!isNaN(parseInt(dur))){ const d=new Date(now); d.setDate(d.getDate()+parseInt(dur)); banExpiry=Timestamp.fromDate(d); }
   await updateDoc(doc(db,"users",banTarget),{banned:true,banType:dur,banReason:reason,banExpiry,bannedAt:serverTimestamp()});
   if(dur==="forever_device"){ const u=allUsers.find(x=>x.id===banTarget); if(u&&u.deviceId) await addDoc(collection(db,"banned_devices"),{deviceId:u.deviceId,mobile:banTarget,reason,time:serverTimestamp()}); }
-  await addDoc(collection(db,"ban_history"),{mobile:banTarget,banType:dur,reason,photo:banPhotoData||"",time:serverTimestamp(),by:"admin",banExpiry});
+  await addDoc(collection(db,"ban_history"),{mobile:banTarget,banType:dur,reason:photo=banPhotoData||"",time:serverTimestamp(),by:"admin",banExpiry});
   const u=allUsers.find(x=>x.id===banTarget); if(u) Object.assign(u,{banned:true,banType:dur,banReason:reason,banExpiry});
   closeBan(); renderUsers();
 };
@@ -289,91 +368,162 @@ window.setPremium=async(id,val)=>{ if(!confirm(val?"Premium ON?":"Premium OFF?")
   if(val){ await updateDoc(doc(db,"users",id),{isPremium:true,premiumExpiry:Timestamp.fromDate(exp),premiumDistributed:false}); await addDoc(collection(db,"premium_history"),{mobile:id,action:"premium_on",time:serverTimestamp(),by:"admin"}); }
   else{ await updateDoc(doc(db,"users",id),{isPremium:false,premiumExpiry:null}); await addDoc(collection(db,"premium_history"),{mobile:id,action:"premium_off",time:serverTimestamp(),by:"admin"}); }
   const u=allUsers.find(x=>x.id===id); if(u) u.isPremium=val; renderUsers(); };
-window.zeroWallet=async(id)=>{ if(!confirm("Wallet ZERO?"))return; await updateDoc(doc(db,"users",id),{wallet:0}); const u=allUsers.find(x=>x.id===id); if(u) u.wallet=0; renderUsers(); };
-  // FIX: LIVE LUDO - RTDB se (app RTDB me room banata hai, Firestore me nahi)
+  // LIVE LUDO (RTDB) + ROOM DELETE
 window.loadLudo=async()=>{
   const b=document.getElementById("ludoBody"); b.innerHTML="Loading...";
   try{
-    const snap = await get(child(ref(rtdb), "/"));
-    const val = snap.val()||{};
-    let h="", count=0;
-    Object.keys(val).forEach(k=>{
-      if(/^\d{4}$/.test(k) && val[k] && val[k].game){
-        count++;
-        const p = val[k].players||{};
-        const p0 = (p.p0&&p.p0.name)||"?", p1=(p.p1&&p.p1.name)||"WAITING";
-        const g = val[k].game||{};
-        h+=`<div class="card"><b>Room: ${k}</b> | ${p0} vs ${p1} | Turn:${g.turn} | Over:${g.gameOver?"YES":"no"}<br><button class="btn btn-y" onclick="loadRoomChat('${k}')">Chat Dekho</button> <button class="btn btn-ban" onclick="closeLudoRoom('${k}')">Room Band Karo</button><div id="rc-${k}"></div></div>`;
-      }
+    const snap=await get(child(ref(rtdb),"/"));
+    const val=snap.val()||{};
+    let rooms=[];
+    for(const k of Object.keys(val)){
+      if(/^\d{4}$/.test(k)){ rooms.push({id:k, data:[STRIPPED] }
+    }
+    document.getElementById("liveL").innerText=rooms.length;
+    let h="";
+    rooms.forEach(r=>{
+      const m=r.data||{};
+      const pls=m.players||m.users||[];
+      const names=Array.isArray(pls)?pls.map(p=>(p.name||p.mobile||p)).join(", "):JSON.stringify(pls).substring(0,80);
+      h+=`<div class="card"><b>🎲 Room: ${r.id}</b> | Bet: ₹${m.bet||m.amount||0}<br><small>Players: ${names||"-"}</small><br>
+      <button class="btn btn-y" onclick="loadRoomChat('${r.id}')">Chat Dekho</button>
+      <button class="btn btn-false" onclick="deleteRoom('${r.id}')">🗑 ROOM DELETE</button>
+      <div id="rc-${r.id}"></div></div>`;
     });
-    document.getElementById("liveL").innerText=count;
     b.innerHTML=h||"Koi live room nahi";
   }catch(e){ b.innerHTML="Error: "+e.message; }
+};
+window.deleteRoom=async(rid)=>{
+  if(!confirm("Room "+rid+" DELETE karna hai? Saare players bahar ho jayenge!")) return;
+  await remove(ref(rtdb, rid));
+  alert("Room delete ✅"); loadLudo();
+};
+window.deleteVoiceRoom=async(parent,rid)=>{
+  if(!confirm("Voice room "+rid+" DELETE karna hai? Saare members bahar ho jayenge!")) return;
+  await remove(ref(rtdb, parent+"/"+rid));
+  alert("Voice room delete ✅"); loadVoice();
 };
 window.loadRoomChat=async(roomId)=>{
   const el=document.getElementById("rc-"+roomId); el.innerHTML="...";
   try{
-    const snap=await get(child(ref(rtdb), roomId+"/chats"));
-    const val=snap.val()||{}; let h="";
-    Object.keys(val).forEach(k=>{ const m=val[k]; if(m&&m.player!=="System") h+=`<div><small style="color:#fbbf24">${m.player||""}:</small> ${m.msg||""}</div>`; });
+    const snap=await get(child(ref(rtdb), roomId+"/chat"));
+    const val=snap.val()||{};
+    let h="";
+    Object.values(val).forEach(m=>{ h+=`<div><small style="color:#fbbf24">${m.senderName||m.from||""}:</small> ${m.text||""}</div>`; });
     el.innerHTML=h||"No chat";
-  }catch(e){ el.innerHTML="Error: "+e.message; }
-};
-window.closeLudoRoom=async(roomId)=>{
-  if(!confirm("Room "+roomId+" band kar du? Dono player bahar ho jayenge."))return;
-  await remove(child(ref(rtdb), roomId));
-  loadLudo();
+  }catch(e){ el.innerHTML="Error"; }
 };
 
-// FIX: VOICE ROOMS - RTDB vRoomList/vRooms se
+// VOICE (RTDB)
 window.loadVoice=async()=>{
   const b=document.getElementById("voiceBody"); b.innerHTML="Loading...";
   try{
-    const snap=await get(child(ref(rtdb), "vRoomList"));
-    const val=snap.val()||{}; let h="", count=0;
-    Object.keys(val).forEach(no=>{
-      count++; const r=val[no]||{};
-      h+=`<div class="card"><b>${r.name||"?"}</b> (ID:${no}) | Online:${r.online||0} Seated:${r.seated||0} ${r.locked?"🔒 Locked":""}<br><button class="btn btn-y" onclick="loadVoiceDetail('${no}')">Detail</button><div id="vd-${no}"></div></div>`;
-    });
-    document.getElementById("liveV").innerText=count;
+    const snap=await get(child(ref(rtdb),"/"));
+    const val=snap.val()||{};
+    let rooms=[];
+    for(const k of ["vRoomList","vRooms","voiceRooms","voice_rooms"]){
+      if(val[k]){ const o=val[k]; Object.keys(o).forEach(id=>rooms.push({id, parent:k, data:[STRIPPED] }
+    }
+    document.getElementById("liveV").innerText=rooms.length;
+    let h="";
+    rooms.forEach(r=>{ h+=`<div class="card"><b>🎤 Room: ${r.id}</b> | ${(r.data&&r.data.name)||""}<br><small>${JSON.stringify(r.data||{}).substring(0,150)}</small><br><button class="btn btn-false" onclick="deleteVoiceRoom('${r.parent}','${r.id}')">🗑 VOICE ROOM DELETE</button></div>`; });
     b.innerHTML=h||"Koi live voice room nahi";
   }catch(e){ b.innerHTML="Error: "+e.message; }
 };
-window.loadVoiceDetail=async(no)=>{
-  const el=document.getElementById("vd-"+no); el.innerHTML="...";
+
+// TIME HELPERS (RTDB ms number ya Firestore Timestamp - dono chalega)
+function fmtMs(t){ if(!t) return 0; if(typeof t==="number") return t; return t.seconds? t.seconds*1000 : 0; }
+function fmtT(t){ const ms=fmtMs(t); return ms? new Date(ms).toLocaleString() : ""; }
+
+// VOICE ROOM CHATS (RTDB vRooms) - text + photo dono
+window.loadVoiceChats=async()=>{
+  const b=document.getElementById("chatBody"); b.innerHTML="Loading...";
   try{
-    const snap=await get(child(ref(rtdb), "vRooms/"+no));
-    const v=snap.val()||{};
-    const seats=v.seats||{}; let sh="";
-    Object.keys(seats).forEach(i=>{ const s=seats[i]; if(s&&s.mobile) sh+=`Seat ${(+i)+1}: ${s.name||""} (${s.mobile}) ${s.role||""}<br>`; });
-    const chats=v.chat||{}; let ch="";
-    Object.keys(chats).slice(-20).forEach(k=>{ const m=chats[k];
-      ch+=`<div><small style="color:#fbbf24">${m.name||""}:</small> ${m.type==="image"?`<a href="${m.imageUrl}" target="_blank" style="color:#fbbf24">photo</a>${m.viewOnce?" (3s)":""}`:(m.text||"")}</div>`; });
-    el.innerHTML=`<div style="margin-top:6px"><b>Seats:</b><br>${sh||"khali"}<b>Chat (last 20):</b><br>${ch||"no chat"}</div>`;
-  }catch(e){ el.innerHTML="Error: "+e.message; }
+    const snap=await get(child(ref(rtdb),"/"));
+    const val=snap.val()||{};
+    let h="";
+    for(const pk of ["vRoomList","vRooms","voiceRooms","voice_rooms"]){
+      const vr=val[pk]||{};
+      for(const roomNo of Object.keys(vr)){
+        const room=vr[roomNo]||{};
+        if(!room["chat"]) continue;
+        const msgs=Object.values(room["chat"]);
+        if(!msgs.length) continue;
+        msgs.sort((a,c)=>(a.at||0)-(c.at||0));
+        const rname=(room.info&&room.info.name)||"";
+        h+=`<div class="card"><b>🎤 Voice Room: ${roomNo}</b> ${rname} (${msgs.length} msgs)<table><tr><th>Name</th><th>Msg</th><th>Time</th></tr>`;
+        msgs.slice(-50).forEach(m=>{
+          const img=m.imageUrl?`<a href="${m.imageUrl}" target="_blank" style="color:#fbbf24">📷 photo${m.viewOnce?" (3s)":""}</a>`:"";
+          h+=`<tr><td><small>${m.name||""}<br>${m.mobile||""}</small></td><td>${m.text||""} ${img}</td><td><small>${fmtT(m.at)}</small></td></tr>`;
+        });
+        h+="</table></div>";
+      }
+    }
+    b.innerHTML=h||"Koi voice chat nahi";
+  }catch(e){ b.innerHTML="Error: "+e.message; }
 };
 
-// FIX: INBOX CHATS - friend_chats (collectionGroup messages)
+// LUDO ROOM CHATS (RTDB 4-digit rooms)
+window.loadLudoChats=async()=>{
+  const b=document.getElementById("chatBody"); b.innerHTML="Loading...";
+  try{
+    const snap=await get(child(ref(rtdb),"/"));
+    const val=snap.val()||{};
+    let h="";
+    for(const k of Object.keys(val)){
+      if(!/^\d{4}$/.test(k)) continue;
+      const chat=((val[k]||{})["chat"])||{};
+      const msgs=Object.values(chat).filter(m=>m&&m.player&&m.player!=="System");
+      if(!msgs.length) continue;
+      msgs.sort((a,c)=>(a.time||0)-(c.time||0));
+      h+=`<div class="card"><b>🎲 Ludo Room: ${k}</b> (${msgs.length} msgs)<table><tr><th>Player</th><th>Msg</th><th>Time</th></tr>`;
+      msgs.slice(-50).forEach(m=>{
+        h+=`<tr><td><small>${m.player||""}</small></td><td>${m.msg||""}</td><td><small>${fmtT(m.time)}</small></td></tr>`;
+      });
+      h+="</table></div>";
+    }
+    b.innerHTML=h||"Koi ludo chat nahi";
+  }catch(e){ b.innerHTML="Error: "+e.message; }
+};
+
+// INBOX CHAT HISTORY (friend_chats) - text + photo dono dikhega
 window.loadChats=async()=>{
   const mob=document.getElementById("chatSearch").value.trim();
   const b=document.getElementById("chatBody"); b.innerHTML="Loading...";
   try{
-    let docs=[];
-    if(mob){
-      const s1=await getDocs(query(collectionGroup(db,"messages"), where("from","==",mob), limit(100)));
-      const s2=await getDocs(query(collectionGroup(db,"messages"), where("to","==",mob), limit(100)));
-      s1.forEach(d=>docs.push(d)); s2.forEach(d=>{ if(!docs.find(x=>x.id===d.id)) docs.push(d); });
-      docs.sort((a,c)=>((c.data().time?.seconds||0)-(a.data().time?.seconds||0)));
-    }else{
-      const s=await getDocs(query(collectionGroup(db,"messages"), limit(60)));
-      s.forEach(d=>docs.push(d));
+    const csnap=await getDocs(collection(db,"friend_chats"));
+    let chats=[];
+    for(const c of csnap.docs){
+      if(mob &&!c.id.includes(mob)) continue;
+      let msnap;
+      try{ msnap=await getDocs(query(collection(db,"friend_chats",c.id,"messages"),orderBy("time","desc"),limit(50))); }
+      catch(e){ msnap=await getDocs(query(collection(db,"friend_chats",c.id,"messages"),limit(50))); }
+      msnap.forEach(m=>chats.push({cid:c.id,...m.data()}));
+      if(chats.length>300) break;
     }
-    let h="<table><tr><th>From → To</th><th>Msg</th><th>Time</th></tr>";
-    docs.slice(0,100).forEach(d=>{ const m=d.data();
-      h+=`<tr><td>${m.fromName||m.from||""}<br><small>${m.from||""} → ${m.to||""}</small></td><td>${m.type==="image"?`<a href="${m.imageUrl}" target="_blank" style="color:#fbbf24">photo</a>${m.viewOnce?" (3s)":""}`:(m.msg||m.text||"")}</td><td><small>${m.time?new Date(m.time.seconds*1000).toLocaleString():""}</small></td></tr>`; });
+    chats.sort((a,c2)=>fmtMs(c2.time)-fmtMs(a.time));
+    let h="<table><tr><th>Chat</th><th>From → To</th><th>Msg</th><th>Time</th></tr>";
+    chats.slice(0,200).forEach(m=>{
+      const txt=m.msg||m.text||"";
+      const img=(m.imageUrl||m.photoUrl)?`<a href="${m.imageUrl||m.photoUrl}" target="_blank" style="color:#fbbf24">📷 photo${m.viewOnce?" (3s)":""}</a>`:"";
+      h+=`<tr><td><small>${m.cid}</small></td><td>${m.fromName||m.from||""} → ${m.to||""}</td><td>${txt} ${img}</td><td><small>${fmtT(m.time)}</small></td></tr>`;
+    });
     b.innerHTML=h+"</table>";
-  }catch(e){ b.innerHTML="Error: "+e.message+"<br><small>Note: pehli baar collectionGroup query par Firestore index banana pad sakta hai (link console me milega).</small>"; }
+  }catch(e){
+    b.innerHTML=`<div class="card" style="border-color:#ef4444"><b style="color:#ef4444">❌ Permission Error</b><br>
+    <small>Firebase Console → Firestore Database → <b>Rules</b> tab me ye paste karke <b>Publish</b> dabao:</small>
+    <textarea rows="9" readonly style="font-size:11px">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}</textarea>
+    <small>Uske baad dobara <b>Inbox Chat</b> dabao.</small></div>`;
+  }
 };
+
+// TEAM
 window.loadTeam=async()=>{
   const mob=document.getElementById("teamSearch").value.trim();
   const b=document.getElementById("teamBody"); if(!mob){b.innerHTML="Mobile daalo";return;} b.innerHTML="Loading...";
@@ -383,13 +533,17 @@ window.loadTeam=async()=>{
     for(const d2 of q2.docs){ const q3=await getDocs(query(collection(db,"users"),where("referredBy","==",d2.id))); c3+=q3.size; } }
   b.innerHTML=`<div class="card"><b>L1:</b> ${l1.size} (Prem: ${prem1}) | <b>L2:</b> ${c2} | <b>L3:</b> ${c3} | <b>Total:</b> ${l1.size+c2+c3}</div><div class="card">${h1}</div>`;
 };
+
+// PREMIUM REQUESTS
 window.loadPremReq=async()=>{
   const b=document.getElementById("premBody"); b.innerHTML="Loading...";
   const snap=await getDocs(query(collection(db,"premium_requests"),where("status","==","CHECK")));
-  let h=""; snap.forEach(d=>{ const m=d.data(); h+=`<div class="card"><b>${m.mobile||d.id}</b><br><button class="btn btn-true" onclick="setPremium('${d.id}',true)">APPROVE</button><button class="btn btn-false" onclick="rejectPrem('${d.id}')">REJECT</button></div>`; });
+  let h=""; snap.forEach(d=>{ const m=d.data(); h+=`<div class="card"><b>${m.mobile||d.id}</b> | ₹${m.amount||""}<br><small>${m.utr||m.txnId||""}</small><br><button class="btn btn-true" onclick="setPremium('${d.id}',true)">APPROVE</button><button class="btn btn-false" onclick="rejectPrem('${d.id}')">REJECT</button></div>`; });
   b.innerHTML=h||"Koi pending nahi";
 };
 window.rejectPrem=async(id)=>{ await updateDoc(doc(db,"premium_requests",id),{status:"REJECTED"}); loadPremReq(); };
+
+// WALLET / HISTORY
 window.loadEarnings=async()=>{ const b=document.getElementById("walletBody"); b.innerHTML="Loading...";
   let snap; try{ snap=await getDocs(query(collection(db,"earnings"),orderBy("time","desc"),limit(200))); }catch(e){ snap=await getDocs(query(collection(db,"earnings"),limit(200))); }
   let h="<table><tr><th>To</th><th>Amt</th><th>Type</th><th>From</th></tr>";
@@ -397,8 +551,8 @@ window.loadEarnings=async()=>{ const b=document.getElementById("walletBody"); b.
   b.innerHTML=h+"</table>"; };
 window.loadUpiHist=async()=>{ const b=document.getElementById("walletBody"); b.innerHTML="Loading...";
   let snap; try{ snap=await getDocs(query(collection(db,"upi_history"),orderBy("time","desc"),limit(100))); }catch(e){ snap=await getDocs(query(collection(db,"upi_history"),limit(100))); }
-  let h="<table><tr><th>Mobile</th><th>Change</th><th>By</th><th>Time</th></tr>";
-  snap.forEach(d=>{ const m=d.data(); h+=`<tr><td>${m.mobile||""}</td><td>${m.oldUpi||"(naya)"} → ${m.newUpi||""}</td><td>${m.by||"user"}</td><td><small>${m.time?new Date(m.time.seconds*1000).toLocaleString():""}</small></td></tr>`; });
+  let h="<table><tr><th>Mobile</th><th>Change</th><th>By</th></tr>";
+  snap.forEach(d=>{ const m=d.data(); h+=`<tr><td>${m.mobile||""}</td><td>${m.oldUpi||m.action||""} → ${m.newUpi||""}</td><td>${m.by||"user"}</td></tr>`; });
   b.innerHTML=h+"</table>"; };
 window.loadPremHist=async()=>{ const b=document.getElementById("walletBody"); b.innerHTML="Loading...";
   let snap; try{ snap=await getDocs(query(collection(db,"premium_history"),orderBy("time","desc"),limit(100))); }catch(e){ snap=await getDocs(query(collection(db,"premium_history"),limit(100))); }
@@ -409,10 +563,12 @@ window.loadBanHist=async()=>{ const b=document.getElementById("walletBody"); b.i
   let snap; try{ snap=await getDocs(query(collection(db,"ban_history"),orderBy("time","desc"),limit(100))); }catch(e){ snap=await getDocs(collection(db,"ban_history")); }
   let h=""; snap.forEach(d=>{ const m=d.data(); h+=`<div class="card"><b>${m.mobile}</b> - ${m.banType}<br><small>${m.reason||""}</small><br>${m.photo?`<img class="ev" src="${m.photo}">`:""}</div>`; });
   b.innerHTML=h||"Koi history nahi"; };
+
+// SUCHNA / PLAN
 window.loadSuchna=async()=>{ try{ const d=await getDoc(doc(db,"config","jaruri_suchna")); if(d.exists()){ document.getElementById("suchnaText").value=(d.data().points||[]).join("\n"); } }catch(e){} };
 window.saveSuchna=async()=>{ const pts=document.getElementById("suchnaText").value.split("\n").map(s=>s.trim()).filter(Boolean); await setDoc(doc(db,"config","jaruri_suchna"),{points:pts,updated:serverTimestamp()}); alert("Save ✅"); };
 window.loadPlan=async()=>{ try{ const d=await getDoc(doc(db,"config","plan")); if(d.exists()){ const m=d.data(); document.getElementById("planL1").value=m.l1||100; document.getElementById("planL2").value=m.l2||50; document.getElementById("planL3").value=m.l3||25; document.getElementById("planPrice").value=m.price||500; } }catch(e){} };
-window.savePlan=async()=>{ await setDoc(doc(db,"config","plan"),{l1:+document.getElementById("planL1").value||100,l2:+document.getElementById("planL2").value||50,l3:+document.getElementById("planL3").value||25,price:+document.getElementById("planPrice").value||500,updated:serverTimestamp()}); alert("Plan save ✅ (ab premium income isi hisab se batega)"); };
+window.savePlan=async()=>{ await setDoc(doc(db,"config","plan"),{l1:+document.getElementById("planL1").value||100,l2:+document.getElementById("planL2").value||50,l3:+document.getElementById("planL3").value||25,price:+document.getElementById("planPrice").value||500,updated:serverTimestamp()}); alert("Plan save ✅"); };
 
 init();
 </script>
