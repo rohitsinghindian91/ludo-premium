@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LUDO PREMIUM - FULL ADMIN (FIXED v6 - unique ID lock)</title>
+<title>LUDO PREMIUM - FULL ADMIN (v7 - safe)</title>
 <style>
 body{background:#0A0E1A;color:#fff;font-family:sans-serif;padding:10px;margin:0}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
@@ -28,7 +28,7 @@ label{font-size:13px;color:#fbbf24;font-weight:bold}
 </style>
 </head>
 <body>
-<h2 style="margin:4px 0">🎮 LUDO PREMIUM - FULL ADMIN <span style="color:#22c55e">FIXED v6</span></h2>
+<h2 style="margin:4px 0">🎮 LUDO PREMIUM - FULL ADMIN <span style="color:#22c55e">v7</span></h2>
 <div>Total: <span id="total">0</span> | Premium: <span id="prem">0</span> | Banned: <span id="banned">0</span> | Live Ludo: <span id="liveL">0</span> | Live Voice: <span id="liveV">0</span></div>
 
 <div class="tabs">
@@ -153,10 +153,10 @@ label{font-size:13px;color:#fbbf24;font-weight:bold}
 <button class="btn btn-true" onclick="savePowers()">SAVE</button>
 <button class="btn btn-unban" onclick="document.getElementById('powerModal').style.display='none'">Cancel</button>
 </div></div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, Timestamp, query, orderBy, where, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
-import { getDatabase, ref, get, child, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAdpsbH2w8T-iMh6pfBIBmjrgybXtgS9zY",
@@ -169,7 +169,15 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const rtdb = getDatabase(app);
+
+// RTDB SAFE lazy load: agar ye fail bhi ho jaye to Users tab chalta rahega
+let _rtdb = null;
+async function getRtdb(){
+  if(_rtdb) return _rtdb;
+  const m = await import("https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js");
+  _rtdb = { getDatabase: m.getDatabase, ref: m.ref, get: m.get, child: m.child, remove: m.remove, db: m.getDatabase(app) };
+  return _rtdb;
+}
 
 let allUsers = [], banTarget = null, banPhotoData = "", powTarget = null, editTarget = null;
 
@@ -195,7 +203,7 @@ async function init(){
     try{ snap = await getDocs(query(collection(db,"users"), orderBy("createdAt","desc"))); }
     catch(e){ snap = await getDocs(collection(db,"users")); }
   }catch(e2){
-    document.getElementById("tbody").innerHTML = `<tr><td colspan="6" style="color:#ef4444">❌ Firestore Error: ${e2.message}</td></tr>`;
+    document.getElementById("tbody").innerHTML = `<tr><td colspan="6" style="color:#ef4444">❌ Firestore Error: ${e2.message}<br><small>Firebase config check karo — apiKey asli hai?</small></td></tr>`;
     return;
   }
   allUsers = []; snap.forEach(d=>allUsers.push({id:d.id,...d.data()}));
@@ -214,14 +222,14 @@ window.renderUsers = ()=>{
     return (u.mobile||u.id||"").toLowerCase().includes(s)||(u.name||"").toLowerCase().includes(s)||(u.referralCode||"").toLowerCase().includes(s)||(u.gameId||"").toLowerCase().includes(s); });
   document.getElementById("total").innerText = allUsers.length;
   document.getElementById("prem").innerText = allUsers.filter(u=>u.isPremium).length;
-  document.getElementById("banned").innerText = allUsers.filter(u=>u.isPremium).length;
+  document.getElementById("banned").innerText = allUsers.filter(u=>u.banned).length;
   tb.innerHTML = "";
   users.slice(0,200).forEach((u,i)=>{
     const isBan = u.banned===true;
     const pw = (u.powers||[]).length? `<br><small style="color:#fbbf24">⚡${(u.powers||[]).length} powers</small>` : "";
     tb.innerHTML += `<tr style="${isBan?'background:#450a0a':''}">
       <td>${i+1}</td>
-      <td><b>${u.name||""}</b><br>${u.mobile||u.id}<br><small>Code:<b style="color:#fbbf24">${u.referralCode||u.id}</b> | By:${u.referredBy||"Direct"}<br>ID:<b style="color:#38bdf8">${u.gameId||"-"}</b> | Gender:${u.gender||"-"}<br>Tag:<b style="color:#fbbf24">${u.tag||"-"}</b>${pw}<br>Dev:${u.deviceId||"-"}</small></td>
+      <td><b>${u.name||""}</b><br>${u.mobile||u.id}<br><small>Code:<b style="color:#fbbf24">${u.referralCode||u.id}</b> | By:${u.referredBy||"Direct"}<br>ID:<b style="color:#38bdf8">${u.gameId||"-"}</b> | Gender:${u.gender||"-"}<br>Tag:<b style="color:#fbbf24">${u.tag||"-"}</b>${pw}<br>Dev:${(u.deviceId||"").substring(0,10)||"-"}</small></td>
       <td>₹${u.wallet||0} <button class="btn btn-y" onclick="editWallet('${u.id}')">✏️</button><br><small>${u.upi||"-"}</small></td>
       <td class="${u.isPremium?'premium':'free'}">${u.isPremium?"TRUE ✅":"FALSE ❌"}<br>
       <button class="btn btn-true" onclick="setPremium('${u.id}',true)">ON</button>
@@ -237,7 +245,7 @@ window.renderUsers = ()=>{
   });
 };
 
-// FULL EDIT USER
+// FULL EDIT USER (mobile migration + unique ID lock)
 window.openEdit = (id)=>{
   const u = allUsers.find(x=>x.id===id); if(!u) return;
   editTarget = id;
@@ -252,7 +260,6 @@ window.openEdit = (id)=>{
   document.getElementById("editGameId").value = u.gameId||"";
   document.getElementById("editModal").style.display = "flex";
 };
-// MOBILE MIGRATION: naya number = naya login, team/tag/powers/wallet sab same
 window.saveEditUser = async ()=>{
   const u = allUsers.find(x=>x.id===editTarget); if(!u) return;
   const newMobile = document.getElementById("editMobile").value.trim();
@@ -269,9 +276,8 @@ window.saveEditUser = async ()=>{
     password: document.getElementById("editPassword").value,
     gameId: document.getElementById("editGameId").value.trim(),
   };
-  // UNIQUE ID CHECK - ye ID kisi aur user ke paas pehle se to nahi hai
   if(data.gameId){
-    const dup=allUsers.find(u=>u.id!==editTarget && (String(u.gameId||"")===data.gameId || String(u.voiceRoomNo||"")===data.gameId));
+    const dup=allUsers.find(x=>x.id!==editTarget && (String(x.gameId||"")===data.gameId || String(x.voiceRoomNo||"")===data.gameId));
     if(dup){ alert("❌ Ye ID ("+data.gameId+") pehle se "+(dup.name||"")+" ("+(dup.mobile||dup.id)+") ke paas hai!\nDusri ID daalo ya 🎲 Nayi ID dabao."); return; }
   }
   if(newMobile!== editTarget){
@@ -313,13 +319,11 @@ window.saveEditUser = async ()=>{
     renderUsers(); alert("Save ✅");
   }
 };
-
-// UNIQUE 7-DIGIT ID GENERATOR (edit modal me 🎲 Nayi ID button ke liye)
 window.genUniqueId=()=>{
   let nid="";
   for(let t=0;t<60;t++){
     nid=String(Math.floor(1000000+Math.random()*9000000));
-    if(!allUsers.some(u=>u.id!==editTarget && (String(u.gameId||"")===nid||String(u.voiceRoomNo||"")===nid))) break;
+    if(!allUsers.some(x=>x.id!==editTarget && (String(x.gameId||"")===nid||String(x.voiceRoomNo||"")===nid))) break;
   }
   document.getElementById("editGameId").value=nid;
 };
@@ -347,7 +351,7 @@ window.fixDupId=async(id,field)=>{
   let nid="";
   for(let t=0;t<60;t++){
     nid=String(Math.floor(1000000+Math.random()*9000000));
-    if(!allUsers.some(u=>String(u.gameId||"")===nid||String(u.voiceRoomNo||"")===nid)) break;
+    if(!allUsers.some(x=>String(x.gameId||"")===nid||String(x.voiceRoomNo||"")===nid)) break;
   }
   if(!nid){ alert("Nayi ID nahi ban payi, dobara try karo"); return; }
   const up={}; up[field]=nid;
@@ -357,7 +361,7 @@ window.fixDupId=async(id,field)=>{
   alert("✅ Nayi unique ID de di: "+nid);
 };
 
-// DELETE USER (FULL)
+// DELETE USER
 window.deleteUser = async (id)=>{
   if(!confirm("⚠️ "+id+" ko HAMESHA ke liye DELETE karna hai?")) return;
   if(!confirm("Pakka? User ka data wapas NAHI aayega!")) return;
@@ -388,7 +392,7 @@ window.savePowers = async ()=>{
   const tag = document.getElementById("powTag").value.trim();
   const powers = [...document.querySelectorAll("#powList input:checked")].map(c=>c.value);
   await updateDoc(doc(db,"users",powTarget), {tag, powers});
-  const u=allUsers.find(x=>x.id===powTarget);
+  const u = allUsers.find(x=>x.id===powTarget);
   if(u){ u.tag = tag; u.powers = powers; }
   document.getElementById("powerModal").style.display = "none";
   renderUsers(); alert("Tag + Powers save ✅");
@@ -414,11 +418,13 @@ window.setPremium=async(id,val)=>{ if(!confirm(val?"Premium ON?":"Premium OFF?")
   if(val){ await updateDoc(doc(db,"users",id),{isPremium:true,premiumExpiry:Timestamp.fromDate(exp),premiumDistributed:false}); await addDoc(collection(db,"premium_history"),{mobile:id,action:"premium_on",time:serverTimestamp(),by:"admin"}); }
   else{ await updateDoc(doc(db,"users",id),{isPremium:false,premiumExpiry:null}); await addDoc(collection(db,"premium_history"),{mobile:id,action:"premium_off",time:serverTimestamp(),by:"admin"}); }
   const u=allUsers.find(x=>x.id===id); if(u) u.isPremium=val; renderUsers(); };
+
 // LIVE LUDO (RTDB) + ROOM DELETE
 window.loadLudo=async()=>{
   const b=document.getElementById("ludoBody"); b.innerHTML="Loading...";
   try{
-    const snap=await get(child(ref(rtdb),"/"));
+    const R = await getRtdb();
+    const snap=await R.get(R.child(R.ref(R.db),"/"));
     const val=snap.val()||{};
     let rooms=[];
     for(const k of Object.keys(val)){
@@ -440,18 +446,21 @@ window.loadLudo=async()=>{
 };
 window.deleteRoom=async(rid)=>{
   if(!confirm("Room "+rid+" DELETE karna hai? Saare players bahar ho jayenge!")) return;
-  await remove(ref(rtdb, rid));
+  const R = await getRtdb();
+  await R.remove(R.ref(R.db, rid));
   alert("Room delete ✅"); loadLudo();
 };
 window.deleteVoiceRoom=async(parent,rid)=>{
   if(!confirm("Voice room "+rid+" DELETE karna hai? Saare members bahar ho jayenge!")) return;
-  await remove(ref(rtdb, parent+"/"+rid));
+  const R = await getRtdb();
+  await R.remove(R.ref(R.db, parent+"/"+rid));
   alert("Voice room delete ✅"); loadVoice();
 };
 window.loadRoomChat=async(roomId)=>{
   const el=document.getElementById("rc-"+roomId); el.innerHTML="...";
   try{
-    const snap=await get(child(ref(rtdb), roomId+"/chat"));
+    const R = await getRtdb();
+    const snap=await R.get(R.child(R.ref(R.db), roomId+"/chat"));
     const val=snap.val()||{};
     let h="";
     Object.values(val).forEach(m=>{ h+=`<div><small style="color:#fbbf24">${m.senderName||m.from||""}:</small> ${m.text||""}</div>`; });
@@ -463,7 +472,8 @@ window.loadRoomChat=async(roomId)=>{
 window.loadVoice=async()=>{
   const b=document.getElementById("voiceBody"); b.innerHTML="Loading...";
   try{
-    const snap=await get(child(ref(rtdb),"/"));
+    const R = await getRtdb();
+    const snap=await R.get(R.child(R.ref(R.db),"/"));
     const val=snap.val()||{};
     let rooms=[];
     for(const k of ["vRoomList","vRooms","voiceRooms","voice_rooms"]){
@@ -476,15 +486,16 @@ window.loadVoice=async()=>{
   }catch(e){ b.innerHTML="Error: "+e.message; }
 };
 
-// TIME HELPERS (RTDB ms number ya Firestore Timestamp - dono chalega)
+// TIME HELPERS
 function fmtMs(t){ if(!t) return 0; if(typeof t==="number") return t; return t.seconds? t.seconds*1000 : 0; }
 function fmtT(t){ const ms=fmtMs(t); return ms? new Date(ms).toLocaleString() : ""; }
 
-// VOICE ROOM CHATS (RTDB vRooms) - text + photo dono
+// VOICE ROOM CHATS (RTDB)
 window.loadVoiceChats=async()=>{
   const b=document.getElementById("chatBody"); b.innerHTML="Loading...";
   try{
-    const snap=await get(child(ref(rtdb),"/"));
+    const R = await getRtdb();
+    const snap=await R.get(R.child(R.ref(R.db),"/"));
     const val=snap.val()||{};
     let h="";
     for(const pk of ["vRoomList","vRooms","voiceRooms","voice_rooms"]){
@@ -512,7 +523,8 @@ window.loadVoiceChats=async()=>{
 window.loadLudoChats=async()=>{
   const b=document.getElementById("chatBody"); b.innerHTML="Loading...";
   try{
-    const snap=await get(child(ref(rtdb),"/"));
+    const R = await getRtdb();
+    const snap=await R.get(R.child(R.ref(R.db),"/"));
     const val=snap.val()||{};
     let h="";
     for(const k of Object.keys(val)){
@@ -531,7 +543,7 @@ window.loadLudoChats=async()=>{
   }catch(e){ b.innerHTML="Error: "+e.message; }
 };
 
-// INBOX CHAT HISTORY (friend_chats) - text + photo dono dikhega
+// INBOX CHAT HISTORY (friend_chats) - text + photo
 window.loadChats=async()=>{
   const mob=document.getElementById("chatSearch").value.trim();
   const b=document.getElementById("chatBody"); b.innerHTML="Loading...";
@@ -571,7 +583,8 @@ service cloud.firestore {
 
 // TEAM
 window.loadTeam=async()=>{
-  const mob=document.getElementById("teamSearch").value.trim(); const b=document.getElementById("teamBody"); if(!mob){b.innerHTML="Mobile daalo";return;} b.innerHTML="Loading...";
+  const mob=document.getElementById("teamSearch").value.trim();
+  const b=document.getElementById("teamBody"); if(!mob){b.innerHTML="Mobile daalo";return;} b.innerHTML="Loading...";
   const l1=await getDocs(query(collection(db,"users"),where("referredBy","==",mob)));
   let c2=0,c3=0,prem1=0,h1=""; l1.forEach(d=>{ const m=d.data(); if(m.isPremium)prem1++; h1+=`<div>L1: ${m.name||""} ${m.mobile||d.id} ${m.isPremium?"✅":"❌"}</div>`; });
   for(const d of l1.docs){ const q2=await getDocs(query(collection(db,"users"),where("referredBy","==",d.id))); c2+=q2.size;
