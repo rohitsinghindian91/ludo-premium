@@ -921,7 +921,7 @@ Future<void> _autoRetry() async {
   Future<void> _applyPublish() async {
   final eng = globalVoiceEngine;
   if (eng == null ||!joined) return;
-  final shouldPublish = micOn; // testing ke liye seat check hataya
+  final shouldPublish = micOn && mySeat >= 0;
   try {
     await eng.updateChannelMediaOptions(ChannelMediaOptions(
       publishMicrophoneTrack: shouldPublish,
