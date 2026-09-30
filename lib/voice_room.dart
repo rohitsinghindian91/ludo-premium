@@ -1567,6 +1567,25 @@ if (mounted) setState(() { chats.clear(); });
         Text(s.empty? "${s.index + 1}" : s.name.split(" ").first + genderSymbol(s.gender),
             maxLines: 1, overflow: TextOverflow.ellipsis,
             style: TextStyle(color: s.empty? Colors.white24 : Colors.white, fontSize: 10)),
+        if(!s.empty)
+FutureBuilder(
+  future: FirebaseFirestore.instance.collection("users").doc(s.mobile).get(),
+  builder: (c, snap){
+    final tag = snap.data?.data()?["tag"]?.toString()?? "";
+    if(tag.isEmpty) return SizedBox.shrink();
+    return Container(
+      margin: EdgeInsets.only(top:2),
+      padding: EdgeInsets.symmetric(horizontal:6, vertical:2),
+      decoration: BoxDecoration(
+        color: Colors.amber,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(tag,
+        style: TextStyle(fontSize:9, fontWeight: FontWeight.bold, color: Colors.black),
+      ),
+    );
+  },
+),
       ]),
     );
   }
