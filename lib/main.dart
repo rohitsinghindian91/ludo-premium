@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math';
 import 'firebase_options.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
@@ -42,7 +43,6 @@ class _SplashState extends State<Splash> {
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     if (m!= null && m.isNotEmpty) {
-      // FIX: device ban bhi check karo (admin ne "Forever + Device" kiya ho to)
       bool banned = await isUserBanned(m) || await isDeviceBanned();
       if (banned) {
         if (!mounted) return;
@@ -155,7 +155,6 @@ class _OtpPageState extends State<OtpPage> {
       return;
     }
     setState(() => load = true);
-    // FIX: DEVICE ID - device ban ke liye permanent device id banao/sambhalo
     String? devId = prefs.getString("device_id");
     if (devId == null || devId.isEmpty) {
       devId = "dev_${DateTime.now().millisecondsSinceEpoch}_${widget.mobile.substring(6)}";
@@ -163,28 +162,38 @@ class _OtpPageState extends State<OtpPage> {
     }
     var doc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
     if (!doc.exists) {
+      // LOCK 3: unique 7-digit ID banao - kisi bhi user se kabhi match nahi hogi
+      final newId = await genUniqueUserId();
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({
         "name": widget.name, "mobile": widget.mobile, "password": widget.password,
         "referralCode": widget.mobile, "referredBy": widget.referral, "wallet": 0, "upi": "",
         "deviceId": devId,
+        "gameId": newId, "voiceRoomNo": newId,
         "isPremium": false, "premiumExpiry": null, "premiumDistributed": false, "createdAt": FieldValue.serverTimestamp(),
       });
     } else {
-      // purane user ke paas deviceId nahi hoga to ab save kar do
       if ((doc.data()?["deviceId"]?? "").toString().isEmpty) {
         await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({"deviceId": devId}, SetOptions(merge: true));
+      }
+      // LOCK 3: purane user ke paas ID nahi hai to unique ID de do (dono field same rakho)
+      final d0 = doc.data()?? {};
+      final g = (d0["gameId"]?? "").toString();
+      final v = (d0["voiceRoomNo"]?? "").toString();
+      if (g.isEmpty || v.isEmpty) {
+        String finalId = g.isNotEmpty? g : v;
+        if (finalId.isEmpty) finalId = await genUniqueUserId();
+        await FirebaseFirestore.instance.collection("users").doc(widget.mobile)
+          .set({"gameId": finalId, "voiceRoomNo": finalId}, SetOptions(merge: true));
       }
     }
     await prefs.setString("mobile", widget.mobile);
     await prefs.setString("name", widget.name);
-    // FIX FOR LUDO - ye 2 line add ki hai, baki kuch change nahi
     var ludoPrefs = await SharedPreferences.getInstance();
     await ludoPrefs.setString("mobile", widget.mobile);
     await ludoPrefs.setString("name", widget.name);
 
     setState(() => load = false);
     if (!mounted) return;
-    // FIX: device ban bhi check karo
     bool banned = await isUserBanned(widget.mobile) || await isDeviceBanned();
     if (banned) {
       showDialog(context: context, barrierDismissible: false,
@@ -210,7 +219,18 @@ class _OtpPageState extends State<OtpPage> {
   }
 }
 
-// BAN CHECK HELPER (admin panel) - file ke sabse neeche, kisi class ke bahar
+// UNIQUE 7-digit ID - kisi bhi user se kabhi match nahi hogi (Lock 3)
+Future<String> genUniqueUserId() async {
+  final r = Random();
+  for (int i = 0; i < 25; i++) {
+    final id = (1000000 + r.nextInt(9000000)).toString();
+    final a = await FirebaseFirestore.instance.collection("users").where("gameId", isEqualTo: id).limit(1).get();
+    final b = await FirebaseFirestore.instance.collection("users").where("voiceRoomNo", isEqualTo: id).limit(1).get();
+    if (a.docs.isEmpty && b.docs.isEmpty) return id;
+  }
+  return DateTime.now().millisecondsSinceEpoch.toString().substring(5, 12);
+}
+
 Future<bool> isUserBanned(String mobile) async {
   try {
     var doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
@@ -230,7 +250,6 @@ Future<bool> isUserBanned(String mobile) async {
   } catch (e) { return false; }
 }
 
-// FIX: DEVICE BAN CHECK - admin ne "Forever + Device" kiya ho to ye device block rahega
 Future<bool> isDeviceBanned() async {
   try {
     String? devId = prefs.getString("device_id");
@@ -247,9 +266,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int wallet = 0; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = "";
+  int wallet = 0; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = ""; String myIdNo = "";
   @override void initState() { super.initState(); checkDeviceBan(); listenUser(); }
-  // FIX: device ban ho to turant bahar nikalo
   Future<void> checkDeviceBan() async {
     if (await isDeviceBanned()) {
       await prefs.clear();
@@ -259,7 +277,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
   void listenUser() {
     FirebaseFirestore.instance.collection("users").doc(widget.mobile).snapshots().listen((d) async {
-            // FIX: admin ne mobile change kiya ya account delete kiya to auto-logout
       if (!d.exists) {
         await prefs.clear();
         if (!mounted) return;
@@ -267,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
       var data = d.data()!; if (!mounted) return;
-      if (data["banned"] == true) { // REALTIME BAN CHECK
+      if (data["banned"] == true) {
         bool stillBanned = true;
         if (data["banExpiry"]!= null) {
           DateTime exp = (data["banExpiry"] as Timestamp).toDate();
@@ -280,14 +297,13 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
       }
-      setState(() { wallet = data["wallet"]?? 0; myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; });
+      setState(() { wallet = data["wallet"]?? 0; myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; myIdNo = (data["gameId"]?? data["voiceRoomNo"]?? "").toString(); });
       if (referredBy.isNotEmpty && referredByName.isEmpty) { var refDoc = await FirebaseFirestore.instance.collection("users").doc(referredBy).get(); if (refDoc.exists) { if (mounted) setState(() => referredByName = refDoc.data()?["name"]?? referredBy); } }
       if (data["isPremium"] == true && data["premiumExpiry"]!= null) { DateTime exp = (data["premiumExpiry"] as Timestamp).toDate(); if (exp.isAfter(DateTime.now())) { setState(() { isPrem = true; expiry = "${exp.day}/${exp.month}/${exp.year}"; }); if (data["premiumDistributed"] == false) { distributePremium(); } } }
     });
   }
   Future<void> distributePremium() async {
     try {
-      // FIX: amount ab hardcoded nahi - admin panel ke Plan Chart (config/plan) se aayega
       int l1Amt = 100, l2Amt = 50, l3Amt = 25;
       try {
         var planDoc = await FirebaseFirestore.instance.collection("config").doc("plan").get();
@@ -324,7 +340,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: 16),
       Container(width: double.infinity, padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: LinearGradient(colors: isPrem? [Colors.amber, Colors.orange] : [const Color(0xFF1E293B), const Color(0xFF151A2B)]), borderRadius: BorderRadius.circular(16)), child: Text(isPrem? "PREMIUM ACTIVE Till $expiry" : "FREE USER - Buy Premium", style: TextStyle(color: isPrem? Colors.black : Colors.white, fontWeight: FontWeight.bold))),
       const SizedBox(height: 12),
-      Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("My Refer Code (Locked): $myCode", style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)), Text("Name Locked: $myName", style: const TextStyle(color: Colors.white54, fontSize: 10)), Text(referredBy.isEmpty? "Referred By: Direct" : "Referred By: ${referredByName.isEmpty? referredBy : referredByName}", style: const TextStyle(color: Colors.white54, fontSize: 10))])),
+      Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("My Refer Code (Locked): $myCode", style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)), Text("Name Locked: $myName", style: const TextStyle(color: Colors.white54, fontSize: 10)), Text("ID Number (Locked): $myIdNo", style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)), Text(referredBy.isEmpty? "Referred By: Direct" : "Referred By: ${referredByName.isEmpty? referredBy : referredByName}", style: const TextStyle(color: Colors.white54, fontSize: 10))])),
       const SizedBox(height: 16),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: () { if (!isPrem) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pehle Premium Lo"))); openPremium(); return; } Navigator.push(context, MaterialPageRoute(builder: (_) => LobbyScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("PLAY LUDO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
       const SizedBox(height: 12),
@@ -367,14 +383,12 @@ class _WalletScreenState extends State<WalletScreen> {
     String newUpi = upiCtrl.text.trim(); if (newUpi.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI dalo"))); return; }
     if (existingUpi.isEmpty) {
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi});
-      // FIX: UPI history likho taaki admin panel me dikhe
       await FirebaseFirestore.instance.collection("upi_history").add({"mobile": widget.mobile, "oldUpi": "", "newUpi": newUpi, "by": "user", "time": FieldValue.serverTimestamp()});
       if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Set Ho Gaya"))); Navigator.pop(context); return;
     }
     TextEditingController passCtrl = TextEditingController(); bool? ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(backgroundColor: const Color(0xFF1E1E2E), title: const Text("Password Daalo", style: TextStyle(color: Colors.white, fontSize: 13)), content: TextField(controller: passCtrl, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(filled: true, fillColor: const Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")), ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("Verify"))]));
     if (ok!= true) return; if (passCtrl.text.trim()!= myPassword) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password galat"))); return; }
     await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"upi": newUpi});
-    // FIX: UPI history likho taaki admin panel me dikhe
     await FirebaseFirestore.instance.collection("upi_history").add({"mobile": widget.mobile, "oldUpi": existingUpi, "newUpi": newUpi, "by": "user", "time": FieldValue.serverTimestamp()});
     if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("UPI Change Ho Gaya"))); Navigator.pop(context);
   }
