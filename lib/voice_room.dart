@@ -1517,11 +1517,11 @@ Future<void> _autoRetry() async {
           ]),
         ),
         // FIX 8: owner lock/unlock button
-        if (isOwner)
+                if (isOwner)
           IconButton(
             icon: Icon(roomLocked? Icons.lock_open : Icons.lock, color: Colors.amber),
             tooltip: roomLocked? "Room unlock karo" : "Room lock karo",
-            onTap: _toggleRoomLock,
+            onPressed: _toggleRoomLock,
           ),
         if (isOwner)
           IconButton(
