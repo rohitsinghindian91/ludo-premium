@@ -43,10 +43,33 @@ class _SplashState extends State<Splash> {
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     if (m!= null && m.isNotEmpty) {
+      bool banned = await isUserBanned(m); // BAN CHECK
+      if (banned) {
+        if (!mounted) return;
+        _showBanDialogSplash();
+        return;
+      }
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen(mobile: m)));
     } else {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
     }
+  }
+  void _showBanDialogSplash() {
+    showDialog(
+      context: context, barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E2E),
+        title: const Text("⛔ Banned", style: TextStyle(color: Colors.red)),
+        content: const Text("Admin ne tumhe ban kiya hai.", style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(onPressed: () async {
+            await prefs.clear();
+            if (mounted) Navigator.pushAndRemoveUntil(context,
+              MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false);
+          }, child: const Text("OK")),
+        ],
+      ),
+    );
   }
   @override
   Widget build(BuildContext context) {
@@ -149,6 +172,17 @@ class _OtpPageState extends State<OtpPage> {
 
     setState(() => load = false);
     if (!mounted) return;
+    bool banned = await isUserBanned(widget.mobile); // BAN CHECK
+    if (banned) {
+      showDialog(context: context, barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E2E),
+          title: const Text("⛔ Banned", style: TextStyle(color: Colors.red)),
+          content: const Text("Admin ne tumhe ban kiya hai.", style: TextStyle(color: Colors.white)),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
+        ));
+      return;
+    }
     Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => HomeScreen(mobile: widget.mobile)), (r) => false);
   }
 
@@ -163,6 +197,26 @@ class _OtpPageState extends State<OtpPage> {
   }
 }
 
+// BAN CHECK HELPER (admin panel) - file ke sabse neeche, kisi class ke bahar
+Future<bool> isUserBanned(String mobile) async {
+  try {
+    var doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
+    if (!doc.exists) return false;
+    var d = doc.data()!;
+    if (d["banned"] == true) {
+      if (d["banExpiry"]!= null) {
+        DateTime exp = (d["banExpiry"] as Timestamp).toDate();
+        if (exp.isBefore(DateTime.now())) {
+          await doc.reference.update({"banned": false, "banExpiry": null});
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
+  } catch (e) { return false; }
+}
+
 class HomeScreen extends StatefulWidget {
   final String mobile;
   const HomeScreen({super.key, required this.mobile});
@@ -175,6 +229,19 @@ class _HomeScreenState extends State<HomeScreen> {
   void listenUser() {
     FirebaseFirestore.instance.collection("users").doc(widget.mobile).snapshots().listen((d) async {
       if (!d.exists) return; var data = d.data()!; if (!mounted) return;
+      if (data["banned"] == true) { // REALTIME BAN CHECK
+        bool stillBanned = true;
+        if (data["banExpiry"]!= null) {
+          DateTime exp = (data["banExpiry"] as Timestamp).toDate();
+          if (exp.isBefore(DateTime.now())) stillBanned = false;
+        }
+        if (stillBanned) {
+          await prefs.clear();
+          if (!mounted) return;
+          Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false);
+          return;
+        }
+      }
       setState(() { wallet = data["wallet"]?? 0; myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; });
       if (referredBy.isNotEmpty && referredByName.isEmpty) { var refDoc = await FirebaseFirestore.instance.collection("users").doc(referredBy).get(); if (refDoc.exists) { if (mounted) setState(() => referredByName = refDoc.data()?["name"]?? referredBy); } }
       if (data["isPremium"] == true && data["premiumExpiry"]!= null) { DateTime exp = (data["premiumExpiry"] as Timestamp).toDate(); if (exp.isAfter(DateTime.now())) { setState(() { isPrem = true; expiry = "${exp.day}/${exp.month}/${exp.year}"; }); if (data["premiumDistributed"] == false) { distributePremium(); } } }
