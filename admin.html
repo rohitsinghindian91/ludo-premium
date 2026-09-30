@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LUDO PREMIUM - FULL ADMIN (FIXED v5)</title>
+<title>LUDO PREMIUM - FULL ADMIN (FIXED v6 - unique ID lock)</title>
 <style>
 body{background:#0A0E1A;color:#fff;font-family:sans-serif;padding:10px;margin:0}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
@@ -28,7 +28,7 @@ label{font-size:13px;color:#fbbf24;font-weight:bold}
 </style>
 </head>
 <body>
-<h2 style="margin:4px 0">🎮 LUDO PREMIUM - FULL ADMIN <span style="color:#22c55e">FIXED v5</span></h2>
+<h2 style="margin:4px 0">🎮 LUDO PREMIUM - FULL ADMIN <span style="color:#22c55e">FIXED v6</span></h2>
 <div>Total: <span id="total">0</span> | Premium: <span id="prem">0</span> | Banned: <span id="banned">0</span> | Live Ludo: <span id="liveL">0</span> | Live Voice: <span id="liveV">0</span></div>
 
 <div class="tabs">
@@ -45,6 +45,7 @@ label{font-size:13px;color:#fbbf24;font-weight:bold}
 
 <div id="users" class="section active">
 <input id="search" placeholder="Search mobile / name / code / ID..." oninput="renderUsers()" style="max-width:300px">
+<button class="btn btn-y" onclick="checkDupIds()">🔍 Duplicate ID Check</button><div id="dupBody" style="margin-top:8px"></div>
 <table><thead><tr><th>#</th><th>User</th><th>Wallet/UPI</th><th>Premium</th><th>Ban</th><th>Action</th></tr></thead><tbody id="tbody"></tbody></table>
 </div>
 
@@ -106,7 +107,9 @@ label{font-size:13px;color:#fbbf24;font-weight:bold}
 <label>Referral Code (user ka khud ka code)</label><input id="editRefCode">
 <label>Referred By (register time kiska code dala tha)</label><input id="editReferredBy">
 <label>Password</label><input id="editPassword">
-<label>ID Number (7 digit - friend search wali ID)</label><input id="editGameId" maxlength="7">
+<label>ID Number (7 digit - friend search wali ID)</label>
+<div style="display:flex;gap:6px"><input id="editGameId" maxlength="7" style="flex:1;margin-bottom:0"><button type="button" class="btn btn-y" onclick="genUniqueId()" style="white-space:nowrap">🎲 Nayi ID</button></div>
+<small>Same ID do users ki kabhi nahi hogi - save karte time check ho jayega.</small>
 <div style="display:flex;gap:8px;margin-top:6px">
 <button class="btn btn-true" onclick="saveEditUser()">SAVE</button>
 <button class="btn btn-unban" onclick="document.getElementById('editModal').style.display='none'">Cancel</button>
@@ -156,7 +159,7 @@ import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, dele
 import { getDatabase, ref, get, child, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD7r1M5vX2k1ABCDeFGh2IJkL3MNOpqrST4",
+  apiKey: "AIzaSyAdpsbH2w8T-iMh6pfBIBmjrgybXtgS9zY",
   authDomain: "ludo-premium-50-e427e.firebaseapp.com",
   databaseURL: "https://ludo-premium-50-e427e-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "ludo-premium-50-e427e",
@@ -211,7 +214,7 @@ window.renderUsers = ()=>{
     return (u.mobile||u.id||"").toLowerCase().includes(s)||(u.name||"").toLowerCase().includes(s)||(u.referralCode||"").toLowerCase().includes(s)||(u.gameId||"").toLowerCase().includes(s); });
   document.getElementById("total").innerText = allUsers.length;
   document.getElementById("prem").innerText = allUsers.filter(u=>u.isPremium).length;
-  document.getElementById("banned").innerText = allUsers.filter(u=>u.banned).length;
+  document.getElementById("banned").innerText = allUsers.filter(u=>u.isPremium).length;
   tb.innerHTML = "";
   users.slice(0,200).forEach((u,i)=>{
     const isBan = u.banned===true;
@@ -266,17 +269,20 @@ window.saveEditUser = async ()=>{
     password: document.getElementById("editPassword").value,
     gameId: document.getElementById("editGameId").value.trim(),
   };
+  // UNIQUE ID CHECK - ye ID kisi aur user ke paas pehle se to nahi hai
+  if(data.gameId){
+    const dup=allUsers.find(u=>u.id!==editTarget && (String(u.gameId||"")===data.gameId || String(u.voiceRoomNo||"")===data.gameId));
+    if(dup){ alert("❌ Ye ID ("+data.gameId+") pehle se "+(dup.name||"")+" ("+(dup.mobile||dup.id)+") ke paas hai!\nDusri ID daalo ya 🎲 Nayi ID dabao."); return; }
+  }
   if(newMobile!== editTarget){
     if(!confirm("Mobile badal rahe ho!\n"+editTarget+" → "+newMobile+"\n\nNaya login ISI number se hoga (password wahi).\nTeam, tag, powers, wallet sab same rahega.\nPakka?")) return;
     const chk = await getDoc(doc(db,"users",newMobile));
     if(chk.exists()){ alert("❌ Is number par pehle se account hai!"); return; }
-    // 1. naya document - SAARA data copy (tag, powers, wallet, premium, ban, deviceId...)
     const copy = {...u,...data};
     delete copy.id;
     if(copy.referralCode===editTarget) copy.referralCode = newMobile;
     copy.updatedAt = serverTimestamp();
     await setDoc(doc(db,"users",newMobile), copy);
-    // 2. TEAM: jinka referredBy purana mobile tha -> naye mobile par
     try{
       const teamSnap = await getDocs(query(collection(db,"users"), where("referredBy","==",editTarget)));
       for(const d of teamSnap.docs){
@@ -284,19 +290,16 @@ window.saveEditUser = async ()=>{
         const tu = allUsers.find(x=>x.id===d.id); if(tu) tu.referredBy = newMobile;
       }
     }catch(e){}
-    // 3. EARNINGS me to/from update
     try{
       const e1 = await getDocs(query(collection(db,"earnings"), where("to","==",editTarget)));
       for(const d of e1.docs) await updateDoc(doc(db,"earnings",d.id), {to:newMobile});
       const e2 = await getDocs(query(collection(db,"earnings"), where("from","==",editTarget)));
       for(const d of e2.docs) await updateDoc(doc(db,"earnings",d.id), {from:newMobile});
     }catch(e){}
-    // 4. pending premium request migrate
     try{
       const pr = await getDoc(doc(db,"premium_requests",editTarget));
       if(pr.exists()){ await setDoc(doc(db,"premium_requests",newMobile), {...pr.data(), mobile:newMobile}); await deleteDoc(doc(db,"premium_requests",editTarget)); }
     }catch(e){}
-    // 5. purana document delete
     await deleteDoc(doc(db,"users",editTarget));
     allUsers = allUsers.filter(x=>x.id!==editTarget);
     allUsers.push({id:newMobile,...copy});
@@ -309,6 +312,49 @@ window.saveEditUser = async ()=>{
     document.getElementById("editModal").style.display = "none";
     renderUsers(); alert("Save ✅");
   }
+};
+
+// UNIQUE 7-DIGIT ID GENERATOR (edit modal me 🎲 Nayi ID button ke liye)
+window.genUniqueId=()=>{
+  let nid="";
+  for(let t=0;t<60;t++){
+    nid=String(Math.floor(1000000+Math.random()*9000000));
+    if(!allUsers.some(u=>u.id!==editTarget && (String(u.gameId||"")===nid||String(u.voiceRoomNo||"")===nid))) break;
+  }
+  document.getElementById("editGameId").value=nid;
+};
+
+// DUPLICATE ID SCANNER + FIXER
+window.checkDupIds=()=>{
+  const b=document.getElementById("dupBody"); b.innerHTML="Checking...";
+  const seen={}; const dups=[];
+  allUsers.forEach(u=>{
+    [["gameId",u.gameId],["voiceRoomNo",u.voiceRoomNo]].forEach(([f,v])=>{
+      v=String(v||"").trim(); if(!v) return;
+      const k=f+":"+v;
+      if(seen[k]) dups.push({v,f,bid:u.id,bname:(u.name||"")+" ("+(u.mobile||u.id)+")",aname:seen[k].name});
+      else seen[k]={name:(u.name||"")+" ("+(u.mobile||u.id)+")"};
+    });
+  });
+  if(!dups.length){ b.innerHTML='<div class="card" style="border-color:#22c55e"><b style="color:#22c55e">✅ Sab IDs unique hain - koi duplicate nahi mila</b></div>'; return; }
+  let h='<div class="card" style="border-color:#ef4444"><b style="color:#ef4444">❌ '+dups.length+' duplicate ID mile!</b><br><small>Neeche wale user ko ek click me nayi unique ID de do</small></div>';
+  dups.forEach(d=>{
+    h+=`<div class="card"><b>ID: ${d.v}</b> <small>(${d.f})</small><br><small>👤 ${d.aname}<br>👤 ${d.bname}</small><br><button class="btn btn-y" onclick="fixDupId('${d.bid}','${d.f}')">🎲 Nayi unique ID do</button></div>`;
+  });
+  b.innerHTML=h;
+};
+window.fixDupId=async(id,field)=>{
+  let nid="";
+  for(let t=0;t<60;t++){
+    nid=String(Math.floor(1000000+Math.random()*9000000));
+    if(!allUsers.some(u=>String(u.gameId||"")===nid||String(u.voiceRoomNo||"")===nid)) break;
+  }
+  if(!nid){ alert("Nayi ID nahi ban payi, dobara try karo"); return; }
+  const up={}; up[field]=nid;
+  await updateDoc(doc(db,"users",id),up);
+  const u=allUsers.find(x=>x.id===id); if(u) u[field]=nid;
+  renderUsers(); checkDupIds();
+  alert("✅ Nayi unique ID de di: "+nid);
 };
 
 // DELETE USER (FULL)
@@ -342,7 +388,7 @@ window.savePowers = async ()=>{
   const tag = document.getElementById("powTag").value.trim();
   const powers = [...document.querySelectorAll("#powList input:checked")].map(c=>c.value);
   await updateDoc(doc(db,"users",powTarget), {tag, powers});
-  const u = allUsers.find(x=>x.id===powTarget);
+  const u=allUsers.find(x=>x.id===powTarget);
   if(u){ u.tag = tag; u.powers = powers; }
   document.getElementById("powerModal").style.display = "none";
   renderUsers(); alert("Tag + Powers save ✅");
@@ -358,7 +404,7 @@ window.confirmBan=async()=>{
   if(!isNaN(parseInt(dur))){ const d=new Date(now); d.setDate(d.getDate()+parseInt(dur)); banExpiry=Timestamp.fromDate(d); }
   await updateDoc(doc(db,"users",banTarget),{banned:true,banType:dur,banReason:reason,banExpiry,bannedAt:serverTimestamp()});
   if(dur==="forever_device"){ const u=allUsers.find(x=>x.id===banTarget); if(u&&u.deviceId) await addDoc(collection(db,"banned_devices"),{deviceId:u.deviceId,mobile:banTarget,reason,time:serverTimestamp()}); }
-  await addDoc(collection(db,"ban_history"),{mobile:banTarget,banType:dur,reason:photo=banPhotoData||"",time:serverTimestamp(),by:"admin",banExpiry});
+  await addDoc(collection(db,"ban_history"),{mobile:banTarget,banType:dur,reason,photo:banPhotoData||"",time:serverTimestamp(),by:"admin",banExpiry});
   const u=allUsers.find(x=>x.id===banTarget); if(u) Object.assign(u,{banned:true,banType:dur,banReason:reason,banExpiry});
   closeBan(); renderUsers();
 };
@@ -368,7 +414,7 @@ window.setPremium=async(id,val)=>{ if(!confirm(val?"Premium ON?":"Premium OFF?")
   if(val){ await updateDoc(doc(db,"users",id),{isPremium:true,premiumExpiry:Timestamp.fromDate(exp),premiumDistributed:false}); await addDoc(collection(db,"premium_history"),{mobile:id,action:"premium_on",time:serverTimestamp(),by:"admin"}); }
   else{ await updateDoc(doc(db,"users",id),{isPremium:false,premiumExpiry:null}); await addDoc(collection(db,"premium_history"),{mobile:id,action:"premium_off",time:serverTimestamp(),by:"admin"}); }
   const u=allUsers.find(x=>x.id===id); if(u) u.isPremium=val; renderUsers(); };
-  // LIVE LUDO (RTDB) + ROOM DELETE
+// LIVE LUDO (RTDB) + ROOM DELETE
 window.loadLudo=async()=>{
   const b=document.getElementById("ludoBody"); b.innerHTML="Loading...";
   try{
@@ -525,8 +571,7 @@ service cloud.firestore {
 
 // TEAM
 window.loadTeam=async()=>{
-  const mob=document.getElementById("teamSearch").value.trim();
-  const b=document.getElementById("teamBody"); if(!mob){b.innerHTML="Mobile daalo";return;} b.innerHTML="Loading...";
+  const mob=document.getElementById("teamSearch").value.trim(); const b=document.getElementById("teamBody"); if(!mob){b.innerHTML="Mobile daalo";return;} b.innerHTML="Loading...";
   const l1=await getDocs(query(collection(db,"users"),where("referredBy","==",mob)));
   let c2=0,c3=0,prem1=0,h1=""; l1.forEach(d=>{ const m=d.data(); if(m.isPremium)prem1++; h1+=`<div>L1: ${m.name||""} ${m.mobile||d.id} ${m.isPremium?"✅":"❌"}</div>`; });
   for(const d of l1.docs){ const q2=await getDocs(query(collection(db,"users"),where("referredBy","==",d.id))); c2+=q2.size;
