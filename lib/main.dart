@@ -10,6 +10,7 @@ import 'voice_room.dart';
 import 'plan_screen.dart';
 import 'friends_screen.dart';
 import 'rtdb.dart';
+import 'jaruri_suchna.dart';
 
 late SharedPreferences prefs;
 
@@ -221,6 +222,18 @@ class _HomeScreenState extends State<HomeScreen> {
       Row(children: [Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => WalletScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00BCD4)), child: const Text("UPI SET KARE", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)))), const SizedBox(width: 8), Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => MyTeamScreen(mobile: widget.mobile))); }, child: const Text("MY TEAM")))]),
       const SizedBox(height: 12),
       Row(children: [Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => PlanScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("PLAN CHART", style: TextStyle(color: Colors.black)))), const SizedBox(width: 8), Expanded(child: ElevatedButton(onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => FriendsScreen(mobile: widget.mobile))); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.blue), child: const Text("FRIENDS", style: TextStyle(color: Colors.white))))]),
+            const SizedBox(height: 12),
+      SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton(
+          onPressed: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const JaruriSuchnaScreen()));
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          child: const Text("JRURI SUCHNA - EK BAAR JRUR DEKHE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+        ),
+      ),
       const SizedBox(height: 20),
       SizedBox(width: double.infinity, child: ElevatedButton(onPressed: isPrem? null : openPremium, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: Text(isPrem? "PREMIUM ACTIVE" : "BUY PREMIUM Rs 500", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 16)))),
       const SizedBox(height: 12),
