@@ -80,7 +80,10 @@ Future<String> fetchVoiceToken(String channel, int uid) async {
   }
   return "";
 }
-
+bool hasPower(Map<String,dynamic> u, String p){
+  return (List<String>.from(u["powers"]?? [])).contains(p);
+}
+Map<String,dynamic> _cachedMe = {};
 String genderSymbol(String g) {
   if (g == "male") return " ♂";
   if (g == "female") return " ♀";
@@ -472,6 +475,10 @@ Set<String> _oldChatKeys = {};
       myRole = "owner";
       await roomRef.child("roles/$myMobile").set({"role": "owner", "name": myName});
     }
+        try {
+      final me = await FirebaseFirestore.instance.collection("users").doc(myMobile).get();
+      _cachedMe = me.data()?? {};
+    } catch (_) {}
     if (myGender.isEmpty) {
       try {
         final u = await FirebaseFirestore.instance.collection("users").doc(myMobile).get();
@@ -1009,8 +1016,18 @@ Future<void> _autoRetry() async {
     await roomRef.child("seats/$i").update({"locked": lock});
     _toast(lock? "Seat lock" : "Seat unlock");
   }
-
+    
   Future<void> _lockMic(int i, bool lock) async {
+        bool iAmVipMute = hasPower(_cachedMe, "can_mute_anyone");
+    final targetMobile1 = seats[i].mobile;
+    if(targetMobile1.isNotEmpty){
+      try{
+        final t = await FirebaseFirestore.instance.collection("users").doc(targetMobile1).get();
+        if(hasPower(t.data()?? {}, "no_mute") &&!iAmVipMute){
+          _toast("Isko mute nahi kar sakte"); return;
+        }
+      }catch(_){}
+    }
     final upd = <String, dynamic>{"micLocked": lock};
     if (lock) upd["muted"] = true;
     await roomRef.child("seats/$i").update(upd);
@@ -1029,6 +1046,14 @@ Future<void> _autoRetry() async {
   }
 
   Future<void> _kick(String mobile, String name, int days) async {
+        bool iAmVipKick = hasPower(_cachedMe, "can_kick_anyone");
+    try {
+      final t = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
+      if(hasPower(t.data()?? {}, "no_kick") &&!iAmVipKick){
+        _toast("Isko kick nahi kar sakte"); return;
+      }
+    } catch (_) {}
+    if(!isAdmin &&!iAmVipKick){ _toast("Sirf admin kick kar sakta hai"); return; }
     final until = days < 0? -1 : DateTime.now().millisecondsSinceEpoch + days * 86400000;
     await roomRef.child("kicks/$mobile").set({
       "name": name, "by": myMobile, "byName": myName, "until": until, "at": ServerValue.timestamp,
