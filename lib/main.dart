@@ -361,15 +361,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("DP fail: $e")));
     }
   }
-  Future<String> _uploadDPToCloudinary(Uint8List bytes) async {
-    final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
-      ..fields['upload_preset'] = 'ludo_chat'
-      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'dp.jpg'));
-    final streamed = await req.send();
-    final res = await http.Response.fromStream(streamed);
-    if (streamed.statusCode!= 200) throw Exception("Cloudinary: ${res.body}");
-    return json.decode(res.body)['secure_url'] as String;
-  }
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
       Row(children: [InkWell(onTap: _changeDP, child: _dpAvatar()), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
       const SizedBox(height: 16),
