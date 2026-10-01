@@ -399,6 +399,18 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   StreamSubscription<DatabaseEvent>? noticeSub;
   DatabaseReference? myPresentRef;
 
+  // ===== PK BATTLE (Step 4) =====
+  bool inPk = false;
+  String pkId = "";
+  String pkOpponentRoom = "";
+  String pkOpponentName = "";
+  int myPkScore = 0;
+  int oppPkScore = 0;
+  StreamSubscription<DatabaseEvent>? pkSub;
+  Timer? pkTimer;
+  int pkTimeLeft = 300;
+  bool isPkHost = false;
+
   // ===== GIFT SYSTEM (Step 2) =====
   int myCoins = 0;
   List<Map<String, dynamic>> giftList = [];
@@ -1403,7 +1415,7 @@ Future<void> _autoRetry() async {
         return Transaction.success(n < 0? 0 : n);
       });
     } catch (_) {}
-    for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub, lockSub, noticeSub, giftSub]) {
+    for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub, lockSub, noticeSub, giftSub, pkSub]) {
       try { await s?.cancel(); } catch (_) {}
     }
     try { await globalVoiceEngine?.leaveChannel(); } catch (_) {}
@@ -1417,7 +1429,7 @@ Future<void> _autoRetry() async {
   void dispose() {
     // FIX 3: Keep kiya to engine zinda rakho
     if (_keepAlive) {
-      for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub, lockSub, noticeSub, giftSub]) {
+      for (var s in [seatsSub, presentSub, chatSub, roleSub, kickSub, inviteSub, lockSub, noticeSub, giftSub, pkSub]) {
         try { s?.cancel(); } catch (_) {}
       }
       // seat aur present rakho taaki wapas aane par sab waisa hi mile
@@ -1944,13 +1956,257 @@ Future<void> _autoRetry() async {
     );
   }
 
-  Future<void> _addXp(int amt) async {
+  // ===== PK BATTLE METHODS (Step 4) =====
+  void _handlePk() {
+    if (inPk) {
+      _showPkEndDialog();
+    } else {
+      _showPkChallengeSheet();
+    }
+  }
+
+  void _showPkEndDialog() {
+    showDialog(context: context, builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      title: const Text("PK khatam karein?", style: TextStyle(color: Colors.white)),
+      content: Text("Score: $myPkScore vs $oppPkScore\nTime left: ${pkTimeLeft}s", style: const TextStyle(color: Colors.white70)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Continue")),
+        TextButton(onPressed: () { Navigator.pop(context); _endPk(force: true); }, child: const Text("End PK", style: TextStyle(color: Colors.red))),
+      ],
+    ));
+  }
+
+  void _showPkChallengeSheet() {
+    showModalBottomSheet(context: context, backgroundColor: const Color(0xFF1E293B),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _PkChallengeSheet(roomId: widget.roomNo, onChallenge: _startPkChallenge));
+  }
+
+  Future<void> _startPkChallenge(String opponentRoomId) async {
     try {
-      await FirebaseFirestore.instance.collection("users").doc(myMobile).update({
-        "xp": FieldValue.increment(amt),
+      final rtdb = FirebaseDatabase.instance;
+      // Check opponent room exists and not in PK
+      final oppPkRef = rtdb.ref("vRoomList/$opponentRoomId/pk");
+      final oppSnap = await oppPkRef.get();
+      if (oppSnap.exists) {
+        _toast("Ye room pehle se PK me hai!");
+        return;
+      }
+      final myPkRef = rtdb.ref("vRoomList/${widget.roomNo}/pk");
+      final mySnap = await myPkRef.get();
+      if (mySnap.exists) {
+        _toast("Tum pehle se PK me ho!");
+        return;
+      }
+
+      final pkData = {
+        "id": DateTime.now().millisecondsSinceEpoch.toString(),
+        "room1": widget.roomNo,
+        "room2": opponentRoomId,
+        "room1Name": widget.myName,
+        "room2Name": "Room $opponentRoomId",
+        "score1": 0,
+        "score2": 0,
+        "startTime": ServerValue.timestamp,
+        "duration": 300,
+        "status": "active",
+      };
+
+      await myPkRef.set(pkData);
+      await rtdb.ref("vRoomList/$opponentRoomId/pk").set(pkData);
+
+      setState(() {
+        inPk = true;
+        pkId = pkData["id"] as String;
+        pkOpponentRoom = opponentRoomId;
+        pkOpponentName = "Room $opponentRoomId";
+        myPkScore = 0;
+        oppPkScore = 0;
+        pkTimeLeft = 300;
+        isPkHost = true;
       });
+
+      _listenPk();
+      _startPkTimer();
+      _toast("âš”ï¸ PK shuru! 5 min battle!");
+
+      // Auto get opponent name
+      try {
+        final oppRoomRef = rtdb.ref("vRoomList/$opponentRoomId");
+        final roomSnap = await oppRoomRef.child("info").get();
+        if (roomSnap.exists) {
+          final info = roomSnap.value as Map?;
+          if (mounted) setState(() => pkOpponentName = (info?["name"] ?? "Room $opponentRoomId").toString());
+        }
+      } catch (_) {}
+    } catch (e) {
+      _toast("PK start fail: $e");
+    }
+  }
+
+  void _listenPk() {
+    pkSub?.cancel();
+    final rtdb = FirebaseDatabase.instance;
+    pkSub = rtdb.ref("vRoomList/${widget.roomNo}/pk").onValue.listen((event) {
+      if (!event.snapshot.exists) {
+        if (inPk) _endPk();
+        return;
+      }
+      final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+      if (!mounted) return;
+      setState(() {
+        if (data["room1"] == widget.roomNo) {
+          myPkScore = (data["score1"] ?? 0) as int;
+          oppPkScore = (data["score2"] ?? 0) as int;
+          pkOpponentRoom = (data["room2"] ?? "").toString();
+          pkOpponentName = (data["room2Name"] ?? data["room2"] ?? "").toString();
+        } else {
+          myPkScore = (data["score2"] ?? 0) as int;
+          oppPkScore = (data["score1"] ?? 0) as int;
+          pkOpponentRoom = (data["room1"] ?? "").toString();
+          pkOpponentName = (data["room1Name"] ?? data["room1"] ?? "").toString();
+        }
+        pkId = (data["id"] ?? "").toString();
+        inPk = true;
+      });
+    });
+  }
+
+  void _startPkTimer() {
+    pkTimer?.cancel();
+    pkTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      if (pkTimeLeft <= 0) {
+        t.cancel();
+        _endPk();
+        return;
+      }
+      setState(() => pkTimeLeft--);
+    });
+  }
+
+  Future<void> _endPk({bool force = false}) async {
+    try {
+      pkTimer?.cancel();
+      pkSub?.cancel();
+
+      final rtdb = FirebaseDatabase.instance;
+      final isWinner = myPkScore > oppPkScore;
+      final isDraw = myPkScore == oppPkScore;
+
+      // Rewards
+      if (force || pkTimeLeft <= 0) {
+        int reward = 0;
+        if (isWinner) reward = 100;
+        else if (isDraw) reward = 30;
+        else reward = 10;
+
+        if (reward > 0) {
+          try {
+            await FirebaseFirestore.instance.collection("users").doc(myMobile).update({
+              "coins": FieldValue.increment(reward),
+              "xp": FieldValue.increment(isWinner ? 50 : 10),
+            });
+            if (mounted) setState(() => myCoins += reward);
+          } catch (_) {}
+        }
+
+        // Clean up both rooms
+        try {
+          await rtdb.ref("vRoomList/${widget.roomNo}/pk").remove();
+          if (pkOpponentRoom.isNotEmpty) {
+            await rtdb.ref("vRoomList/$pkOpponentRoom/pk").remove();
+          }
+        } catch (_) {}
+
+        if (mounted) {
+          String msg = isDraw ? "ðŸ¤ Draw! +$reward coins" : (isWinner ? "ðŸ† Jeet gaye! +$reward coins!" : "ðŸ˜¢ Haar gaye +$reward coins");
+          _toast(msg);
+          showDialog(context: context, builder: (_) => AlertDialog(
+            backgroundColor: const Color(0xFF1E293B),
+            title: Text(isWinner ? "ðŸ† WINNER!" : isDraw ? "ðŸ¤ DRAW!" : "Game Over", style: const TextStyle(color: Colors.white)),
+            content: Text("Tumhara: $myPkScore\nOpponent: $oppPkScore\nReward: $reward coins", style: const TextStyle(color: Colors.white70)),
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
+          ));
+        }
+      }
+
+      if (mounted) setState(() {
+        inPk = false;
+        pkId = "";
+        pkOpponentRoom = "";
+        pkOpponentName = "";
+        myPkScore = 0;
+        oppPkScore = 0;
+        pkTimeLeft = 300;
+        isPkHost = false;
+      });
+    } catch (e) {
+      _toast("PK end error: $e");
+    }
+  }
+
+  Widget _buildPkBar() {
+    if (!inPk) return const SizedBox.shrink();
+    final total = myPkScore + oppPkScore;
+    final myPercent = total > 0 ? myPkScore / total : 0.5;
+    return Container(
+      margin: const EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFFDB2777)]),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white24, width: 1),
+      ),
+      child: Column(children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Row(children: [
+            const Icon(Icons.local_fire_department, color: Colors.amber, size: 18),
+            const SizedBox(width: 4),
+            Text("PK ${pkTimeLeft}s", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+          ]),
+          Text("$myPkScore : $oppPkScore", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(pkOpponentName.isNotEmpty ? pkOpponentName : pkOpponentRoom, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+        ]),
+        const SizedBox(height: 6),
+        Stack(children: [
+          Container(height: 6, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(3))),
+          FractionallySizedBox(
+            widthFactor: myPercent.clamp(0.05, 0.95),
+            child: Container(height: 6, decoration: BoxDecoration(
+              color: myPkScore >= oppPkScore ? Colors.amber : Colors.white70,
+              borderRadius: BorderRadius.circular(3))),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  Future<void> _updatePkScore(int giftPrice) async {
+    if (!inPk) return;
+    try {
+      final rtdb = FirebaseDatabase.instance;
+      final pkRef = rtdb.ref("vRoomList/${widget.roomNo}/pk");
+      final snap = await pkRef.get();
+      if (!snap.exists) return;
+      final data = Map<String, dynamic>.from(snap.value as Map);
+      final isRoom1 = data["room1"] == widget.roomNo;
+      final field = isRoom1 ? "score1" : "score2";
+      final current = (data[field] ?? 0) as int;
+      await pkRef.update({field: current + giftPrice});
+
+      // Also update opponent room
+      if (pkOpponentRoom.isNotEmpty) {
+        final oppRef = rtdb.ref("vRoomList/$pkOpponentRoom/pk");
+        final oppSnap = await oppRef.get();
+        if (oppSnap.exists) {
+          await oppRef.update({field: current + giftPrice});
+        }
+      }
     } catch (_) {}
   }
+
   void _openGiftPanel() async {
     try {
       final snap = await FirebaseFirestore.instance.collection("gifts")
@@ -2089,7 +2345,7 @@ Future<void> _autoRetry() async {
         "price": price, "at": ServerValue.timestamp,
       });
       if (mounted) setState(() => myCoins -= price);
-      _addXp(5);
+      _updatePkScore(price);
       _toast("Gift bhej diya! \u{1F381}");
     } catch (e) {
       _toast("Gift fail: $e");
@@ -2112,6 +2368,7 @@ Future<void> _autoRetry() async {
         Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
           _bigBtn(icon: micOn? Icons.mic : Icons.mic_off, label: micOn? "Mic" : "Mute",
               active: micOn, onTap: _toggleMic),
+          _bigBtn(icon: Icons.local_fire_department, label: inPk? "${pkTimeLeft}s" : "PK", active: inPk, onTap: _handlePk),
           _bigBtn(icon: Icons.card_giftcard, label: "Gift",
               active: true, onTap: _openGiftPanel),
           _bigBtn(icon: speakerOn? Icons.volume_up : Icons.volume_off, label: "Speaker",
