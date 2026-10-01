@@ -6,6 +6,9 @@ import 'dart:math';
 import 'firebase_options.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:typed_data';
+import 'dart:convert';
 import 'beautiful_ludo.dart';
 import 'voice_room.dart';
 import 'plan_screen.dart';
@@ -59,7 +62,7 @@ class _SplashState extends State<Splash> {
       context: context, barrierDismissible: false,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E2E),
-        title: const Text("⛔ Banned", style: TextStyle(color: Colors.red)),
+        title: const Text("â›” Banned", style: TextStyle(color: Colors.red)),
         content: const Text("Admin ne tumhe ban kiya hai.", style: TextStyle(color: Colors.white)),
         actions: [
           TextButton(onPressed: () async {
@@ -199,7 +202,7 @@ class _OtpPageState extends State<OtpPage> {
       showDialog(context: context, barrierDismissible: false,
         builder: (_) => AlertDialog(
           backgroundColor: const Color(0xFF1E1E2E),
-          title: const Text("⛔ Banned", style: TextStyle(color: Colors.red)),
+          title: const Text("â›” Banned", style: TextStyle(color: Colors.red)),
           content: const Text("Admin ne tumhe ban kiya hai.", style: TextStyle(color: Colors.white)),
           actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
         ));
@@ -266,7 +269,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int wallet = 0; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = ""; String myIdNo = "";
+  int wallet = 0; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = ""; String myIdNo = ""; String myPhotoUrl = "";
   @override void initState() { super.initState(); checkDeviceBan(); listenUser(); }
   Future<void> checkDeviceBan() async {
     if (await isDeviceBanned()) {
@@ -297,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
       }
-      setState(() { wallet = data["wallet"]?? 0; myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; myIdNo = (data["gameId"]?? data["voiceRoomNo"]?? "").toString(); });
+      setState(() { wallet = data["wallet"]?? 0; myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; myIdNo = (data["gameId"]?? data["voiceRoomNo"]?? "").toString(); myPhotoUrl = data["photoUrl"]?? ""; });
       if (referredBy.isNotEmpty && referredByName.isEmpty) { var refDoc = await FirebaseFirestore.instance.collection("users").doc(referredBy).get(); if (refDoc.exists) { if (mounted) setState(() => referredByName = refDoc.data()?["name"]?? referredBy); } }
       if (data["isPremium"] == true && data["premiumExpiry"]!= null) { DateTime exp = (data["premiumExpiry"] as Timestamp).toDate(); if (exp.isAfter(DateTime.now())) { setState(() { isPrem = true; expiry = "${exp.day}/${exp.month}/${exp.year}"; }); if (data["premiumDistributed"] == false) { distributePremium(); } } }
     });
@@ -334,8 +337,41 @@ class _HomeScreenState extends State<HomeScreen> {
   void openPremium() { Navigator.push(context, MaterialPageRoute(builder: (_) => PremiumPayScreen(mobile: widget.mobile, onPaid: (){}))); }
   void doLogout() async { await prefs.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false); }
   @override Widget build(BuildContext context) {
+  // ===== DP SYSTEM (Step 1) =====
+  Widget _dpAvatar() {
+    return Stack(alignment: Alignment.bottomRight, children: [
+      CircleAvatar(radius: 22, backgroundColor: const Color(0xFF1E293B),
+        backgroundImage: myPhotoUrl.isNotEmpty? NetworkImage(myPhotoUrl) : null,
+        child: myPhotoUrl.isNotEmpty? null : const Icon(Icons.person, color: Colors.amber, size: 28)),
+      Container(padding: const EdgeInsets.all(3), decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
+        child: const Icon(Icons.camera_alt, size: 12, color: Colors.black)),
+    ]);
+  }
+  Future<void> _changeDP() async {
+    try {
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 512, imageQuality: 80);
+      if (x == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP upload ho rahi hai...")));
+      final bytes = await x.readAsBytes();
+      final url = await _uploadDPToCloudinary(bytes);
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"photoUrl": url});
+      if (mounted) setState(() => myPhotoUrl = url);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP lag gayi \u2705")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("DP fail: $e")));
+    }
+  }
+  Future<String> _uploadDPToCloudinary(Uint8List bytes) async {
+    final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
+      ..fields['upload_preset'] = 'ludo_chat'
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'dp.jpg'));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (streamed.statusCode!= 200) throw Exception("Cloudinary: ${res.body}");
+    return json.decode(res.body)['secure_url'] as String;
+  }
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
-      Row(children: [const Icon(Icons.casino, color: Colors.amber), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
+      Row(children: [InkWell(onTap: _changeDP, child: _dpAvatar()), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
       const SizedBox(height: 16),
       Container(width: double.infinity, padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: LinearGradient(colors: isPrem? [Colors.amber, Colors.orange] : [const Color(0xFF1E293B), const Color(0xFF151A2B)]), borderRadius: BorderRadius.circular(16)), child: Text(isPrem? "PREMIUM ACTIVE Till $expiry" : "FREE USER - Buy Premium", style: TextStyle(color: isPrem? Colors.black : Colors.white, fontWeight: FontWeight.bold))),
       const SizedBox(height: 12),
