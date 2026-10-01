@@ -509,7 +509,7 @@ class _BuyCoinsScreenState extends State<BuyCoinsScreen> {
           decoration: BoxDecoration(gradient: const LinearGradient(colors: [Colors.amber, Colors.orange]),
               borderRadius: BorderRadius.circular(16)),
           child: Column(children: [
-            const Text("\u{1F381}", style: TextStyle(fontSize: 50)),
+            const Text("\u{1FA99}", style: TextStyle(fontSize: 50)),
             Text("Rs 100 = $buyRate coins", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           ])),
         const SizedBox(height: 16),
