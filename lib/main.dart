@@ -347,6 +347,15 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.camera_alt, size: 12, color: Colors.black)),
     ]);
   }
+  Future<String> _uploadDPToCloudinary(Uint8List bytes) async {
+    final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
+      ..fields['upload_preset'] = 'ludo_chat'
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'dp.jpg'));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (streamed.statusCode!= 200) throw Exception("Cloudinary: ${res.body}");
+    return json.decode(res.body)['secure_url'] as String;
+  }
   Future<void> _changeDP() async {
     try {
       final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 512, imageQuality: 80);
@@ -500,7 +509,7 @@ class _BuyCoinsScreenState extends State<BuyCoinsScreen> {
           decoration: BoxDecoration(gradient: const LinearGradient(colors: [Colors.amber, Colors.orange]),
               borderRadius: BorderRadius.circular(16)),
           child: Column(children: [
-            const Text("\u{1FA99}", style: TextStyle(fontSize: 50)),
+            const Text("\u{1F381}", style: TextStyle(fontSize: 50)),
             Text("Rs 100 = $buyRate coins", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           ])),
         const SizedBox(height: 16),
