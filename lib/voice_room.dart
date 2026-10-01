@@ -1944,6 +1944,13 @@ Future<void> _autoRetry() async {
     );
   }
 
+  Future<void> _addXp(int amt) async {
+    try {
+      await FirebaseFirestore.instance.collection("users").doc(myMobile).update({
+        "xp": FieldValue.increment(amt),
+      });
+    } catch (_) {}
+  }
   void _openGiftPanel() async {
     try {
       final snap = await FirebaseFirestore.instance.collection("gifts")
@@ -2082,6 +2089,7 @@ Future<void> _autoRetry() async {
         "price": price, "at": ServerValue.timestamp,
       });
       if (mounted) setState(() => myCoins -= price);
+      _addXp(5);
       _toast("Gift bhej diya! \u{1F381}");
     } catch (e) {
       _toast("Gift fail: $e");
