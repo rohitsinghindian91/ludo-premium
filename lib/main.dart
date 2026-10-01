@@ -269,7 +269,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int wallet = 0; int myCoins = 0; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = ""; String myIdNo = ""; String myPhotoUrl = "";
+  int wallet = 0; int myCoins = 0; int myXp = 0; int myLevel = 1; String myFrameUrl = ""; List<String> myFrames = []; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = ""; String myIdNo = ""; String myPhotoUrl = "";
   @override void initState() { super.initState(); checkDeviceBan(); listenUser(); }
   Future<void> checkDeviceBan() async {
     if (await isDeviceBanned()) {
@@ -300,10 +300,72 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
       }
-      setState(() { wallet = data["wallet"]?? 0; myCoins = data["coins"]?? 0; myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; myIdNo = (data["gameId"]?? data["voiceRoomNo"]?? "").toString(); myPhotoUrl = data["photoUrl"]?? ""; });
+      setState(() { wallet = data["wallet"]?? 0; myCoins = data["coins"]?? 0; myXp = data["xp"]?? 0; myFrameUrl = data["frameUrl"]?? ""; myFrames = List<String>.from(data["frames"]?? []); myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; myIdNo = (data["gameId"]?? data["voiceRoomNo"]?? "").toString(); myPhotoUrl = data["photoUrl"]?? ""; });
+      _calcLevel();
+      _checkDailyXp();
       if (referredBy.isNotEmpty && referredByName.isEmpty) { var refDoc = await FirebaseFirestore.instance.collection("users").doc(referredBy).get(); if (refDoc.exists) { if (mounted) setState(() => referredByName = refDoc.data()?["name"]?? referredBy); } }
       if (data["isPremium"] == true && data["premiumExpiry"]!= null) { DateTime exp = (data["premiumExpiry"] as Timestamp).toDate(); if (exp.isAfter(DateTime.now())) { setState(() { isPrem = true; expiry = "${exp.day}/${exp.month}/${exp.year}"; }); if (data["premiumDistributed"] == false) { distributePremium(); } } }
     });
+  }
+  // ===== STEP 3: XP / LEVEL / FRAMES =====
+  List<Map<String, dynamic>> _levelTable = [];
+  Future<void> _loadLevelTable() async {
+    try {
+      final d = await FirebaseFirestore.instance.collection("config").doc("levels").get();
+      final lv = d.data()?["levels"] as List? ?? [];
+      _levelTable = lv.map((e) => {"level": e["level"] as int, "xp": e["xp"] as int}).toList();
+      _levelTable.sort((a, b) => (a["xp"] as int).compareTo(b["xp"] as int));
+    } catch (_) {}
+  }
+  void _calcLevel() {
+    int lvl = 1;
+    for (var e in _levelTable) {
+      if (myXp >= (e["xp"] as int)) lvl = e["level"] as int;
+    }
+    if (lvl != myLevel) {
+      int old = myLevel;
+      if (mounted) setState(() => myLevel = lvl);
+      if (lvl > old) _onLevelUp(lvl);
+    }
+  }
+  Future<void> _onLevelUp(int lvl) async {
+    _showToast("Level up! Ab tum Level $lvl ho!");
+    try {
+      final snap = await FirebaseFirestore.instance.collection("frames")
+          .where("type", isEqualTo: "level").where("value", isEqualTo: lvl).get();
+      for (var d in snap.docs) {
+        final fdata = d.data();
+        final furl = fdata["imageUrl"] ?? "";
+        if (furl.isNotEmpty && !myFrames.contains(furl)) {
+          await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({
+            "frames": FieldValue.arrayUnion([furl]),
+          });
+          _showToast("Nayi frame mili!");
+        }
+      }
+    } catch (_) {}
+  }
+  Future<void> _checkDailyXp() async {
+    try {
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      final d = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
+      if (d.data()?["lastDailyXp"] != today) {
+        await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({
+          "xp": FieldValue.increment(10), "lastDailyXp": today,
+        });
+      }
+    } catch (_) {}
+  }
+  Future<void> _addXp(int amount) async {
+    try {
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({
+        "xp": FieldValue.increment(amount),
+      });
+    } catch (_) {}
+  }
+  void _showToast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
   Future<void> distributePremium() async {
     try {
@@ -339,13 +401,20 @@ class _HomeScreenState extends State<HomeScreen> {
   @override Widget build(BuildContext context) {
   // ===== DP SYSTEM (Step 1) =====
   Widget _dpAvatar() {
-    return Stack(alignment: Alignment.bottomRight, children: [
+    return InkWell(onTap: () {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => FramesScreen(mobile: widget.mobile)));
+    }, child: Stack(alignment: Alignment.center, children: [
       CircleAvatar(radius: 22, backgroundColor: const Color(0xFF1E293B),
         backgroundImage: myPhotoUrl.isNotEmpty? NetworkImage(myPhotoUrl) : null,
         child: myPhotoUrl.isNotEmpty? null : const Icon(Icons.person, color: Colors.amber, size: 28)),
-      Container(padding: const EdgeInsets.all(3), decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
-        child: const Icon(Icons.camera_alt, size: 12, color: Colors.black)),
-    ]);
+      if (myFrameUrl.isNotEmpty)
+        Image.network(myFrameUrl, width: 52, height: 52,
+            errorBuilder: (_, __, ___) => const SizedBox()),
+      Positioned(right: 0, bottom: 0,
+        child: Container(padding: const EdgeInsets.all(2),
+          decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
+          child: Text("$myLevel", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)))),
+    ]));
   }
   Future<String> _uploadDPToCloudinary(Uint8List bytes) async {
     final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
@@ -538,5 +607,114 @@ class _BuyCoinsScreenState extends State<BuyCoinsScreen> {
         const Text("Admin approve karne ke baad coins mil jayenge.",
             style: TextStyle(color: Colors.white54, fontSize: 12)),
       ])));
+  }
+}
+
+// ================= FRAMES (Step 3) =================
+class FramesScreen extends StatefulWidget {
+  final String mobile;
+  const FramesScreen({super.key, required this.mobile});
+  @override State<FramesScreen> createState() => _FramesScreenState();
+}
+class _FramesScreenState extends State<FramesScreen> {
+  List<Map<String, dynamic>> allFrames = [];
+  List<String> owned = [];
+  String equipped = "";
+  int coins = 0;
+  bool loading = true;
+  @override void initState() { super.initState(); _load(); }
+  Future<void> _load() async {
+    try {
+      final fs = FirebaseFirestore.instance;
+      final fSnap = await fs.collection("frames").get();
+      final uDoc = await fs.collection("users").doc(widget.mobile).get();
+      final udata = uDoc.data() ?? {};
+      if (mounted) setState(() {
+        allFrames = fSnap.docs.map((d) => {"id": d.id, ...d.data()}).toList();
+        owned = List<String>.from(udata["frames"] ?? []);
+        equipped = udata["frameUrl"] ?? "";
+        coins = udata["coins"] ?? 0;
+        loading = false;
+      });
+    } catch (_) { if (mounted) setState(() => loading = false); }
+  }
+  Future<void> _equip(String url) async {
+    try {
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"frameUrl": url});
+      if (mounted) { setState(() => equipped = url); _msg("Frame laga di! ðŸ–¼ï¸"); }
+    } catch (e) { _msg("Fail: $e"); }
+  }
+  Future<void> _buy(Map<String, dynamic> f) async {
+    final price = (f["value"] ?? 0) as int;
+    if (coins < price) { _msg("Coins kam hain!"); return; }
+    try {
+      final fs = FirebaseFirestore.instance;
+      final uref = fs.collection("users").doc(widget.mobile);
+      await fs.runTransaction((tx) async {
+        final snap = await tx.get(uref);
+        final c = (snap.data()?["coins"] ?? 0) as int;
+        if (c < price) throw Exception("Coins kam");
+        tx.update(uref, {"coins": c - price, "frames": FieldValue.arrayUnion([f["imageUrl"]])});
+      });
+      if (mounted) setState(() { coins -= price; owned.add(f["imageUrl"]); });
+      _msg("Frame khareed li! ðŸŽ‰");
+    } catch (e) { _msg("Fail: $e"); }
+  }
+  void _msg(String s) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s))); }
+  @override Widget build(BuildContext context) {
+    return Scaffold(backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(title: const Text("My Frames"), backgroundColor: Colors.purple),
+      body: loading ? const Center(child: CircularProgressIndicator())
+      : allFrames.isEmpty
+      ? const Center(child: Text("Koi frame nahi hai", style: TextStyle(color: Colors.white54)))
+      : GridView.builder(padding: const EdgeInsets.all(12),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 0.75),
+        itemCount: allFrames.length,
+        itemBuilder: (_, i) {
+          final f = allFrames[i];
+          final url = (f["imageUrl"] ?? "") as String;
+          final isOwned = owned.contains(url);
+          final isEquipped = equipped == url;
+          final canBuy = f["type"] == "purchase";
+          final price = (f["value"] ?? 0) as int;
+          return Container(margin: const EdgeInsets.all(6), padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isEquipped ? Colors.purple.withOpacity(0.3) : const Color(0xFF151A2B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isEquipped ? Colors.purple : Colors.white12, width: 2)),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Stack(alignment: Alignment.center, children: [
+                const CircleAvatar(radius: 28, backgroundColor: Colors.grey),
+                if (url.isNotEmpty) Image.network(url, width: 72, height: 72,
+                    errorBuilder: (_, __, ___) => const SizedBox()),
+              ]),
+              const SizedBox(height: 6),
+              Text("${f["name"] ?? ''}", style: const TextStyle(color: Colors.white, fontSize: 11),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 4),
+              if (isEquipped)
+                const Text("Lagi hui âœ…", style: TextStyle(color: Colors.greenAccent, fontSize: 10))
+              else if (isOwned)
+                InkWell(onTap: () => _equip(url),
+                  child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.purple, borderRadius: BorderRadius.circular(10)),
+                    child: const Text("Lagao", style: TextStyle(color: Colors.white, fontSize: 11))))
+              else if (canBuy)
+                InkWell(onTap: () => _buy(f),
+                  child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(10)),
+                    child: Text("ðŸª™ $price", style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.bold))))
+              else
+                Text("${_typeLabel(f["type"])}", style: const TextStyle(color: Colors.white38, fontSize: 9)),
+            ]));
+        }));
+  }
+  String _typeLabel(dynamic t) {
+    switch (t) {
+      case "premium": return "Premium par milegi";
+      case "level": return "Level par milegi";
+      case "manual": return "Admin dega";
+      default: return "";
+    }
   }
 }
