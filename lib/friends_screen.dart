@@ -19,12 +19,14 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   final searchCtrl = TextEditingController();
   List<DocumentSnapshot> pending = [];
   List<Map<String, dynamic>> friendsWithName = [];
+  List<Map<String, dynamic>> blockedWithName = [];
   List<DocumentSnapshot> searchResult = [];
   bool loading = true;
   String myName = "";
   String myIdNo = "";
+  List<String> myPowers = [];
 
-  @override void initState() { super.initState(); tabCtrl = TabController(length: 3, vsync: this); loadAll(); }
+  @override void initState() { super.initState(); tabCtrl = TabController(length: 4, vsync: this); loadAll(); }
 
   Future<void> loadAll() async {
     setState((){ loading = true; });
@@ -32,9 +34,28 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       var me = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
       myName = me.data()?["name"]?? "You";
       myIdNo = me.data()?["voiceRoomNo"]?.toString()?? "";
+      myPowers = List<String>.from(me.data()?["powers"]?? []);
+      // block list pehle lao taaki blocked logon ki request filter ho sake
+      var b = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("blocked").get();
+      var blockedIds = b.docs.map((d) => d.id).toSet();
+      List<Map<String, dynamic>> btemp = [];
+      for(var doc in b.docs){
+        var bdata = doc.data() as Map<String, dynamic>;
+        String bm = bdata["mobile"]?.toString()?? doc.id;
+        var userDoc = await FirebaseFirestore.instance.collection("users").doc(bm).get();
+        String bname = userDoc.data()?["name"]?? "User";
+        String bid = userDoc.data()?["voiceRoomNo"]?.toString()?? "";
+        btemp.add({"mobile": bm, "name": bname, "idNo": bid});
+      }
       // FIX: composite index se bachne ke liye sirf "to" par query, status ka filter code me
+      // blocked logon ki request list me nahi dikhegi
       var p = await FirebaseFirestore.instance.collection("friend_requests").where("to", isEqualTo: widget.mobile).get();
-      var pendingDocs = p.docs.where((d) => (d.data() as Map<String, dynamic>)["status"] == "pending").toList();
+      var pendingDocs = p.docs.where((d) {
+        var m = d.data() as Map<String, dynamic>;
+        if (m["status"]!= "pending") return false;
+        if (blockedIds.contains(m["from"]?.toString())) return false;
+        return true;
+      }).toList();
       var f = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("friends").get();
       List<Map<String, dynamic>> temp = [];
       for(var doc in f.docs){
@@ -46,7 +67,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
         temp.add({"mobile": fm, "name": fname, "idNo": fid});
       }
       if(!mounted) return;
-      setState((){ pending = pendingDocs; friendsWithName = temp; loading = false; });
+      setState((){ pending = pendingDocs; friendsWithName = temp; blockedWithName = btemp; loading = false; });
     } catch (e) {
       if(!mounted) return;
       setState(()=> loading = false);
@@ -79,7 +100,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
         final fm = f["mobile"].toString();
         final s = [widget.mobile, fm]..sort();
         await FirebaseFirestore.instance.collection("friend_chats").doc(s.join("_"))
-           .set({"clearedBy": {widget.mobile: FieldValue.serverTimestamp()}}, SetOptions(merge: true));
+          .set({"clearedBy": {widget.mobile: FieldValue.serverTimestamp()}}, SetOptions(merge: true));
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sabhi chats clear ho gayi ✅")));
@@ -89,18 +110,26 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     }
   }
 
-  // ID NUMBER se search - 7 digit ka permanent ID (voice room number)
-  // Mobile number kisi ko nahi dikhega, sirf ID se dhoondo aur add karo
+  // ID NUMBER ya NAAM se search - 7 digit ka permanent ID (voice room number) ya naam dono chalega
+  // Mobile number kisi ko nahi dikhega
   Future<void> searchUser() async {
     String s = searchCtrl.text.trim();
-    if(s.length!=7) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("7 digit ka ID number dalo"))); return; }
+    if(s.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("ID ya naam likho"))); return; }
     if(s==myIdNo) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ye tumhari apni ID hai"))); return; }
     try {
-      var q = await FirebaseFirestore.instance.collection("users").where("voiceRoomNo", isEqualTo: s).limit(1).get();
-      if(q.docs.isEmpty){ setState(()=> searchResult=[]); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Is ID ka koi user nahi mila"))); return; }
-      var doc = q.docs.first;
-      if(doc.id==widget.mobile){ setState(()=> searchResult=[]); return; }
-      setState(()=> searchResult=[doc]);
+      // maine jinko block kiya hai wo search me nahi dikhenge
+      var myBlocked = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("blocked").get();
+      var blockedIds = myBlocked.docs.map((d) => d.id).toSet();
+      QuerySnapshot q;
+      // 7 digit number hai to ID se dhoondo, warna naam se
+      if(RegExp(r'^[0-9]{7}$').hasMatch(s)){
+        q = await FirebaseFirestore.instance.collection("users").where("voiceRoomNo", isEqualTo: s).limit(10).get();
+      } else {
+        q = await FirebaseFirestore.instance.collection("users").where("name", isGreaterThanOrEqualTo: s).where("name", isLessThan: s + '￯').limit(10).get();
+      }
+      var docs = q.docs.where((doc) => doc.id!= widget.mobile &&!blockedIds.contains(doc.id)).toList();
+      if(docs.isEmpty){ setState(()=> searchResult=[]); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Koi user nahi mila"))); return; }
+      setState(()=> searchResult=docs);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Search fail: $e")));
     }
@@ -108,6 +137,11 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
 
   Future<void> sendRequest(String toMobile) async {
     try {
+      // block check: maine isko block kiya hai ya isne mujhe
+      var iBlocked = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("blocked").doc(toMobile).get();
+      if(iBlocked.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Tumne isko block kiya hai - pehle unblock karo"))); return; }
+      var blockedMe = await FirebaseFirestore.instance.collection("users").doc(toMobile).collection("blocked").doc(widget.mobile).get();
+      if(blockedMe.exists){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request nahi bhej sakte"))); return; }
       // FIX: composite index se bachne ke liye 2 filter hataye, pending check code me
       var q = await FirebaseFirestore.instance.collection("friend_requests").where("from", isEqualTo: widget.mobile).get();
       bool alreadySent = q.docs.any((d){
@@ -146,6 +180,81 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     }
   }
 
+  // BLOCK: request wale ko block karo - request band + block list me jayega + friend tha to unfriend bhi
+  Future<void> blockUser(String targetMobile, DocumentSnapshot? req) async {
+    if(targetMobile.isEmpty) return;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Block karein?"),
+        content: const Text("Ye user tumhe request nahi bhej payega aur message bhi nahi kar payega."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Block")),
+        ],
+      ),
+    );
+    if(yes!= true) return;
+    try {
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("blocked").doc(targetMobile).set({"mobile": targetMobile, "blockedAt": FieldValue.serverTimestamp()});
+      if(req!= null){
+        await FirebaseFirestore.instance.collection("friend_requests").doc(req.id).update({"status": "blocked"});
+      }
+      // friend tha to dono taraf se unfriend bhi
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("friends").doc(targetMobile).delete();
+      await FirebaseFirestore.instance.collection("users").doc(targetMobile).collection("friends").doc(widget.mobile).delete();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Block kar diya")));
+      loadAll();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fail: $e")));
+    }
+  }
+
+  // UNBLOCK: block list se hatao
+  Future<void> unblockUser(String targetMobile) async {
+    try {
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("blocked").doc(targetMobile).delete();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Unblock ho gaya")));
+      loadAll();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fail: $e")));
+    }
+  }
+
+  // UNFRIEND: dono taraf se dosti khatm
+  Future<void> unfriend(String fm, String fname) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Unfriend karein?"),
+        content: Text("$fname se dosti toot jayegi.\nDono taraf se unfriend ho jaoge."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Unfriend")),
+        ],
+      ),
+    );
+    if(yes!= true) return;
+    try {
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("friends").doc(fm).delete();
+      await FirebaseFirestore.instance.collection("users").doc(fm).collection("friends").doc(widget.mobile).delete();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Unfriend ho gaya")));
+      loadAll();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fail: $e")));
+    }
+  }
+
+  // admin power check: "chat_without_add" hai to bina add kiye seedha message
+  bool _canDirectMsg(Map d){
+    List tp = d["powers"]?? [];
+    return tp.contains("chat_without_add") || myPowers.contains("chat_without_add");
+  }
+
   @override Widget build(BuildContext context){
     return Scaffold(
       backgroundColor: Color(0xFF0A0E1A),
@@ -154,21 +263,75 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           IconButton(icon: Icon(Icons.delete_sweep, color: Colors.black), tooltip: "Sabhi chats clear karo",
             onPressed: _clearAllChats),
         ],
-        bottom: TabBar(controller: tabCtrl, labelColor: Colors.black, tabs: [Tab(text: "ADD"), Tab(text: "REQUESTS (${pending.length})"), Tab(text: "MY FRIENDS (${friendsWithName.length})")])),
+        bottom: TabBar(controller: tabCtrl, labelColor: Colors.black, unselectedLabelColor: Colors.black54, isScrollable: true, tabs: [Tab(text: "ADD"), Tab(text: "REQUESTS (${pending.length})"), Tab(text: "MY FRIENDS (${friendsWithName.length})"), Tab(text: "BLOCKED (${blockedWithName.length})")])),
       body: loading? Center(child: CircularProgressIndicator(color: Colors.amber)):
       TabBarView(controller: tabCtrl, children: [
+        // ===== TAB 1: ADD (search) =====
         Padding(padding: EdgeInsets.all(16), child: Column(children: [
           if(myIdNo.isNotEmpty)
             Container(margin: EdgeInsets.only(bottom:12), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withOpacity(0.4))),
               child: Row(children: [Icon(Icons.badge, color: Colors.amber), SizedBox(width:8), Text("Tumhari ID: $myIdNo", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), SizedBox(width:4), Expanded(child: Text("(dosto ko ye ID do)", style: TextStyle(color: Colors.white54, fontSize: 11)))])),
-          Row(children: [Expanded(child: TextField(controller: searchCtrl, keyboardType: TextInputType.number, maxLength: 7, style: TextStyle(color: Colors.white, letterSpacing: 4, fontWeight: FontWeight.bold), decoration: InputDecoration(counterText: "", labelText: "ID Number se Search (7 digit)", labelStyle: TextStyle(color: Colors.white54, fontSize: 12), filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))), SizedBox(width:8), ElevatedButton(onPressed: searchUser, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: Text("SEARCH", style: TextStyle(color: Colors.black))) ]),
+          Row(children: [Expanded(child: TextField(controller: searchCtrl, keyboardType: TextInputType.text, maxLength: 20, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold), decoration: InputDecoration(counterText: "", labelText: "ID ya Naam se Search", labelStyle: TextStyle(color: Colors.white54, fontSize: 12), filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))), SizedBox(width:8), ElevatedButton(onPressed: searchUser, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: Text("SEARCH", style: TextStyle(color: Colors.black))) ]),
           SizedBox(height:8),
-          Text("Mobile number kisi ko nahi dikhega - sirf ID se add karo", style: TextStyle(color: Colors.white38, fontSize: 11)),
+          Text("Mobile number kisi ko nahi dikhega - ID ya naam se add karo", style: TextStyle(color: Colors.white38, fontSize: 11)),
           SizedBox(height:12),
-          Expanded(child: searchResult.isEmpty? Center(child: Text("ID dalke SEARCH dabao", style: TextStyle(color: Colors.white54))): ListView.builder(itemCount: searchResult.length, itemBuilder: (c,i){ var d=searchResult[i].data() as Map; String name = d["name"]?? "User"; String fid = d["voiceRoomNo"]?.toString()?? ""; String toMobile = searchResult[i].id; return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [CircleAvatar(backgroundColor: Colors.amber, child: Text(name.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.black))), SizedBox(width:12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text("ID: $fid", style: TextStyle(color: Colors.white54, fontSize: 11))])), ElevatedButton(onPressed: ()=>sendRequest(toMobile), child: Text("ADD"), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)) ])); }))
+          Expanded(child: searchResult.isEmpty? Center(child: Text("ID ya naam likhke SEARCH dabao", style: TextStyle(color: Colors.white54))): ListView.builder(itemCount: searchResult.length, itemBuilder: (c,i){
+            var d=searchResult[i].data() as Map;
+            String name = d["name"]?? "User";
+            String fid = d["voiceRoomNo"]?.toString()?? "";
+            String toMobile = searchResult[i].id;
+            bool directMsg = _canDirectMsg(d);
+            return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [
+              CircleAvatar(backgroundColor: Colors.amber, child: Text(name.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.black))),
+              SizedBox(width:12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text("ID: $fid", style: TextStyle(color: Colors.white54, fontSize: 11))])),
+              directMsg
+               ? ElevatedButton(onPressed: (){ Navigator.push(context, MaterialPageRoute(builder: (_)=> PrivateChatScreen(myMobile: widget.mobile, friendMobile: toMobile, friendName: name, myName: myName))); }, child: Text("MESSAGE"), style: ElevatedButton.styleFrom(backgroundColor: Colors.blue))
+                : ElevatedButton(onPressed: ()=>sendRequest(toMobile), child: Text("ADD"), style: ElevatedButton.styleFrom(backgroundColor: Colors.green))
+            ]));
+          }))
         ])),
-        pending.isEmpty? Center(child: Text("Koi request nahi", style: TextStyle(color: Colors.white54))): ListView.builder(padding: EdgeInsets.all(12), itemCount: pending.length, itemBuilder: (c,i){ var data=pending[i].data() as Map; String fromName = data["fromName"]?? "Kisi ne"; return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [Expanded(child: Text("$fromName ne request bheji", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))), ElevatedButton(onPressed: ()=>acceptRequest(pending[i]), child: Text("Accept"), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)), SizedBox(width:6), ElevatedButton(onPressed: ()=>rejectRequest(pending[i]), child: Text("Reject"), style: ElevatedButton.styleFrom(backgroundColor: Colors.red)) ])); }),
-        friendsWithName.isEmpty? Center(child: Text("Koi friend nahi", style: TextStyle(color: Colors.white54))): ListView.builder(padding: EdgeInsets.all(12), itemCount: friendsWithName.length, itemBuilder: (c,i){ var data=friendsWithName[i]; String fname = data["name"]; String fm = data["mobile"]; String fid = data["idNo"]?? ""; return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [CircleAvatar(backgroundColor: Colors.green, child: Text(fname.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.white))), SizedBox(width:12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(fname, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text("ID: $fid", style: TextStyle(color: Colors.white54, fontSize: 11))])), IconButton(icon: Icon(Icons.chat, color: Colors.amber), onPressed: (){ Navigator.push(context, MaterialPageRoute(builder: (_)=> PrivateChatScreen(myMobile: widget.mobile, friendMobile: fm, friendName: fname, myName: myName))); }) ])); })
+        // ===== TAB 2: REQUESTS (Accept / Reject / Block) =====
+        pending.isEmpty? Center(child: Text("Koi request nahi", style: TextStyle(color: Colors.white54))): ListView.builder(padding: EdgeInsets.all(12), itemCount: pending.length, itemBuilder: (c,i){
+          var data=pending[i].data() as Map;
+          String fromName = data["fromName"]?? "Kisi ne";
+          String fromMobile = data["from"]?.toString()?? "";
+          return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [
+            Expanded(child: Text("$fromName ne request bheji", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+            ElevatedButton(onPressed: ()=>acceptRequest(pending[i]), child: Text("Accept", style: TextStyle(fontSize: 12)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: EdgeInsets.symmetric(horizontal: 10))),
+            SizedBox(width:6),
+            ElevatedButton(onPressed: ()=>rejectRequest(pending[i]), child: Text("Reject", style: TextStyle(fontSize: 12)), style: ElevatedButton.styleFrom(backgroundColor: Colors.red, padding: EdgeInsets.symmetric(horizontal: 10))),
+            SizedBox(width:6),
+            ElevatedButton(onPressed: ()=>blockUser(fromMobile, pending[i]), child: Text("Block", style: TextStyle(fontSize: 12)), style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[800], padding: EdgeInsets.symmetric(horizontal: 10))),
+          ]));
+        }),
+        // ===== TAB 3: MY FRIENDS (chat + unfriend) =====
+        friendsWithName.isEmpty? Center(child: Text("Koi friend nahi", style: TextStyle(color: Colors.white54))): ListView.builder(padding: EdgeInsets.all(12), itemCount: friendsWithName.length, itemBuilder: (c,i){
+          var data=friendsWithName[i];
+          String fname = data["name"];
+          String fm = data["mobile"];
+          String fid = data["idNo"]?? "";
+          return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [
+            CircleAvatar(backgroundColor: Colors.green, child: Text(fname.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.white))),
+            SizedBox(width:12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(fname, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text("ID: $fid", style: TextStyle(color: Colors.white54, fontSize: 11))])),
+            IconButton(icon: Icon(Icons.chat, color: Colors.amber), tooltip: "Chat", onPressed: (){ Navigator.push(context, MaterialPageRoute(builder: (_)=> PrivateChatScreen(myMobile: widget.mobile, friendMobile: fm, friendName: fname, myName: myName))); }),
+            IconButton(icon: Icon(Icons.person_remove, color: Colors.red), tooltip: "Unfriend", onPressed: ()=>unfriend(fm, fname)),
+          ]));
+        }),
+        // ===== TAB 4: BLOCKED (unblock) =====
+        blockedWithName.isEmpty? Center(child: Text("Kisi ko block nahi kiya", style: TextStyle(color: Colors.white54))): ListView.builder(padding: EdgeInsets.all(12), itemCount: blockedWithName.length, itemBuilder: (c,i){
+          var data=blockedWithName[i];
+          String bname = data["name"];
+          String bm = data["mobile"];
+          String bid = data["idNo"]?? "";
+          return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.withOpacity(0.3))), child: Row(children: [
+            CircleAvatar(backgroundColor: Colors.red, child: Text(bname.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.white))),
+            SizedBox(width:12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(bname, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text("ID: $bid", style: TextStyle(color: Colors.white54, fontSize: 11))])),
+            ElevatedButton(onPressed: ()=>unblockUser(bm), child: Text("Unblock"), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)),
+          ]));
+        }),
       ])
     );
   }
@@ -183,7 +346,7 @@ class PrivateChatScreen extends StatefulWidget {
 
 class _PrivateChatScreenState extends State<PrivateChatScreen> {
   final msgCtrl = TextEditingController();
-  DateTime? _clearedAt; // is time se pehle ke msgs sirf mere liye hidden (Firestore se delete NAHI hote)
+  DateTime? _clearedAt;
 
   String getChatId(){ List<String> s=[widget.myMobile, widget.friendMobile]; s.sort(); return s.join("_"); }
 
@@ -196,8 +359,6 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     _loadClearedAt();
   }
 
-  // Maine kab chat clear ki thi - us time se pehle ke msgs mujhe nahi dikhenge
-  // (Firestore se delete NAHI hota - admin panel me sab dikhta rahega)
   Future<void> _loadClearedAt() async {
     try {
       final d = await FirebaseFirestore.instance.collection("friend_chats").doc(getChatId()).get();
@@ -210,7 +371,6 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
 
   void _toast(String s){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s), duration: const Duration(seconds: 2))); }
 
-  // TIME FORMAT: 10:45 PM
   String _fmtTime(Timestamp? t){
     if (t == null) return "";
     final dt = t.toDate();
@@ -221,7 +381,6 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     return "$h:$m $ap";
   }
 
-  // DATE LABEL: Today / Yesterday / 28 Sep 2026
   String _dayLabel(DateTime dt){
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -233,7 +392,6 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     return "${dt.day} ${months[dt.month - 1]} ${dt.year}";
   }
 
-  // DATE CHIP: ek din ki chat ke upar ek patti
   Widget _dateChip(String label){
     return Center(
       child: Container(
@@ -245,7 +403,6 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     );
   }
 
-  // CHAT CLEAR (sirf mere liye) - Firestore se delete NAHI hota, admin panel me sab safe
   Future<void> _clearChat() async {
     final yes = await showDialog<bool>(
       context: context,
@@ -263,17 +420,16 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     if (yes!= true) return;
     try {
       await FirebaseFirestore.instance.collection("friend_chats").doc(getChatId())
-         .set({"clearedBy": {widget.myMobile: FieldValue.serverTimestamp()}}, SetOptions(merge: true));
+        .set({"clearedBy": {widget.myMobile: FieldValue.serverTimestamp()}}, SetOptions(merge: true));
       if (mounted) setState(() => _clearedAt = DateTime.now());
       _toast("Chat clear ho gayi ✅");
     } catch (e) { _toast("Fail: $e"); }
   }
 
-  // Cloudinary par photo upload
   Future<String> _uploadToCloudinary(Uint8List bytes) async {
     final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
- ..fields['upload_preset'] = 'ludo_chat'
- ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chat.jpg'));
+..fields['upload_preset'] = 'ludo_chat'
+..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'chat.jpg'));
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
     if (streamed.statusCode!= 200) throw Exception("Cloudinary: ${res.body}");
@@ -291,7 +447,6 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     } catch (e) { _toast("Bhej nahi paya: $e"); }
   }
 
-  // Photo bhejo - view-once (3 sec) ya normal
   Future<void> _pickAndSendImage() async {
     final choice = await showDialog<String>(
       context: context,
@@ -319,7 +474,6 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
     } catch (e) { _toast("Photo fail: $e"); }
   }
 
-  // 2 minute ke andar hi delete for everyone milega
   bool _canDelete(Timestamp? t){
     if (t == null) return true;
     return DateTime.now().difference(t.toDate()).inMinutes < 2;
@@ -339,14 +493,12 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
         ],
       ),
     );
-    // SOFT DELETE - dono ke inbox se gayab, lekin Firestore me doc rehta hai (admin panel me dikhega)
     if (yes == true) {
       await msgCol.doc(docId).set({"hiddenFor": {widget.myMobile: true, widget.friendMobile: true}}, SetOptions(merge: true));
       _toast("Delete ho gaya");
     }
   }
 
-  // Normal photo gallery me save karo (gal package)
   Future<void> _savePhoto(String url) async {
     try {
       _toast("Save ho rahi hai...");
@@ -390,39 +542,38 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       final bool seen = viewedBy[widget.myMobile] == true;
       if (viewOnce && seen &&!isMe) {
         content = const Text("Dekh liya 👀", style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic));
-      } else if (viewOnce && !seen && !isMe) {
-  // Bina open kiye dhundhli photo dikhegi
-  content = GestureDetector(
-    onTap: () => _openPhoto(doc),
-    child: Stack(alignment: Alignment.center, children: [
-      ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Image.network(url, height: 150, fit: BoxFit.cover),
-        ),
-      ),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
-        child: const Text("👁 Tap to view", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-      ),
-    ]),
-  );
-} else {
-  content = GestureDetector(
-    onTap: () => _openPhoto(doc),
-    child: Stack(alignment: Alignment.topRight,
-      children: [
-        ClipRRect(borderRadius: BorderRadius.circular(8),
-          child: Image.network(url, height: 150, fit: BoxFit.cover,
-            loadingBuilder: (c, w, p) => p == null ? w : const SizedBox(height: 150, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
-            errorBuilder: (c, e, s) => const SizedBox(height: 60, child: Center(child: Icon(Icons.broken_image, color: Colors.white38))))),
-        if (viewOnce) Container(margin: const EdgeInsets.all(6), padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
-          child: const Text("3s", style: TextStyle(color: Colors.white, fontSize: 10))),
-      ]),
-  );
+      } else if (viewOnce &&!seen &&!isMe) {
+        content = GestureDetector(
+          onTap: () => _openPhoto(doc),
+          child: Stack(alignment: Alignment.center, children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: Image.network(url, height: 150, fit: BoxFit.cover),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
+              child: const Text("👁 Tap to view", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+          ]),
+        );
+      } else {
+        content = GestureDetector(
+          onTap: () => _openPhoto(doc),
+          child: Stack(alignment: Alignment.topRight,
+            children: [
+              ClipRRect(borderRadius: BorderRadius.circular(8),
+                child: Image.network(url, height: 150, fit: BoxFit.cover,
+                  loadingBuilder: (c, w, p) => p == null? w : const SizedBox(height: 150, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+                  errorBuilder: (c, e, s) => const SizedBox(height: 60, child: Center(child: Icon(Icons.broken_image, color: Colors.white38))))),
+              if (viewOnce) Container(margin: const EdgeInsets.all(6), padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
+                child: const Text("3s", style: TextStyle(color: Colors.white, fontSize: 10))),
+            ]),
+        );
       }
     } else {
       content = Text(d["msg"]?? "", style: TextStyle(color: isMe? Colors.black : Colors.white));
@@ -472,7 +623,6 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
             if (snap.hasError) return Center(child: Padding(padding: const EdgeInsets.all(16), child: Text("Error: ${snap.error}", style: const TextStyle(color: Colors.white54))));
             if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.amber));
             final allDocs = snap.data?.docs?? [];
-            // mere liye hidden/clear kiye gaye msgs mat dikhao (Firestore se delete NAHI hote - admin ko dikhte rahenge)
             final docs = allDocs.where((doc){
               final dd = doc.data();
               final hiddenFor = dd["hiddenFor"];
@@ -484,7 +634,6 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
               return true;
             }).toList();
             if (docs.isEmpty) return const Center(child: Text("Abhi koi message nahi — pehla message bhejo 👋", style: TextStyle(color: Colors.white54)));
-            // DATE HEADER: ek din ki chat ke upar ek baar - Today / Yesterday / date
             List<Widget> items = [];
             String lastDay = "";
             for (var doc in docs) {
@@ -511,7 +660,6 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   }
 }
 
-// Photo dekhne wali screen - view-once 3 sec me band, normal me Save button
 class _PhotoViewScreen extends StatefulWidget {
   final String url; final bool viewOnce; final bool showSave;
   final VoidCallback? onSave; final VoidCallback? onViewed;
