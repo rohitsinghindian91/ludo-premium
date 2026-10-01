@@ -85,8 +85,8 @@ bool hasPower(Map<String,dynamic> u, String p){
 }
 Map<String,dynamic> _cachedMe = {};
 String genderSymbol(String g) {
-  if (g == "male") return " ♂";
-  if (g == "female") return " ♀";
+  if (g == "male") return " â™‚";
+  if (g == "female") return " â™€";
   return "";
 }
 
@@ -289,7 +289,7 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
                             decoration: const BoxDecoration(gradient: LinearGradient(colors: [Colors.amber, Colors.orange]), shape: BoxShape.circle),
                             child: Icon(r["locked"] == true? Icons.lock : Icons.casino_rounded, color: Colors.black, size: 20)),
                         title: Text(r["name"], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        subtitle: Text("ID:${r["no"]} • ${r["online"]} online${r["locked"] == true? " • 🔒 Locked" : ""}",
+                        subtitle: Text("ID:${r["no"]} â€¢ ${r["online"]} online${r["locked"] == true? " â€¢ ðŸ”’ Locked" : ""}",
                             style: const TextStyle(color: Colors.white54, fontSize: 11)),
                         trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
                         onTap: () => joinRoom(r["no"]),
@@ -317,9 +317,10 @@ class _Seat {
   final String role;
   final String gender;
   final String idNo;
+  final String photo;
   final bool muted;
   bool get empty => mobile.isEmpty;
-  _Seat({required this.index, this.locked = false, this.micLocked = false, this.uid = 0, this.mobile = "", this.name = "", this.role = "visitor", this.gender = "", this.idNo = "", this.muted = false});
+  _Seat({required this.index, this.locked = false, this.micLocked = false, this.uid = 0, this.mobile = "", this.name = "", this.role = "visitor", this.gender = "", this.idNo = "", this.photo = "", this.muted = false});
 }
 
 class _Present {
@@ -329,7 +330,8 @@ class _Present {
   final String role;
   final String gender;
   final String idNo;
-  _Present({required this.uid, required this.name, required this.mobile, required this.role, this.gender = "", this.idNo = ""});
+  final String photo;
+  _Present({required this.uid, required this.name, required this.mobile, required this.role, this.gender = "", this.idNo = "", this.photo = ""});
 }
 
 class _ChatMsg {
@@ -341,10 +343,11 @@ class _ChatMsg {
   final int at;
   final String type; // text | image
   final String imageUrl;
+  final String photo;
   final bool viewOnce;
   final Map<String, dynamic> viewedBy;
   _ChatMsg({this.key = "", required this.name, required this.mobile, required this.text, required this.role, required this.at,
-    this.type = "text", this.imageUrl = "", this.viewOnce = false, this.viewedBy = const {}});
+    this.type = "text", this.imageUrl = "", this.photo = "", this.viewOnce = false, this.viewedBy = const {}});
 }
 // ================= VOICE ROOM =================
 class VoiceRoomScreen extends StatefulWidget {
@@ -363,6 +366,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   String myRole = "visitor";
   String myGender = "";
   String myIdNo = "";
+  String myPhoto = "";
   int _seatGuardUntil = 0;
   String roomName = "...";
   String ownerMobile = "";
@@ -523,8 +527,9 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     } else {
       await _joinAgora();
     }
+    try { final ud = await FirebaseFirestore.instance.collection("users").doc(myMobile).get(); myPhoto = ud.data()?["photoUrl"]?.toString()?? ""; } catch (_) {}
     myPresentRef = roomRef.child("visitors/$myUid");
-    await myPresentRef!.set({"name": myName, "mobile": myMobile, "idNo": myIdNo, "at": ServerValue.timestamp});
+    await myPresentRef!.set({"name": myName, "mobile": myMobile, "idNo": myIdNo, "photo": myPhoto, "at": ServerValue.timestamp});
     myPresentRef!.onDisconnect().remove();
     await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update(
         {"name": roomName, "id": widget.roomNo, "locked": roomLocked});
@@ -539,7 +544,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF2A1420),
-        title: const Text("🔒 Locked Room", style: TextStyle(color: Colors.amber)),
+        title: const Text("ðŸ”’ Locked Room", style: TextStyle(color: Colors.amber)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text("Ye room lock hai. Owner se password lekar dalo.",
               style: TextStyle(color: Colors.white70, fontSize: 13)),
@@ -611,7 +616,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       await roomRef.child("info").update({"locked": true, "roomPassword": res});
       await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update({"locked": true});
       setState(() => roomLocked = true);
-      _toast("Room lock ho gaya 🔒");
+      _toast("Room lock ho gaya ðŸ”’");
     } else {
       final ok = await showDialog<bool>(
         context: context,
@@ -631,7 +636,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       await roomRef.child("info").update({"locked": false, "roomPassword": ""});
       await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update({"locked": false});
       setState(() => roomLocked = false);
-      _toast("Room unlock ho gaya 🔓");
+      _toast("Room unlock ho gaya ðŸ”“");
     }
   }
     void _listenAll() {
@@ -654,6 +659,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
           role: (m["role"]?? "visitor").toString(),
           gender: (m["gender"]?? "").toString(),
           idNo: (m["idNo"]?? "").toString(),
+          photo: (m["photo"]?? "").toString(),
           muted: m["muted"] == true,
         );
       }
@@ -689,7 +695,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       for (final s in seats) {
         if (!s.empty) {
           seen.add(s.mobile);
-          list.add(_Present(uid: s.uid, name: s.name, mobile: s.mobile, role: s.role, gender: s.gender, idNo: s.idNo));
+          list.add(_Present(uid: s.uid, name: s.name, mobile: s.mobile, role: s.role, gender: s.gender, idNo: s.idNo, photo: s.photo));
         }
       }
       final val = e.snapshot.value;
@@ -722,7 +728,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
                 mobile: mob,
                 role: roles[mob]?? "visitor",
                 gender: genders[mob]?? "",
-                idNo: (m["idNo"]?? "").toString()));
+                idNo: (m["idNo"]?? "").toString(), photo: (m["photo"]?? "").toString()));
           }
         });
       }
@@ -744,6 +750,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
               key: k.toString(),
               name: (m["name"]?? "?").toString(),
               mobile: (m["mobile"]?? "").toString(),
+              photo: (m["photo"]?? "").toString(),
               text: (m["text"]?? "").toString(),
               role: (m["role"]?? "").toString(),
               at: at,
@@ -790,7 +797,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       final l = e.snapshot.value == true;
       if (l!= roomLocked) {
         setState(() => roomLocked = l);
-        _toast(l? "Room lock ho gaya 🔒" : "Room unlock ho gaya 🔓");
+        _toast(l? "Room lock ho gaya ðŸ”’" : "Room unlock ho gaya ðŸ”“");
       }
     });
 
@@ -958,7 +965,7 @@ Future<void> _autoRetry() async {
       }
       await ref.set({
         "locked": false, "micLocked": false, "uid": myUid, "mobile": myMobile,
-        "name": myName, "role": myRole, "gender": myGender, "idNo": myIdNo,
+        "name": myName, "role": myRole, "gender": myGender, "idNo": myIdNo, "photo": myPhoto,
         "muted":!micOn, "at": DateTime.now().millisecondsSinceEpoch,
       });
       if (wasEmpty) _bumpSeated(1);
@@ -1045,7 +1052,7 @@ Future<void> _autoRetry() async {
       try {
         final t = await FirebaseFirestore.instance.collection("users").doc(targetMobile).get();
         if (hasPower(t.data()?? {}, "no_mic_leave")) {
-          _toast("Isko mic se nahi utar sakte ⛔");
+          _toast("Isko mic se nahi utar sakte â›”");
           return;
         }
       } catch (_) {}
@@ -1078,7 +1085,7 @@ Future<void> _autoRetry() async {
     _toast("$name kick ${days < 0? "forever" : "$days din"}");
   }
 
-  // ✅ FIXED: q2 line me isEqualTo lagaya
+  // âœ… FIXED: q2 line me isEqualTo lagaya
   Future<void> _addFriend(String toMobile, String toName) async {
     try {
       final fs = FirebaseFirestore.instance;
@@ -1101,11 +1108,11 @@ Future<void> _autoRetry() async {
         ElevatedButton(
           onPressed: () { Navigator.pop(context); _saveGender("male"); },
           style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-          child: const Text("♂ Male", style: TextStyle(color: Colors.white))),
+          child: const Text("â™‚ Male", style: TextStyle(color: Colors.white))),
         ElevatedButton(
           onPressed: () { Navigator.pop(context); _saveGender("female"); },
           style: ElevatedButton.styleFrom(backgroundColor: Colors.pink),
-          child: const Text("♀ Female", style: TextStyle(color: Colors.white))),
+          child: const Text("â™€ Female", style: TextStyle(color: Colors.white))),
       ],
     ));
   }
@@ -1132,7 +1139,7 @@ Future<void> _autoRetry() async {
         await roomRef.child("roles/$myMobile").update({"gender": g});
         if (mySeat >= 0) { try { await roomRef.child("seats/$mySeat").update({"gender": g}); } catch (_) {} }
       } catch (_) {}
-      _toast(g == "male"? "Gender: Male ♂" : "Gender: Female ♀");
+      _toast(g == "male"? "Gender: Male â™‚" : "Gender: Female â™€");
     } catch (e) {
       _toast("Error: $e");
     }
@@ -1143,7 +1150,7 @@ Future<void> _autoRetry() async {
     if (t.isEmpty) return;
     chatCtrl.clear();
     await roomRef.child("chat").push().set({
-      "name": myName, "mobile": myMobile, "text": t, "role": myRole, "at": ServerValue.timestamp,
+      "name": myName, "mobile": myMobile, "text": t, "role": myRole, "photo": myPhoto, "at": ServerValue.timestamp,
       "type": "text",
     });
   }
@@ -1421,7 +1428,7 @@ Future<void> _autoRetry() async {
   }
 
   // FIX 6: gender icon DP (male=boy, female=girl), bolne par green glow
-  Widget _avatarFor(String name, String gender, double radius, {bool isMe = false, bool glow = false}) {
+  Widget _avatarFor(String name, String gender, double radius, {bool isMe = false, bool glow = false, String photo = ""}) {
     IconData icon;
     Color bg;
     if (gender == "male") {
@@ -1442,12 +1449,27 @@ Future<void> _autoRetry() async {
         border: Border.all(color: glow? Colors.greenAccent : Colors.transparent, width: 2.5),
         boxShadow: glow? [BoxShadow(color: Colors.greenAccent.withOpacity(0.7), blurRadius: 12)] : [],
       ),
-      child: CircleAvatar(
-        radius: radius,
-        backgroundColor: bg,
-        child: Icon(icon, color: Colors.white, size: radius * 1.3),
-      ),
+      child: photo.isNotEmpty
+          ? CircleAvatar(radius: radius, backgroundColor: bg, backgroundImage: NetworkImage(photo))
+          : CircleAvatar(
+              radius: radius,
+              backgroundColor: bg,
+              child: Icon(icon, color: Colors.white, size: radius * 1.3),
+            ),
     );
+  }
+  // ===== DP helpers (Step 1) =====
+  String _photoFor(String mobile) {
+    if (mobile == myMobile) return myPhoto;
+    for (final p in present) { if (p.mobile == mobile && p.photo.isNotEmpty) return p.photo; }
+    for (final s in seats) { if (s.mobile == mobile && s.photo.isNotEmpty) return s.photo; }
+    return "";
+  }
+  Widget _chatAvatar(String mobile, String name, String msgPhoto, bool isMe) {
+    final ph = msgPhoto.isNotEmpty? msgPhoto : _photoFor(mobile);
+    if (ph.isNotEmpty) return CircleAvatar(radius: 12, backgroundImage: NetworkImage(ph));
+    return CircleAvatar(radius: 12, backgroundColor: isMe? Colors.amber : Colors.white24,
+        child: Text(name.isNotEmpty? name[0].toUpperCase() : "?", style: const TextStyle(fontSize: 12, color: Colors.black)));
   }
     // ================= UI =================
   @override
@@ -1567,7 +1589,7 @@ Future<void> _autoRetry() async {
       circle = _seatCircle(icon: Icons.mic, bg: Colors.white10, iconColor: Colors.white54);
     } else {
       circle = Stack(alignment: Alignment.center, children: [
-        _avatarFor(s.name, s.gender, 26, isMe: isMe, glow: isSpeaking),
+        _avatarFor(s.name, s.gender, 26, isMe: isMe, glow: isSpeaking, photo: isMe? myPhoto : s.photo),
         Positioned(bottom: 0, right: 2, child: _roleBadge(s.role)),
         if (s.muted || s.micLocked)
           const Positioned(top: 0, right: 2,
@@ -1633,7 +1655,7 @@ Future<void> _autoRetry() async {
       _sitOn(s.index);
       return;
     }
-    _userSheet(name: s.name, mobile: s.mobile, uid: s.uid, role: s.role, gender: s.gender, idNo: s.idNo, seatIndex: s.index, isSeated: true);
+    _userSheet(name: s.name, mobile: s.mobile, uid: s.uid, role: s.role, gender: s.gender, idNo: s.idNo, photo: s.photo, seatIndex: s.index, isSeated: true);
   }
 
   void _seatAdminSheet(_Seat s) {
@@ -1650,7 +1672,7 @@ Future<void> _autoRetry() async {
         ])));
   }
 
-  void _userSheet({required String name, required String mobile, required int uid, required String role, String gender = "", String idNo = "", int seatIndex = -1, bool isSeated = false}) {
+  void _userSheet({required String name, required String mobile, required int uid, required String role, String gender = "", String idNo = "", String photo = "", int seatIndex = -1, bool isSeated = false}) {
     final isMe = mobile == myMobile;
     final targetIsOwner = role == "owner" || mobile == ownerMobile;
     // FIX 1: sheet me bhi lock naam
@@ -1661,7 +1683,7 @@ Future<void> _autoRetry() async {
         builder: (_) {
           final items = <Widget>[
             ListTile(
-              leading: _avatarFor(showName, showGender, 20),
+              leading: _avatarFor(showName, showGender, 20, photo: photo),
               title: Text("$showName${genderSymbol(showGender)} ${_roleTag(role)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               subtitle: Text(isMe? "ID: $myIdNo" : "ID: ${idNo.isNotEmpty? idNo : "..."}",
                   style: const TextStyle(color: Colors.white54, fontSize: 11)),
@@ -1677,7 +1699,7 @@ Future<void> _autoRetry() async {
             if (isSeated) addTile(Icons.event_seat, Colors.orange, "Seat se uth jao", () => _leaveSeat());
             addTile(micOn? Icons.mic_off : Icons.mic, Colors.amber, micOn? "Khud ko mute karo" : "Unmute karo", _toggleMic);
             addTile(Icons.wc, Colors.pinkAccent,
-                myGender.isEmpty? "Apna gender set karo" : "Gender: ${myGender == "male"? "Male ♂" : "Female ♀"} (badlo)",
+                myGender.isEmpty? "Apna gender set karo" : "Gender: ${myGender == "male"? "Male â™‚" : "Female â™€"} (badlo)",
                 _chooseGender);
           } else {
             addTile(Icons.person_add_alt, Colors.greenAccent, "Add Friend", () => _addFriend(mobile, showName));
@@ -1773,9 +1795,13 @@ Future<void> _autoRetry() async {
                           color: isMe? Colors.amber.withOpacity(0.25) : Colors.black.withOpacity(0.35),
                           borderRadius: BorderRadius.circular(12)),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text("${m.name}${m.role.isNotEmpty? " (${m.role.toUpperCase()})" : ""}",
-                            style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 2),
+                        Row(children: [
+                          _chatAvatar(m.mobile, m.name, m.photo, isMe),
+                          const SizedBox(width: 6),
+                          Expanded(child: Text("${m.name}${m.role.isNotEmpty? " (${m.role.toUpperCase()})" : ""}",
+                              style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold))),
+                        ]),
+                        const SizedBox(height: 4),
                         _chatContent(m),
                       ]),
                     ),
@@ -1838,7 +1864,7 @@ Future<void> _autoRetry() async {
           decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(10)),
           child: ListTile(
             leading: Stack(children: [
-              _avatarFor(p.name, isMe? myGender : p.gender, 18),
+              _avatarFor(p.name, isMe? myGender : p.gender, 18, photo: isMe? myPhoto : p.photo),
               Positioned(bottom: 0, right: 0, child: _roleBadge(p.role)),
             ]),
             title: Text("${p.name}${isMe? " (Tum)" : ""}${genderSymbol(isMe? myGender : p.gender)}",
@@ -1847,7 +1873,7 @@ Future<void> _autoRetry() async {
                 style: const TextStyle(color: Colors.white38, fontSize: 10)),
             onTap: () {
               final si = seats.indexWhere((s) => s.mobile == p.mobile);
-              _userSheet(name: p.name, mobile: p.mobile, uid: p.uid, role: p.role, gender: p.gender, idNo: p.idNo, seatIndex: si, isSeated: si >= 0);
+              _userSheet(name: p.name, mobile: p.mobile, uid: p.uid, role: p.role, gender: p.gender, idNo: p.idNo, photo: p.photo, seatIndex: si, isSeated: si >= 0);
             },
           ),
         );
