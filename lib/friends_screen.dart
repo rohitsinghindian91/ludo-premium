@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -389,19 +390,39 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       final bool seen = viewedBy[widget.myMobile] == true;
       if (viewOnce && seen &&!isMe) {
         content = const Text("Dekh liya 👀", style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic));
-      } else {
-        content = GestureDetector(
-          onTap: () => _openPhoto(doc),
-          child: Stack(alignment: Alignment.topRight, children: [
-            ClipRRect(borderRadius: BorderRadius.circular(8),
-              child: Image.network(url, height: 150, fit: BoxFit.cover,
-                loadingBuilder: (c, w, p) => p == null? w : const SizedBox(height: 150, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
-                errorBuilder: (c, e, s) => const SizedBox(height: 60, child: Center(child: Icon(Icons.broken_image, color: Colors.white38))))),
-            if (viewOnce) Container(margin: const EdgeInsets.all(6), padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
-              child: const Text("3s", style: TextStyle(color: Colors.white, fontSize: 10))),
-          ]),
-        );
+      } else if (viewOnce && !seen && !isMe) {
+  // Bina open kiye dhundhli photo dikhegi
+  content = GestureDetector(
+    onTap: () => _openPhoto(doc),
+    child: Stack(alignment: Alignment.center, children: [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Image.network(url, height: 150, fit: BoxFit.cover),
+        ),
+      ),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(color: Colors.black60, borderRadius: BorderRadius.circular(20)),
+        child: const Text("👁 Tap to view", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+      ),
+    ]),
+  );
+} else {
+  content = GestureDetector(
+    onTap: () => _openPhoto(doc),
+    child: Stack(alignment: Alignment.topRight,
+      children: [
+        ClipRRect(borderRadius: BorderRadius.circular(8),
+          child: Image.network(url, height: 150, fit: BoxFit.cover,
+            loadingBuilder: (c, w, p) => p == null ? w : const SizedBox(height: 150, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+            errorBuilder: (c, e, s) => const SizedBox(height: 60, child: Center(child: Icon(Icons.broken_image, color: Colors.white38))))),
+        if (viewOnce) Container(margin: const EdgeInsets.all(6), padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
+          child: const Text("3s", style: TextStyle(color: Colors.white, fontSize: 10))),
+      ]),
+  );
       }
     } else {
       content = Text(d["msg"]?? "", style: TextStyle(color: isMe? Colors.black : Colors.white));
