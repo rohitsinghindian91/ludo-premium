@@ -21,7 +21,7 @@ void main() async {
   prefs = await SharedPreferences.getInstance();
   getRtdb();
   runApp(const MyApp());
-}
+} 
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
