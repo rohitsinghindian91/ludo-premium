@@ -110,18 +110,21 @@ Future<String> getOrCreateRoomNo(String mobile) async {
   try {
     final doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
     var no = doc.data()?["voiceRoomNo"]?.toString();
-    if (no!= null && no.isNotEmpty) {
+    if (no != null && no.isNotEmpty) {
       try { await prefs.setString(cacheKey, no); } catch (_) {}
-      return no;
+      return no; // admin edited value ko priority
     }
   } catch (_) {}
+  // ... baki same as before - yahan se continue karo, } mat lagao
+
   try {
     final cached = prefs.getString(cacheKey);
-    if (cached!= null && cached.isNotEmpty) {
+    if (cached != null && cached.isNotEmpty) {
       try { await FirebaseFirestore.instance.collection("users").doc(mobile).set({"voiceRoomNo": cached}, SetOptions(merge: true)); } catch (_) {}
       return cached;
     }
   } catch (_) {}
+
   final rnd = Random();
   String no;
   while (true) {
