@@ -26,6 +26,6 @@ android {
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
     }
-    buildTypes { release { signingConfig = signingConfigs.debug; minifyEnabled false; shrinkResources false } }
+    buildTypes { release { signingConfig = signingConfigs.debug; minifyEnabled true; shrinkResources true } }
 }
 flutter { source = '../..' }
