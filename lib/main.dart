@@ -347,6 +347,15 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.camera_alt, size: 12, color: Colors.black)),
     ]);
   }
+  Future<String> _uploadDPToCloudinary(Uint8List bytes) async {
+    final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
+      ..fields['upload_preset'] = 'ludo_chat'
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'dp.jpg'));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (streamed.statusCode!= 200) throw Exception("Cloudinary: ${res.body}");
+    return json.decode(res.body)['secure_url'] as String;
+  }
   Future<void> _changeDP() async {
     try {
       final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 512, imageQuality: 80);
