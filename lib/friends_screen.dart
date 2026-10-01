@@ -15,6 +15,24 @@ class FriendsScreen extends StatefulWidget {
 }
 
 class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProviderStateMixin {
+  final Map<String,String> _photoCache = {};
+  // ===== DP helper (Step 1) =====
+  Widget _dpAvatar(String mobile, String name, Color bg) {
+    final cached = _photoCache[mobile];
+    if (cached != null) {
+      if (cached.isNotEmpty) return CircleAvatar(backgroundImage: NetworkImage(cached));
+      return CircleAvatar(backgroundColor: bg, child: Text(name.isNotEmpty? name.substring(0,1).toUpperCase() : "?", style: TextStyle(color: bg == Colors.amber? Colors.black : Colors.white)));
+    }
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection("users").doc(mobile).get(),
+      builder: (c, snap) {
+        final ph = snap.data?.data() == null? "" : ((snap.data!.data() as Map)["photoUrl"]?.toString()?? "");
+        if (snap.connectionState == ConnectionState.done) _photoCache[mobile] = ph;
+        if (ph.isNotEmpty) return CircleAvatar(backgroundImage: NetworkImage(ph));
+        return CircleAvatar(backgroundColor: bg, child: Text(name.isNotEmpty? name.substring(0,1).toUpperCase() : "?", style: TextStyle(color: bg == Colors.amber? Colors.black : Colors.white)));
+      },
+    );
+  }
   late TabController tabCtrl;
   final searchCtrl = TextEditingController();
   List<DocumentSnapshot> pending = [];
@@ -103,7 +121,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           .set({"clearedBy": {widget.mobile: FieldValue.serverTimestamp()}}, SetOptions(merge: true));
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sabhi chats clear ho gayi ✅")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sabhi chats clear ho gayi âœ…")));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fail: $e")));
@@ -282,7 +300,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             String toMobile = searchResult[i].id;
             bool directMsg = _canDirectMsg(d);
             return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [
-              CircleAvatar(backgroundColor: Colors.amber, child: Text(name.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.black))),
+              _dpAvatar(toMobile, name, Colors.amber),
               SizedBox(width:12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text("ID: $fid", style: TextStyle(color: Colors.white54, fontSize: 11))])),
               directMsg
@@ -312,7 +330,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           String fm = data["mobile"];
           String fid = data["idNo"]?? "";
           return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12)), child: Row(children: [
-            CircleAvatar(backgroundColor: Colors.green, child: Text(fname.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.white))),
+            _dpAvatar(fm, fname, Colors.green),
             SizedBox(width:12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(fname, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text("ID: $fid", style: TextStyle(color: Colors.white54, fontSize: 11))])),
             IconButton(icon: Icon(Icons.chat, color: Colors.amber), tooltip: "Chat", onPressed: (){ Navigator.push(context, MaterialPageRoute(builder: (_)=> PrivateChatScreen(myMobile: widget.mobile, friendMobile: fm, friendName: fname, myName: myName))); }),
@@ -326,7 +344,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           String bm = data["mobile"];
           String bid = data["idNo"]?? "";
           return Container(margin: EdgeInsets.only(bottom:10), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.withOpacity(0.3))), child: Row(children: [
-            CircleAvatar(backgroundColor: Colors.red, child: Text(bname.substring(0,1).toUpperCase(), style: TextStyle(color: Colors.white))),
+            _dpAvatar(bm, bname, Colors.red),
             SizedBox(width:12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(bname, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text("ID: $bid", style: TextStyle(color: Colors.white54, fontSize: 11))])),
             ElevatedButton(onPressed: ()=>unblockUser(bm), child: Text("Unblock"), style: ElevatedButton.styleFrom(backgroundColor: Colors.green)),
@@ -422,7 +440,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       await FirebaseFirestore.instance.collection("friend_chats").doc(getChatId())
         .set({"clearedBy": {widget.myMobile: FieldValue.serverTimestamp()}}, SetOptions(merge: true));
       if (mounted) setState(() => _clearedAt = DateTime.now());
-      _toast("Chat clear ho gayi ✅");
+      _toast("Chat clear ho gayi âœ…");
     } catch (e) { _toast("Fail: $e"); }
   }
 
@@ -506,7 +524,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       if (!hasAccess) await Gal.requestAccess();
       final res = await http.get(Uri.parse(url));
       await Gal.putImageBytes(Uint8List.fromList(res.bodyBytes), name: "chat_${DateTime.now().millisecondsSinceEpoch}");
-      _toast("Gallery me save ho gayi ✅");
+      _toast("Gallery me save ho gayi âœ…");
     } catch (e) { _toast("Save fail: $e"); }
   }
 
@@ -541,7 +559,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       final Map viewedBy = Map.from(d["viewedBy"]?? {});
       final bool seen = viewedBy[widget.myMobile] == true;
       if (viewOnce && seen &&!isMe) {
-        content = const Text("Dekh liya 👀", style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic));
+        content = const Text("Dekh liya ðŸ‘€", style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic));
       } else if (viewOnce &&!seen &&!isMe) {
         content = GestureDetector(
           onTap: () => _openPhoto(doc),
@@ -556,7 +574,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
-              child: const Text("👁 Tap to view", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              child: const Text("ðŸ‘ Tap to view", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
             ),
           ]),
         );
@@ -607,7 +625,18 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   @override Widget build(BuildContext context){
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(backgroundColor: const Color(0xFF151A2B), title: Text(widget.friendName, style: const TextStyle(color: Colors.white)),
+      appBar: AppBar(backgroundColor: const Color(0xFF151A2B), title: Row(children: [
+          FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance.collection("users").doc(widget.friendMobile).get(),
+            builder: (c, snap) {
+              final ph = snap.data?.data() == null? "" : ((snap.data!.data() as Map)["photoUrl"]?.toString()?? "");
+              if (ph.isNotEmpty) return CircleAvatar(radius: 16, backgroundImage: NetworkImage(ph));
+              return CircleAvatar(radius: 16, backgroundColor: Colors.amber, child: Text(widget.friendName.isNotEmpty? widget.friendName[0].toUpperCase() : "?", style: const TextStyle(color: Colors.black, fontSize: 14)));
+            },
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(widget.friendName, style: const TextStyle(color: Colors.white))),
+        ]),
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),
@@ -633,7 +662,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
               }
               return true;
             }).toList();
-            if (docs.isEmpty) return const Center(child: Text("Abhi koi message nahi — pehla message bhejo 👋", style: TextStyle(color: Colors.white54)));
+            if (docs.isEmpty) return const Center(child: Text("Abhi koi message nahi â€” pehla message bhejo ðŸ‘‹", style: TextStyle(color: Colors.white54)));
             List<Widget> items = [];
             String lastDay = "";
             for (var doc in docs) {
