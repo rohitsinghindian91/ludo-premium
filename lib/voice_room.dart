@@ -2378,6 +2378,55 @@ class _PhotoViewScreenState extends State<_PhotoViewScreen> {
 class PkChallengeSheet extends StatefulWidget {
   final String roomId;
   final Function(String) onChallenge;
-  const PkChallengeSheet({required this.roomId, required this.onChallenge});
-  @override State<PkChallengeSheet> createState() => PkChallengeSheetState();
+  const PkChallengeSheet({super.key, required this.roomId, required this.onChallenge});
+  @override State<PkChallengeSheet> createState() => _PkChallengeSheetState();
+}
+
+class _PkChallengeSheetState extends State<PkChallengeSheet> {
+  List<Map<String, dynamic>> liveRooms = [];
+  bool loading = true;
+  @override void initState() { super.initState(); _loadRooms(); }
+  Future<void> _loadRooms() async {
+    try {
+      final rtdb = FirebaseDatabase.instance;
+      final snap = await rtdb.ref("vRoomList").get();
+      if (!snap.exists) { if (mounted) setState(() => loading = false); return; }
+      final data = snap.value as Map;
+      final rooms = <Map<String, dynamic>>[];
+      data.forEach((key, value) {
+        if (key.toString() == widget.roomId) return;
+        if (value is Map) {
+          final info = value["info"] as Map? ?? {};
+          final pk = value["pk"];
+          rooms.add({"id": key.toString(), "name": (info["name"] ?? "Room $key").toString(), "online": ((value["present"] ?? {}) as Map).length, "inPk": pk != null});
+        }
+      });
+      if (mounted) setState(() { liveRooms = rooms; loading = false; });
+    } catch (_) { if (mounted) setState(() => loading = false); }
+  }
+  @override Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(color: Color(0xFF1E293B), borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(height: 12),
+        const Row(children: [Icon(Icons.local_fire_department, color: Colors.orange), SizedBox(width: 8), Text("PK Challenge", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))]),
+        const SizedBox(height: 8),
+        const Text("Kisi live room ko challenge karo! 5 min battle, gifts = points", style: TextStyle(color: Colors.white60, fontSize: 12)),
+        const SizedBox(height: 16),
+        if (loading) const Center(child: CircularProgressIndicator())
+        else if (liveRooms.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Text("Koi live room nahi", style: TextStyle(color: Colors.white54)))
+        else SizedBox(height: 300, child: ListView.builder(itemCount: liveRooms.length, itemBuilder: (_, i) {
+          final r = liveRooms[i]; final inPk = r["inPk"] as bool;
+          return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(10), border: Border.all(color: inPk ? Colors.red.withOpacity(0.3) : Colors.white12)), child: Row(children: [
+            CircleAvatar(radius: 20, backgroundColor: Colors.purple, child: Text(r["id"].toString().substring(0, 2), style: const TextStyle(color: Colors.white, fontSize: 12))),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(r["name"], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)), Text("ID: ${r["id"]} - ${r["online"]} online${inPk ? " - PK me" : ""}", style: TextStyle(color: inPk ? Colors.redAccent : Colors.white54, fontSize: 11))])),
+            ElevatedButton(onPressed: inPk ? null : () { Navigator.pop(context); widget.onChallenge(r["id"]); }, style: ElevatedButton.styleFrom(backgroundColor: inPk ? Colors.grey : Colors.orange, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)), child: Text(inPk ? "Busy" : "PK", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+          ]));
+        })),
+      ]),
+    );
+  }
 }
