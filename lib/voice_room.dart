@@ -1889,6 +1889,166 @@ Future<void> _autoRetry() async {
     );
   }
 
+  // ===== GIFT SYSTEM METHODS (Step 2) =====
+  Future<void> _loadMyCoins() async {
+    try {
+      final d = await FirebaseFirestore.instance.collection("users").doc(myMobile).get();
+      if (mounted) setState(() => myCoins = (d.data()?['coins'] ?? 0) as int);
+    } catch (_) {}
+  }
+
+  void _listenGifts() {
+    giftSub = roomRef.child("gifts").limitToLast(1).onChildAdded.listen((e) {
+      if (e.snapshot.key == null || _seenGiftKeys.contains(e.snapshot.key)) return;
+      _seenGiftKeys.add(e.snapshot.key!);
+      try {
+        final g = Map<String, dynamic>.from(e.snapshot.value as Map);
+        _showGiftAnim(g);
+      } catch (_) {}
+    });
+  }
+
+  void _showGiftAnim(Map<String, dynamic> g) {
+    if (!mounted) return;
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    entry = OverlayEntry(builder: (_) => Positioned.fill(
+      child: Material(color: Colors.transparent,
+        child: Center(child: _giftAnimCard(g))),
+    ));
+    overlay.insert(entry);
+    Future.delayed(const Duration(seconds: 3), () { try { entry.remove(); } catch (_) {} });
+  }
+
+  Widget _giftAnimCard(Map<String, dynamic> g) {
+    final img = (g['giftImg'] ?? "") as String;
+    return Container(
+      margin: const EdgeInsets.all(40),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(color: Colors.black87,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.amber, width: 2)),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text("\u{1F381}", style: TextStyle(fontSize: 50)),
+        if (img.isNotEmpty)
+          Image.network(img, width: 100, height: 100,
+              errorBuilder: (_, __, ___) => const SizedBox()),
+        const SizedBox(height: 12),
+        Text("${g['fromName']} ne ${g['toName']} ko",
+            style: const TextStyle(color: Colors.white, fontSize: 16)),
+        Text("${g['giftName']}",
+            style: const TextStyle(color: Colors.amber, fontSize: 20, fontWeight: FontWeight.bold)),
+        Text("bheja! (${g['price']} coins)",
+            style: const TextStyle(color: Colors.white70, fontSize: 14)),
+      ]),
+    );
+  }
+
+  void _openGiftPanel() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection("gifts")
+          .where("active", isEqualTo: true).orderBy("coinPrice").get();
+      giftList = snap.docs.map((d) => {"id": d.id, ...d.data()}).toList();
+    } catch (e) { _toast("Gifts load nahi hue"); return; }
+    if (!mounted) return;
+    final targets = seats.where((s) => !s.empty && s.mobile != myMobile).toList();
+    if (targets.isEmpty) { _toast("Seat par koi nahi hai"); return; }
+    _Seat? selected;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A0F1E),
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(builder: (ctx2, setSt) => Container(
+        padding: const EdgeInsets.all(16),
+        height: MediaQuery.of(ctx).size.height * 0.75,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Text("\u{1F381} Gift Bhejo",
+                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20)),
+              child: Text("\u{1FA99} $myCoins",
+                  style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          const Text("Kisko bhejna hai?", style: TextStyle(color: Colors.white70, fontSize: 14)),
+          const SizedBox(height: 8),
+          SizedBox(height: 72, child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: targets.length,
+            itemBuilder: (_, i) {
+              final t = targets[i];
+              final sel = selected?.mobile == t.mobile;
+              return InkWell(
+                onTap: () => setSt(() => selected = t),
+                child: Container(
+                  margin: const EdgeInsets.only(right: 10),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: sel ? Colors.amber.withOpacity(0.3) : Colors.white10,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: sel ? Colors.amber : Colors.transparent)),
+                  child: Column(children: [
+                    CircleAvatar(radius: 18,
+                      backgroundImage: t.photo.isNotEmpty ? NetworkImage(t.photo) : null,
+                      child: t.photo.isEmpty
+                          ? Text(t.name.isNotEmpty ? t.name[0] : "?",
+                              style: const TextStyle(color: Colors.white)) : null),
+                    Text(t.name.length > 8 ? t.name.substring(0, 8) : t.name,
+                        style: const TextStyle(color: Colors.white, fontSize: 10)),
+                  ])));
+            })),
+          const SizedBox(height: 12),
+          const Text("Gift chuno:", style: TextStyle(color: Colors.white70, fontSize: 14)),
+          const SizedBox(height: 8),
+          Expanded(child: giftList.isEmpty
+            ? const Center(child: Text("Koi gift nahi hai",
+                style: TextStyle(color: Colors.white54)))
+            : GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3, childAspectRatio: 0.8),
+              itemCount: giftList.length,
+              itemBuilder: (_, i) {
+                final g = giftList[i];
+                final img = (g['imageUrl'] ?? "") as String;
+                final price = (g['coinPrice'] ?? 0) as int;
+                final afford = myCoins >= price;
+                return InkWell(
+                  onTap: () {
+                    if (selected == null) { _toast("Pehle kisko bhejna hai chuno"); return; }
+                    if (!afford) { _toast("Coins kam hain!"); return; }
+                    Navigator.pop(ctx2);
+                    _sendGift(g, selected!.mobile, selected!.name);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.white10,
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      if (img.isNotEmpty)
+                        Image.network(img, width: 50, height: 50,
+                            errorBuilder: (_, __, ___) =>
+                                const Text("\u{1F381}", style: TextStyle(fontSize: 40)))
+                      else
+                        const Text("\u{1F381}", style: TextStyle(fontSize: 40)),
+                      const SizedBox(height: 4),
+                      Text("${g['name'] ?? ''}",
+                          style: const TextStyle(color: Colors.white, fontSize: 11),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text("\u{1FA99} $price",
+                          style: TextStyle(color: afford ? Colors.amber : Colors.red,
+                              fontSize: 11, fontWeight: FontWeight.bold)),
+                    ])));
+              })),
+        ]))),
+    );
+  }
+
   Future<void> _sendGift(Map<String, dynamic> gift, String toMobile, String toName) async {
     final price = (gift['coinPrice'] ?? 0) as int;
     if (myCoins < price) { _toast("Coins kam hain! Pehle coins khareedo"); return; }
@@ -1898,7 +2058,8 @@ Future<void> _autoRetry() async {
       final senderRef = fs.collection("users").doc(myMobile);
       final recvRef = fs.collection("users").doc(toMobile);
       await fs.runTransaction((tx) async {
-        final sSnap = await tx.get(senderRef); final rSnap = await tx.get(recvRef);
+        final sSnap = await tx.get(senderRef);
+        final rSnap = await tx.get(recvRef);
         final sCoins = (sSnap.data()?['coins'] ?? 0) as int;
         if (sCoins < price) throw Exception("Coins kam hain");
         tx.update(senderRef, {"coins": sCoins - price});
@@ -1906,13 +2067,25 @@ Future<void> _autoRetry() async {
         tx.update(recvRef, {"coins": rCoins + price});
       });
       final now = FieldValue.serverTimestamp();
-      await fs.collection("coinTx").add({"mobile": myMobile, "type": "gift_sent", "amount": -price, "detail": "${gift['name']} -> $toName", "at": now});
-      await fs.collection("coinTx").add({"mobile": toMobile, "type": "gift_received", "amount": price, "detail": "${gift['name']} <- $myName", "at": now});
-      await roomRef.child("gifts").push().set({"fromMobile": myMobile, "fromName": myName, "toMobile": toMobile,
-        "toName": toName, "giftName": gift['name'], "giftImg": gift['imageUrl'] ?? "", "price": price, "at": ServerValue.timestamp});
+      await fs.collection("coinTx").add({
+        "mobile": myMobile, "type": "gift_sent", "amount": -price,
+        "detail": "${gift['name']} -> $toName", "at": now,
+      });
+      await fs.collection("coinTx").add({
+        "mobile": toMobile, "type": "gift_received", "amount": price,
+        "detail": "${gift['name']} <- $myName", "at": now,
+      });
+      await roomRef.child("gifts").push().set({
+        "fromMobile": myMobile, "fromName": myName,
+        "toMobile": toMobile, "toName": toName,
+        "giftName": gift['name'], "giftImg": gift['imageUrl'] ?? "",
+        "price": price, "at": ServerValue.timestamp,
+      });
       if (mounted) setState(() => myCoins -= price);
       _toast("Gift bhej diya! \u{1F381}");
-    } catch (e) { _toast("Gift fail: $e"); }
+    } catch (e) {
+      _toast("Gift fail: $e");
+    }
   }
 
   // FIX 6: neeche wala Leave hataya - ab sirf Mic + Speaker
