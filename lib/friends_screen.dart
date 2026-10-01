@@ -125,7 +125,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       if(RegExp(r'^[0-9]{7}$').hasMatch(s)){
         q = await FirebaseFirestore.instance.collection("users").where("voiceRoomNo", isEqualTo: s).limit(10).get();
       } else {
-        q = await FirebaseFirestore.instance.collection("users").where("name", isGreaterThanOrEqualTo: s).where("name", isLessThan: s + '￯').limit(10).get();
+        q = await FirebaseFirestore.instance.collection("users").where("name", isGreaterThanOrEqualTo: s).where("name", isLessThan: s + '\uf8ff').limit(10).get();
       }
       var docs = q.docs.where((doc) => doc.id!= widget.mobile &&!blockedIds.contains(doc.id)).toList();
       if(docs.isEmpty){ setState(()=> searchResult=[]); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Koi user nahi mila"))); return; }
