@@ -404,7 +404,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       ),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(color: Colors.black60, borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
         child: const Text("👁 Tap to view", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
       ),
     ]),
