@@ -269,7 +269,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int wallet = 0; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = ""; String myIdNo = ""; String myPhotoUrl = "";
+  int wallet = 0; int myCoins = 0; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = ""; String myIdNo = ""; String myPhotoUrl = "";
   @override void initState() { super.initState(); checkDeviceBan(); listenUser(); }
   Future<void> checkDeviceBan() async {
     if (await isDeviceBanned()) {
@@ -300,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
       }
-      setState(() { wallet = data["wallet"]?? 0; myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; myIdNo = (data["gameId"]?? data["voiceRoomNo"]?? "").toString(); myPhotoUrl = data["photoUrl"]?? ""; });
+      setState(() { wallet = data["wallet"]?? 0; myCoins = data["coins"]?? 0; myCode = data["referralCode"]?? widget.mobile; referredBy = data["referredBy"]?? ""; myName = data["name"]?? ""; myIdNo = (data["gameId"]?? data["voiceRoomNo"]?? "").toString(); myPhotoUrl = data["photoUrl"]?? ""; });
       if (referredBy.isNotEmpty && referredByName.isEmpty) { var refDoc = await FirebaseFirestore.instance.collection("users").doc(referredBy).get(); if (refDoc.exists) { if (mounted) setState(() => referredByName = refDoc.data()?["name"]?? referredBy); } }
       if (data["isPremium"] == true && data["premiumExpiry"]!= null) { DateTime exp = (data["premiumExpiry"] as Timestamp).toDate(); if (exp.isAfter(DateTime.now())) { setState(() { isPrem = true; expiry = "${exp.day}/${exp.month}/${exp.year}"; }); if (data["premiumDistributed"] == false) { distributePremium(); } } }
     });
@@ -347,15 +347,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.camera_alt, size: 12, color: Colors.black)),
     ]);
   }
-  Future<String> _uploadDPToCloudinary(Uint8List bytes) async {
-    final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
-      ..fields['upload_preset'] = 'ludo_chat'
-      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'dp.jpg'));
-    final streamed = await req.send();
-    final res = await http.Response.fromStream(streamed);
-    if (streamed.statusCode!= 200) throw Exception("Cloudinary: ${res.body}");
-    return json.decode(res.body)['secure_url'] as String;
-  }
   Future<void> _changeDP() async {
     try {
       final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 512, imageQuality: 80);
@@ -371,7 +362,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
-      Row(children: [InkWell(onTap: _changeDP, child: _dpAvatar()), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), Text("Rs $wallet", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
+      Row(children: [InkWell(onTap: _changeDP, child: _dpAvatar()), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), InkWell(onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => BuyCoinsScreen(mobile: widget.mobile))); }, child: Text("\u{1FA99} $myCoins", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))), const SizedBox(width: 8), Text("Rs $wallet", style: const TextStyle(color: Colors.white70)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
       const SizedBox(height: 16),
       Container(width: double.infinity, padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: LinearGradient(colors: isPrem? [Colors.amber, Colors.orange] : [const Color(0xFF1E293B), const Color(0xFF151A2B)]), borderRadius: BorderRadius.circular(16)), child: Text(isPrem? "PREMIUM ACTIVE Till $expiry" : "FREE USER - Buy Premium", style: TextStyle(color: isPrem? Colors.black : Colors.white, fontWeight: FontWeight.bold))),
       const SizedBox(height: 12),
@@ -460,4 +451,83 @@ class _MyTeamScreenState extends State<MyTeamScreen> with SingleTickerProviderSt
     });
   }
   @override Widget build(BuildContext context) { return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("My Team"), backgroundColor: Colors.amber, bottom: TabBar(controller: tabCtrl, tabs: const [Tab(text: "L1"), Tab(text: "L2"), Tab(text: "L3"), Tab(text: "Income")])), body: loading? const Center(child: CircularProgressIndicator()) : TabBarView(controller: tabCtrl, children: [buildList(l1, "L1 empty"), buildList(l2, "L2 empty"), buildList(l3, "L3 empty"), ListView.builder(itemCount: earn.length, itemBuilder: (ctx, i) { var d = earn[i].data() as Map; return ListTile(title: Text("Rs ${d["amount"]} - ${d["type"]}", style: const TextStyle(color: Colors.white)), subtitle: Text("${d["from"]}", style: const TextStyle(color: Colors.white54))); })])); }
+}
+
+// ================= BUY COINS (Step 2) =================
+class BuyCoinsScreen extends StatefulWidget {
+  final String mobile;
+  const BuyCoinsScreen({super.key, required this.mobile});
+  @override State<BuyCoinsScreen> createState() => _BuyCoinsScreenState();
+}
+class _BuyCoinsScreenState extends State<BuyCoinsScreen> {
+  int buyRate = 1000; String upiId = ""; bool loading = true;
+  final amtCtrl = TextEditingController(); final utrCtrl = TextEditingController();
+  @override void initState() { super.initState(); _load(); }
+  Future<void> _load() async {
+    try {
+      final c = await FirebaseFirestore.instance.collection("config").doc("coins").get();
+      final w = await FirebaseFirestore.instance.collection("config").doc("wallet").get();
+      if (mounted) setState(() {
+        buyRate = (c.data()?["buyRate"] ?? 1000) as int;
+        upiId = (w.data()?["upiId"] ?? "") as String;
+        loading = false;
+      });
+    } catch (_) { if (mounted) setState(() => loading = false); }
+  }
+  Future<void> _submit() async {
+    final amt = int.tryParse(amtCtrl.text) ?? 0;
+    final utr = utrCtrl.text.trim();
+    if (amt < 10) { _msg("Kam se kam Rs 10"); return; }
+    if (utr.length < 6) { _msg("Sahi UTR likho"); return; }
+    final coins = (amt * buyRate) ~/ 100;
+    try {
+      await FirebaseFirestore.instance.collection("coinRequests").add({
+        "mobile": widget.mobile, "amount": amt, "coins": coins, "utr": utr,
+        "status": "pending", "at": FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      _msg("Request bhej di! Admin approve karega");
+      Navigator.pop(context);
+    } catch (e) { _msg("Fail: $e"); }
+  }
+  void _msg(String m) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m))); }
+  @override Widget build(BuildContext context) {
+    return Scaffold(backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(title: const Text("Buy Coins"), backgroundColor: Colors.amber),
+      body: loading ? const Center(child: CircularProgressIndicator())
+      : SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(width: double.infinity, padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(gradient: const LinearGradient(colors: [Colors.amber, Colors.orange]),
+              borderRadius: BorderRadius.circular(16)),
+          child: Column(children: [
+            const Text("\u{1FA99}", style: TextStyle(fontSize: 50)),
+            Text("Rs 100 = $buyRate coins", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          ])),
+        const SizedBox(height: 16),
+        const Text("1. Is UPI par paise bhejo:", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Container(width: double.infinity, padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: const Color(0xFF151A2B), borderRadius: BorderRadius.circular(10)),
+          child: Text(upiId.isEmpty ? "UPI ID set nahi hai" : upiId,
+              style: const TextStyle(color: Colors.amber, fontSize: 18, fontWeight: FontWeight.bold))),
+        const SizedBox(height: 16),
+        const Text("2. Kitne Rs bheje:", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        TextField(controller: amtCtrl, keyboardType: TextInputType.number,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(hintText: "Jaise: 100", hintStyle: TextStyle(color: Colors.white38))),
+        const SizedBox(height: 12),
+        const Text("3. UTR / Transaction ID:", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        TextField(controller: utrCtrl,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(hintText: "12 digit UTR", hintStyle: TextStyle(color: Colors.white38))),
+        const SizedBox(height: 20),
+        SizedBox(width: double.infinity, height: 54,
+          child: ElevatedButton(onPressed: _submit,
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text("REQUEST BHEJO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
+        const SizedBox(height: 12),
+        const Text("Admin approve karne ke baad coins mil jayenge.",
+            style: TextStyle(color: Colors.white54, fontSize: 12)),
+      ])));
+  }
 }
