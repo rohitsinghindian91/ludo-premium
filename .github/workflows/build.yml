@@ -22,9 +22,9 @@ jobs:
       - name: Generate App Icon
         run: dart run flutter_launcher_icons
       - name: Build APK Release
-        run: flutter build apk --release --no-tree-shake-icons
+        run: flutter build apk --release --split-per-abi --obfuscate --split-debug-info=./debug-info --no-tree-shake-icons
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-*-release.apk
