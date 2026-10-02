@@ -268,9 +268,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isConnectionStable = true;
 
   // 1. Root / Emulator / Debug Detection
-  Future<bool> _checkDeviceSecurity() async  {
+  Future<bool> _checkDeviceSecurity() async {
     // Disabled for crash fix - was causing crash on launch
     debugPrint("_checkDeviceSecurity disabled");
+    return true;
   }
 
   // 2. Connection Stability - Auto Reconnect Logic
@@ -289,9 +290,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // 3. Anti-Tamper - Check APK signature / package name
-  Future<bool> _checkAppIntegrity() async  {
-    // Disabled for crash fix - was causing crash on launch
+  Future<bool> _checkAppIntegrity() async {
+    // Disabled for crash fix
     debugPrint("_checkAppIntegrity disabled");
+    return true;
   }
 
   // 4. Secure Storage - Encrypt sensitive data
