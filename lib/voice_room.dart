@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:http/http.dart' as http;
 import 'dart:typed_data';
@@ -534,7 +535,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     try { FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}").keepSynced(true); } catch (_) {}
     try {
       Connectivity().onConnectivityChanged.listen((result) {
-        if (result == ConnectivityResult.none) { _toast("âš ï¸ Internet gaya - Reconnecting..."); } 
+        if (result.contains(ConnectivityResult.none)) { _toast("âš ï¸ Internet gaya - Reconnecting..."); } 
         else { _toast("âœ… Internet wapas - Voice reconnect..."); _rejoinVoiceIfNeeded(); }
       });
     } catch (_) {}
