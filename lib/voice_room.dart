@@ -529,6 +529,44 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       if (snap.exists && mounted) setState(() => roomTheme = snap.value as String? ?? "default");
     } catch (_) {}
   }
+
+  Future<void> _ensureVoiceConnectionStability() async {
+    try { FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}").keepSynced(true); } catch (_) {}
+    try {
+      Connectivity().onConnectivityChanged.listen((result) {
+        if (result == ConnectivityResult.none) { _toast("âš ï¸ Internet gaya - Reconnecting..."); } 
+        else { _toast("âœ… Internet wapas - Voice reconnect..."); _rejoinVoiceIfNeeded(); }
+      });
+    } catch (_) {}
+  }
+  Future<void> _rejoinVoiceIfNeeded() async { try {} catch (_) {} }
+
+
+  Future<void> _changeDPWithCrop() async {
+    try {
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 85);
+      if (x == null) return;
+      final bytes = await x.readAsBytes();
+      final cropped = await showDialog<Uint8List>(context: context, builder: (_) => _CropDialog(originalBytes: bytes));
+      if (cropped == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP upload ho rahi hai...")));
+      final url = await _uploadDPToCloudinary(cropped);
+      await FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}/info/photoUrl").set(url);
+      _toast("DP changed!");
+    } catch (e) {
+      _toast("DP Error: $e");
+    }
+  }
+  Future<String> _uploadDPToCloudinary(Uint8List bytes) async {
+    final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
+      ..fields['upload_preset'] = 'ludo_chat'
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'dp.jpg'));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (streamed.statusCode != 200) throw Exception("Cloudinary: ${res.body}");
+    return json.decode(res.body)['secure_url'] as String;
+  }
+
   Future<void> _changeRoomTheme(String newTheme) async {
     try {
       if (!isOwner) { _toast("Only owner can change theme"); return; }
@@ -659,6 +697,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
 
   void initState() {
     super.initState();
+    _ensureVoiceConnectionStability();
     _loadMyLevel();
     tabCtrl = TabController(length: 2, vsync: this);
     myMobile = prefs.getString("mobile")?? "";
@@ -2672,17 +2711,26 @@ class _PkChallengeSheetState extends State<PkChallengeSheet> {
     );
   }
 
-class _CropDialogVoice extends StatefulWidget {
+
+
+class _CropDialog extends StatefulWidget {
   final Uint8List originalBytes;
-  const _CropDialogVoice({required this.originalBytes});
-  @override State<_CropDialogVoice> createState() => _CropDialogVoiceState();
+  final bool isRoomDP;
+  const _CropDialog({required this.originalBytes, this.isRoomDP = false});
+  @override State<_CropDialog> createState() => _CropDialogState();
 }
-class _CropDialogVoiceState extends State<_CropDialogVoice> {
+
+class _CropDialogState extends State<_CropDialog> {
   bool isSquareCrop = true;
+  
+  Uint8List _getCroppedBytes() {
+    return widget.originalBytes;
+  }
+  
   @override Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: const Color(0xFF1E293B),
-      title: const Text("DP Crop Karo", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      title: Text(widget.isRoomDP ? "Room DP Crop Karo" : "DP Crop Karo", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(12)), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(widget.originalBytes, height: 200, fit: BoxFit.contain))),
         const SizedBox(height: 16),
@@ -2692,7 +2740,10 @@ class _CropDialogVoiceState extends State<_CropDialogVoice> {
           Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=false), icon: Icon(!isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Original"), style: ElevatedButton.styleFrom(backgroundColor: !isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: !isSquareCrop ? Colors.black : Colors.white))),
         ]),
       ])),
-      actions: [TextButton(onPressed: ()=> Navigator.pop(context), child: const Text("Cancel")), ElevatedButton(onPressed: (){ Navigator.pop(context, widget.originalBytes); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)), child: const Text("Use This"))],
+      actions: [
+        TextButton(onPressed: ()=> Navigator.pop(context), child: const Text("Cancel")),
+        ElevatedButton(onPressed: (){ Navigator.pop(context, _getCroppedBytes()); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)), child: const Text("Use This")),
+      ],
     );
   }
 }
