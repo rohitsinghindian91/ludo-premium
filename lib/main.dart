@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
@@ -478,7 +475,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
   void openPremium() { Navigator.push(context, MaterialPageRoute(builder: (_) => PremiumPayScreen(mobile: widget.mobile, onPaid: (){}))); }
   void doLogout() async { await prefs.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false); }
-  @override Widget build(BuildContext context) {
+    static const String currentAppVersion = "8.0";
+  bool _forceUpdateChecked = false;
+  bool _isOldApk = false;
+
   // ===== DP SYSTEM (Step 1) =====
   Widget _dpAvatar() {
     return Stack(alignment: Alignment.bottomRight, children: [
@@ -489,10 +489,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.camera_alt, size: 12, color: Colors.black)),
     ]);
   }
-  
-  static const String currentAppVersion = "8.0";
-  bool _forceUpdateChecked = false;
-  bool _isOldApk = false;
+
   Future<bool> _checkForceUpdate() async {
     try {
       final versionDoc = await FirebaseFirestore.instance.collection("config").doc("appVersion").get();
@@ -511,6 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return false;
     } catch (e) { return false; }
   }
+
   Future<bool> _blockIfOldApkIdLogin() async {
     if (!_forceUpdateChecked) { _forceUpdateChecked = true; final isOld = await _checkForceUpdate(); if (isOld) return true; }
     if (_isOldApk) { if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("APK Updated! Naya APK download karo"), backgroundColor: Colors.red)); } return true; }
@@ -536,11 +534,13 @@ class _HomeScreenState extends State<HomeScreen> {
       final url = await _uploadDPToCloudinary(bytes);
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"photoUrl": url});
       if (mounted) setState(() => myPhotoUrl = url);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP lag gayi \u2705")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP lag gayi âœ…")));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("DP fail: $e")));
     }
   }
+
+  @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
       Row(children: [InkWell(onTap: _changeDP, child: _dpAvatar()), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), InkWell(onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => BuyCoinsScreen(mobile: widget.mobile))); }, child: Text("\u{1FA99} $myCoins", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))), const SizedBox(width: 8), Text("Rs $wallet", style: const TextStyle(color: Colors.white70)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
       const SizedBox(height: 16),
@@ -626,7 +626,7 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
   Future<void> sendSS() async {
     final picker = ImagePicker(); final XFile? img = await picker.pickImage(source: ImageSource.gallery); if (img == null) return; setState(() { loading = true; });
     await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({"mobile": widget.mobile, "amount": 500, "status": "CHECK", "time": Timestamp.now()});
-    Uri wa = Uri.parse("https://wa.me/447397293594?text=Check ${widget.mobile}"); await launchUrl(wa, mode: LaunchMode.externalApplication); setState(() { loading = false; });
+    Uri wa = Uri.parse("https://wa.me/447397293594 text=Check ${widget.mobile}"); await launchUrl(wa, mode: LaunchMode.externalApplication); setState(() { loading = false; });
   }
   @override Widget build(BuildContext context) { return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Buy Premium"), backgroundColor: Colors.amber), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [const Text("Premium Rs 500", style: TextStyle(color: Colors.white, fontSize: 22)), const SizedBox(height: 20), SelectableText(myUpiId, style: const TextStyle(color: Colors.amber, fontSize: 20)), const SizedBox(height: 20), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: payUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("PAY Rs 500", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 16)))), const SizedBox(height: 12), loading? const CircularProgressIndicator() : SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: sendSS, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SEND PAYMENT SCREENSHOT", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 15))))]))); }
 }
@@ -1636,59 +1636,30 @@ class _BlockReportScreenState extends State<BlockReportScreen> {
     );
   }
 
-
-}
-
 class _CropDialog extends StatefulWidget {
   final Uint8List originalBytes;
-  const _CropDialog({required this.originalBytes});
-  @override
-  State<_CropDialog> createState() => _CropDialogState();
+  final bool isRoomDP;
+  const _CropDialog({required this.originalBytes, this.isRoomDP = false});
+  @override State<_CropDialog> createState() => _CropDialogState();
 }
-
 class _CropDialogState extends State<_CropDialog> {
-  double _scale = 1.0;
-  double _prevScale = 1.0;
-  Offset _offset = Offset.zero;
-  Offset _prevOffset = Offset.zero;
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.black,
-      insetPadding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onScaleStart: (d) {
-                _prevScale = _scale;
-                _prevOffset = _offset;
-              },
-              onScaleUpdate: (d) {
-                setState(() {
-                  _scale = (_prevScale * d.scale).clamp(0.5, 3.0);
-                  _offset = _prevOffset + d.focalPointDelta;
-                });
-              },
-              child: ClipRect(
-                child: Transform(
-                  transform: Matrix4.identity()..translate(_offset.dx, _offset.dy)..scale(_scale),
-                  child: Image.memory(widget.originalBytes, fit: BoxFit.contain),
-                ),
-              ),
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-              ElevatedButton(onPressed: () => Navigator.pop(context, widget.originalBytes), child: const Text("Done")),
-            ],
-          ),
-        ],
-      ),
+  bool isSquareCrop = true;
+  @override Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      title: Text(widget.isRoomDP ? "Room DP Crop Karo" : "DP Crop Karo", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(12)), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(widget.originalBytes, height: 200, fit: BoxFit.contain))),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=true), icon: Icon(isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Square"), style: ElevatedButton.styleFrom(backgroundColor: isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: isSquareCrop ? Colors.black : Colors.white))),
+          const SizedBox(width: 8),
+          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=false), icon: Icon(!isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Original"), style: ElevatedButton.styleFrom(backgroundColor: !isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: !isSquareCrop ? Colors.black : Colors.white))),
+        ]),
+      ])),
+      actions: [TextButton(onPressed: ()=> Navigator.pop(context), child: const Text("Cancel")), ElevatedButton(onPressed: (){ Navigator.pop(context, widget.originalBytes); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)), child: const Text("Use This"))],
     );
   }
+}
+
 }
