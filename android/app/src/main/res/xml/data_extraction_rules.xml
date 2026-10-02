@@ -1,0 +1,13 @@
+<data-extraction-rules>
+<cloud-backup>
+<exclude domain="sharedpref"/>
+<exclude domain="database"/>
+<exclude domain="file"/>
+<exclude domain="external"/>
+</cloud-backup>
+<device-transfer>
+<exclude domain="sharedpref"/>
+<exclude domain="database"/>
+<exclude domain="file"/>
+</device-transfer>
+</data-extraction-rules>
