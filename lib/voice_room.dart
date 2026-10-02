@@ -359,39 +359,6 @@ class VoiceRoomScreen extends StatefulWidget {
 }
 
 class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProviderStateMixin {
-  bool _inPk = false;
-  bool get inPk => _inPk;
-  int myPkScore = 0;
-  int oppPkScore = 0;
-  String pkTimeLeft = "00:00";
-  Timer? _pkTimer;
-
-  void _handlePk() {
-    if (inPk) { _showPkEndDialog(); } else { _showPkChallengeSheet(); }
-  }
-
-  void _showPkEndDialog() {
-    if (!mounted) return;
-    showDialog(context: context, builder: (_) => AlertDialog(
-      backgroundColor: const Color(0xFF1E293B),
-      title: const Text("PK Battle Ended", style: TextStyle(color: Colors.white)),
-      content: Text("Score: $myPkScore vs $oppPkScore Time left: $pkTimeLeft", style: const TextStyle(color: Colors.white70)),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Continue")),
-        TextButton(onPressed: () { Navigator.pop(context); _endPk(force: true); }, child: const Text("End PK", style: TextStyle(color: Colors.red))),
-      ],
-    ));
-  }
-
-  void _showPkChallengeSheet() {}
-
-  void _endPk({bool force = false}) {
-    _inPk = false;
-    _pkTimer?.cancel();
-    setState(() {});
-  }
-
-
   RtcEngine? get engine => globalVoiceEngine;
   late int myUid;
   late String myName;
@@ -430,7 +397,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   StreamSubscription<DatabaseEvent>? inviteSub;
   StreamSubscription<DatabaseEvent>? lockSub;
   StreamSubscription<DatabaseEvent>? noticeSub;
-  StreamSubscription<DatabaseEvent>? themeSub;
   DatabaseReference? myPresentRef;
 
   // ===== PK BATTLE (Step 4) =====
@@ -445,268 +411,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   int pkTimeLeft = 300;
   bool isPkHost = false;
 
-
-  // ===== STEP 6: VIP FRAMES + ENTRY EFFECTS =====
-  int myLevel = 1;
-  String myFrame = "none";
-  
-  int _getLevelFromXp(int xp) {
-    if (xp < 100) return 1;
-    if (xp < 300) return 2;
-    if (xp < 600) return 3;
-    if (xp < 1000) return 4;
-    if (xp < 1500) return 5;
-    if (xp < 2200) return 6;
-    if (xp < 3000) return 7;
-    if (xp < 4000) return 8;
-    if (xp < 5500) return 9;
-    return 10 + ((xp - 5500) ~/ 2000);
-  }
-
-  Color _getLevelColor(int level) {
-    if (level <= 1) return const Color(0xFF9CA3AF);
-    if (level <= 3) return const Color(0xFF22C55E);
-    if (level <= 5) return const Color(0xFF3B82F6);
-    if (level <= 7) return const Color(0xFF8B5CF6);
-    if (level <= 9) return const Color(0xFFF59E0B);
-    if (level <= 15) return const Color(0xFFEC4899);
-    return const Color(0xFFFFD700);
-  }
-
-  String _getFrameForLevel(int level) {
-    if (level <= 2) return "none";
-    if (level <= 4) return "bronze";
-    if (level <= 6) return "silver";
-    if (level <= 8) return "gold";
-    if (level <= 10) return "diamond";
-    if (level <= 15) return "royal";
-    return "supreme";
-  }
-
-  Widget _buildFrameForLevel(int level, Widget child) {
-    final frame = _getFrameForLevel(level);
-    if (frame == "none") return child;
-    
-    Color borderColor = _getLevelColor(level);
-    double borderWidth = 2;
-    List<BoxShadow>? shadows;
-    
-    if (frame == "bronze") { borderColor = const Color(0xFFCD7F32); borderWidth = 2.5; }
-    else if (frame == "silver") { borderColor = const Color(0xFFC0C0C0); borderWidth = 3; shadows = [BoxShadow(color: borderColor.withOpacity(0.5), blurRadius: 8)]; }
-    else if (frame == "gold") { borderColor = const Color(0xFFFFD700); borderWidth = 3.5; shadows = [BoxShadow(color: borderColor.withOpacity(0.6), blurRadius: 10)]; }
-    else if (frame == "diamond") { borderColor = const Color(0xFF00FFFF); borderWidth = 4; shadows = [BoxShadow(color: borderColor.withOpacity(0.7), blurRadius: 12), BoxShadow(color: Colors.purple.withOpacity(0.3), blurRadius: 16)]; }
-    else if (frame == "royal") { borderColor = const Color(0xFF9D00FF); borderWidth = 4.5; shadows = [BoxShadow(color: borderColor.withOpacity(0.8), blurRadius: 15), BoxShadow(color: Colors.pink.withOpacity(0.4), blurRadius: 20)]; }
-    else if (frame == "supreme") { borderColor = const Color(0xFFFFD700); borderWidth = 5; shadows = [BoxShadow(color: Colors.amber.withOpacity(0.9), blurRadius: 18), BoxShadow(color: Colors.orange.withOpacity(0.5), blurRadius: 25)]; }
-
-    return Container(
-      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: borderColor, width: borderWidth), boxShadow: shadows),
-      child: child,
-    );
-  }
-
-  void _showEntryEffect(String userName, int level) {
-    if (level < 4) return;
-    String effect = "";
-    if (level <= 5) effect = "â­";
-    else if (level <= 7) effect = "ðŸ”¥";
-    else if (level <= 9) effect = "âš¡";
-    else if (level <= 15) effect = "ðŸ¦š";
-    else effect = "ðŸ‰";
-
-    _toast("$effect $userName (Lv.$level) entered! $effect");
-    
-    // Show fancy dialog for high levels
-    if (level >= 8 && mounted) {
-      showDialog(context: context, barrierDismissible: true, builder: (_) => Dialog(backgroundColor: Colors.transparent, child: Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: LinearGradient(colors: [_getLevelColor(level), _getLevelColor(level).withOpacity(0.5)]), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white30, width: 2)), child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(effect, style: const TextStyle(fontSize: 50)),
-        const SizedBox(height: 8),
-        Text(userName, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-        Text("Level $level â€¢ ${_getLevelTitle(level)}", style: const TextStyle(color: Colors.white70)),
-        const SizedBox(height: 8),
-        Text("$effect Welcome! $effect", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ]))));
-      Future.delayed(const Duration(seconds: 2), () { if (mounted) Navigator.of(context, rootNavigator: true).pop(); });
-    }
-  }
-
-  String _getLevelTitle(int level) {
-    if (level <= 1) return "Newbie";
-    if (level <= 2) return "Rookie";
-    if (level <= 3) return "Explorer";
-    if (level <= 4) return "Adventurer";
-    if (level <= 5) return "Warrior";
-    if (level <= 6) return "Champion";
-    if (level <= 7) return "Hero";
-    if (level <= 8) return "Legend";
-    if (level <= 9) return "Mythic";
-    if (level <= 15) return "VIP $level";
-    return "SUPREME $level";
-  }
-
-
-
-  // ===== STEP 7: ROOM THEMES FIXED (using widget.roomNo) =====
-  String roomTheme = "default";
-  final Map<String, Map<String,dynamic>> _roomThemes = {
-    "default": {"name":"Default","color": Color(0xFF4A0E2A),"icon":"ðŸ "},
-    "royal": {"name":"Royal Palace","color": Color(0xFF4A1A6B),"icon":"ðŸ‘‘"},
-    "beach": {"name":"Beach Party","color": Color(0xFF0E4A6B),"icon":"ðŸ–ï¸"},
-    "space": {"name":"Space Station","color": Color(0xFF0A1A3A),"icon":"ðŸš€"},
-    "jungle": {"name":"Jungle","color": Color(0xFF1A4A1A),"icon":"ðŸŒ´"},
-    "neon": {"name":"Neon City","color": Color(0xFF4A0E4A),"icon":"ðŸŒƒ"},
-    "gold": {"name":"Gold Luxury","color": Color(0xFF4A3A0E),"icon":"ðŸ’Ž"},
-  };
-  Future<void> _loadRoomTheme() async {
-    try {
-      final snap = await roomRef.child("info/theme").get();
-      if (snap.exists && mounted) setState(() => roomTheme = snap.value as String? ?? "default");
-    } catch (_) {}
-  }
-
-  Future<void> _ensureVoiceConnectionStability() async {
-    try { FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}").keepSynced(true); } catch (_) {}
-    try {
-      Connectivity().onConnectivityChanged.listen((result) {
-        if (result == ConnectivityResult.none) { _toast("âš ï¸ Internet gaya - Reconnecting..."); } 
-        else { _toast("âœ… Internet wapas - Voice reconnect..."); _rejoinVoiceIfNeeded(); }
-      });
-    } catch (_) {}
-  }
-  Future<void> _rejoinVoiceIfNeeded() async { try {} catch (_) {} }
-
-
-  Future<void> _changeDPWithCrop() async {
-    try {
-      final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 85);
-      if (x == null) return;
-      final bytes = await x.readAsBytes();
-      final cropped = await showDialog<Uint8List>(context: context, builder: (_) => _CropDialog(originalBytes: bytes));
-      if (cropped == null) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP upload ho rahi hai...")));
-      final url = await _uploadDPToCloudinary(cropped);
-      await FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}/info/photoUrl").set(url);
-      _toast("DP changed!");
-    } catch (e) {
-      _toast("DP Error: $e");
-    }
-  }
-  Future<String> _uploadDPToCloudinary(Uint8List bytes) async {
-    final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
-      ..fields['upload_preset'] = 'ludo_chat'
-      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'dp.jpg'));
-    final streamed = await req.send();
-    final res = await http.Response.fromStream(streamed);
-    if (streamed.statusCode != 200) throw Exception("Cloudinary: ${res.body}");
-    return json.decode(res.body)['secure_url'] as String;
-  }
-
-  Future<void> _changeRoomTheme(String newTheme) async {
-    try {
-      if (!isOwner) { _toast("Only owner can change theme"); return; }
-      await roomRef.child("info/theme").set(newTheme);
-      if (mounted) setState(() => roomTheme = newTheme);
-    } catch (e) { _toast("Theme fail: $e"); }
-  }
-  void _showThemePicker() {
-    showModalBottomSheet(context: context, backgroundColor: const Color(0xFF1E293B), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))), builder: (_) => Container(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const Text("Room Theme", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-      const SizedBox(height: 16),
-      GridView.builder(shrinkWrap: true, gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 1, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: _roomThemes.length, itemBuilder: (_, i){
-        final key = _roomThemes.keys.elementAt(i);
-        final theme = _roomThemes[key]!;
-        return InkWell(onTap: (){ Navigator.pop(context); _changeRoomTheme(key); }, child: Container(decoration: BoxDecoration(color: theme["color"], borderRadius: BorderRadius.circular(12)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(theme["icon"], style: const TextStyle(fontSize: 32)), Text(theme["name"], style: const TextStyle(color: Colors.white, fontSize: 11))]))); 
-      }),
-    ])));
-  }
-
-
-
-  // ===== STEP 8: VOICE FILTERS + BLOCK/REPORT + FOLLOW =====
-  String voiceFilter = "normal";
-  final Map<String, Map<String,dynamic>> _voiceFilters = {
-    "normal": {"name":"Normal","icon":"ðŸŽ™ï¸"},
-    "robot": {"name":"Robot","icon":"ðŸ¤–"},
-    "girl": {"name":"Girl Voice","icon":"ðŸ‘§"},
-    "boy": {"name":"Boy Voice","icon":"ðŸ‘¦"},
-    "echo": {"name":"Echo","icon":"ðŸ”Š"},
-    "deep": {"name":"Deep","icon":"ðŸŽ¤"},
-  };
-
-  Future<void> _changeVoiceFilter(String filter) async {
-    setState(() => voiceFilter = filter);
-    _toast("Voice filter: ${_voiceFilters[filter]?["name"]} ${_voiceFilters[filter]?["icon"]}");
-    // Actual voice filter would need Agora extension, here we just save preference
-    await FirebaseFirestore.instance.collection("users").doc(myMobile).update({"voiceFilter": filter});
-  }
-
-  void _showVoiceFilterPicker() {
-    showModalBottomSheet(context: context, backgroundColor: const Color(0xFF1E293B), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))), builder: (_) => Container(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const Text("ðŸŽ™ï¸ Voice Filter Chuno", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-      const SizedBox(height: 16),
-      GridView.builder(shrinkWrap: true, gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 1.2, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: _voiceFilters.length, itemBuilder: (_, i){
-        final key = _voiceFilters.keys.elementAt(i);
-        final filter = _voiceFilters[key]!;
-        final isSelected = voiceFilter == key;
-        return InkWell(onTap: (){ Navigator.pop(context); _changeVoiceFilter(key); }, child: Container(decoration: BoxDecoration(color: isSelected ? const Color(0xFF7C3AED) : const Color(0xFF0F172A), borderRadius: BorderRadius.circular(12), border: Border.all(color: isSelected ? const Color(0xFF7C3AED) : Colors.white24, width: isSelected ? 2 : 1)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(filter["icon"], style: const TextStyle(fontSize: 28)),
-          const SizedBox(height: 4),
-          Text(filter["name"], style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-        ])));
-      }),
-    ])));
-  }
-
-  Future<void> _blockUser(String targetMobile, String targetName) async {
-    final confirm = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
-      backgroundColor: const Color(0xFF1E293B),
-      title: const Text("Block User?", style: TextStyle(color: Colors.white)),
-      content: Text("$targetName ko block karna hai? Wo tumhe message nahi bhej payega.", style: const TextStyle(color: Colors.white70)),
-      actions: [TextButton(onPressed: ()=> Navigator.pop(context, false), child: const Text("Cancel")), TextButton(onPressed: ()=> Navigator.pop(context, true), child: const Text("Block", style: TextStyle(color: Colors.red)))],
-    ));
-    if (confirm != true) return;
-    try {
-      await FirebaseFirestore.instance.collection("users").doc(myMobile).collection("blocked").doc(targetMobile).set({
-        "id": targetMobile, "name": targetName, "blockedAt": FieldValue.serverTimestamp()
-      });
-      _toast("$targetName blocked ðŸš«");
-    } catch (e) { _toast("Block failed: $e"); }
-  }
-
-  Future<void> _reportUser(String targetMobile, String targetName) async {
-    final reasonCtrl = TextEditingController();
-    final confirm = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
-      backgroundColor: const Color(0xFF1E293B),
-      title: const Text("Report User", style: TextStyle(color: Colors.white)),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text("$targetName ko report karna hai?", style: const TextStyle(color: Colors.white70)),
-        const SizedBox(height: 12),
-        TextField(controller: reasonCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "Reason likho...", hintStyle: const TextStyle(color: Colors.white54), filled: true, fillColor: const Color(0xFF0A0E1A), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
-      ]),
-      actions: [TextButton(onPressed: ()=> Navigator.pop(context, false), child: const Text("Cancel")), TextButton(onPressed: ()=> Navigator.pop(context, true), child: const Text("Report", style: TextStyle(color: Colors.orange)))],
-    ));
-    if (confirm != true) return;
-    try {
-      await FirebaseFirestore.instance.collection("reports").add({
-        "reporter": myMobile, "reported": targetMobile, "reporterName": myName, "reportedName": targetName,
-        "reason": reasonCtrl.text.trim(), "roomNo": widget.roomNo, "at": FieldValue.serverTimestamp()
-      });
-      _toast("Report sent âœ…");
-    } catch (e) { _toast("Report failed: $e"); }
-  }
-
-  Future<void> _followUser(String targetMobile, String targetName, String targetPhoto) async {
-    try {
-      await FirebaseFirestore.instance.collection("users").doc(myMobile).collection("following").doc(targetMobile).set({
-        "id": targetMobile, "name": targetName, "photoUrl": targetPhoto, "followedAt": FieldValue.serverTimestamp()
-      });
-      await FirebaseFirestore.instance.collection("users").doc(targetMobile).collection("followers").doc(myMobile).set({
-        "id": myMobile, "name": myName, "photoUrl": myPhoto, "followedAt": FieldValue.serverTimestamp()
-      });
-      _toast("$targetName followed âœ…");
-    } catch (e) { _toast("Follow failed: $e"); }
-  }
-
-
   // ===== GIFT SYSTEM (Step 2) =====
   int myCoins = 0;
   List<Map<String, dynamic>> giftList = [];
@@ -718,20 +422,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   bool get isAdmin => myRole == "admin" || isOwner;
 
   @override
-  Future<void> _loadMyLevel() async {
-    try {
-      final doc = await FirebaseFirestore.instance.collection("users").doc(myMobile).get();
-      if (doc.exists) {
-        final xp = (doc.data()?["xp"] ?? 0) as int;
-        if (mounted) setState(() { myLevel = _getLevelFromXp(xp); myFrame = _getFrameForLevel(myLevel); });
-      }
-    } catch (_) {}
-  }
-
   void initState() {
     super.initState();
-    _ensureVoiceConnectionStability();
-    _loadMyLevel();
     tabCtrl = TabController(length: 2, vsync: this);
     myMobile = prefs.getString("mobile")?? "";
     myName = prefs.getString("name")?? "Guest";
@@ -740,7 +432,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     _enter();
     _loadMyCoins();
     _listenGifts();
-    _loadRoomTheme();
   }
 
   Future<void> _enter() async {
@@ -1160,11 +851,6 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       ));
     });
 
-    themeSub = roomRef.child("info/theme").onValue.listen((e) {
-      if (!mounted) return;
-      final val = e.snapshot.value;
-      if (val != null && mounted) setState(() => roomTheme = val as String);
-    });
     noticeSub = roomRef.child("info/notice").onValue.listen((e) {
       if (!mounted) return;
       final n = e.snapshot.value?.toString()?? "";
@@ -2743,5 +2429,4 @@ class _PkChallengeSheetState extends State<PkChallengeSheet> {
       ]),
     );
   }
-
-
+}
