@@ -45,37 +45,20 @@ class Splash extends StatefulWidget {
 class _SplashState extends State<Splash> {
   @override void initState() { super.initState(); checkUser(); }
   Future<void> checkUser() async {
-    var m = prefs.getString("mobile");
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    if (m!= null && m.isNotEmpty) {
-      bool banned = await isUserBanned(m) || await isDeviceBanned();
-      if (banned) {
-        if (!mounted) return;
-        _showBanDialogSplash();
-        return;
+    try {
+      var m = prefs.getString("mobile");
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+      if (m!= null && m.isNotEmpty) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen(mobile: m)));
+      } else {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
       }
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen(mobile: m)));
-    } else {
+    } catch (e) {
+      debugPrint("Splash error: $e");
+      if (!mounted) return;
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
     }
-  }
-  void _showBanDialogSplash() {
-    showDialog(
-      context: context, barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E2E),
-        title: const Text("â›” Banned", style: TextStyle(color: Colors.red)),
-        content: const Text("Admin ne tumhe ban kiya hai.", style: TextStyle(color: Colors.white)),
-        actions: [
-          TextButton(onPressed: () async {
-            await prefs.clear();
-            if (mounted) Navigator.pushAndRemoveUntil(context,
-              MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false);
-          }, child: const Text("OK")),
-        ],
-      ),
-    );
   }
   @override
   Widget build(BuildContext context) {
@@ -83,11 +66,13 @@ class _SplashState extends State<Splash> {
       backgroundColor: Color(0xFF0A0E1A),
       body: Center(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.casino_rounded, size: 80, color: Colors.amber),
+          Icon(Icons.casino_rounded, size: 90, color: Colors.amber),
+          SizedBox(height: 20),
+          CircularProgressIndicator(color: Colors.amber, strokeWidth: 3),
           SizedBox(height: 16),
-          CircularProgressIndicator(color: Colors.amber),
-          SizedBox(height: 10),
-          Text("LUDO PREMIUM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+          Text("LUDO PREMIUM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: 1.2)),
+          SizedBox(height: 6),
+          Text("Loading...", style: TextStyle(color: Colors.white54, fontSize: 12))
         ]),
       ),
     );
@@ -628,7 +613,7 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
   Future<void> sendSS() async {
     final picker = ImagePicker(); final XFile? img = await picker.pickImage(source: ImageSource.gallery); if (img == null) return; setState(() { loading = true; });
     await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({"mobile": widget.mobile, "amount": 500, "status": "CHECK", "time": Timestamp.now()});
-    Uri wa = Uri.parse("https://wa.me/44739729394?text=Check ${widget.mobile}"); await launchUrl(wa, mode: LaunchMode.externalApplication); setState(() { loading = false; });
+    Uri wa = Uri.parse("https://wa.me/447397293594?text=Check ${widget.mobile}"); await launchUrl(wa, mode: LaunchMode.externalApplication); setState(() { loading = false; });
   }
   @override Widget build(BuildContext context) { return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Buy Premium"), backgroundColor: Colors.amber), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [const Text("Premium Rs 500", style: TextStyle(color: Colors.white, fontSize: 22)), const SizedBox(height: 20), SelectableText(myUpiId, style: const TextStyle(color: Colors.amber, fontSize: 20)), const SizedBox(height: 20), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: payUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("PAY Rs 500", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 16)))), const SizedBox(height: 12), loading? const CircularProgressIndicator() : SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: sendSS, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SEND PAYMENT SCREENSHOT", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 15))))]))); }
 }
