@@ -475,10 +475,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
   void openPremium() { Navigator.push(context, MaterialPageRoute(builder: (_) => PremiumPayScreen(mobile: widget.mobile, onPaid: (){}))); }
   void doLogout() async { await prefs.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false); }
-    static const String currentAppVersion = "8.0";
-  bool _forceUpdateChecked = false;
-  bool _isOldApk = false;
-
+  @override Widget build(BuildContext context) {
   // ===== DP SYSTEM (Step 1) =====
   Widget _dpAvatar() {
     return Stack(alignment: Alignment.bottomRight, children: [
@@ -489,7 +486,10 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.camera_alt, size: 12, color: Colors.black)),
     ]);
   }
-
+  
+  static const String currentAppVersion = "8.0";
+  bool _forceUpdateChecked = false;
+  bool _isOldApk = false;
   Future<bool> _checkForceUpdate() async {
     try {
       final versionDoc = await FirebaseFirestore.instance.collection("config").doc("appVersion").get();
@@ -508,7 +508,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return false;
     } catch (e) { return false; }
   }
-
   Future<bool> _blockIfOldApkIdLogin() async {
     if (!_forceUpdateChecked) { _forceUpdateChecked = true; final isOld = await _checkForceUpdate(); if (isOld) return true; }
     if (_isOldApk) { if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("APK Updated! Naya APK download karo"), backgroundColor: Colors.red)); } return true; }
@@ -534,13 +533,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final url = await _uploadDPToCloudinary(bytes);
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"photoUrl": url});
       if (mounted) setState(() => myPhotoUrl = url);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP lag gayi âœ…")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP lag gayi \u2705")));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("DP fail: $e")));
     }
   }
-
-  @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
       Row(children: [InkWell(onTap: _changeDP, child: _dpAvatar()), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), InkWell(onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => BuyCoinsScreen(mobile: widget.mobile))); }, child: Text("\u{1FA99} $myCoins", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))), const SizedBox(width: 8), Text("Rs $wallet", style: const TextStyle(color: Colors.white70)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
       const SizedBox(height: 16),
@@ -626,7 +623,7 @@ class _PremiumPayScreenState extends State<PremiumPayScreen> {
   Future<void> sendSS() async {
     final picker = ImagePicker(); final XFile? img = await picker.pickImage(source: ImageSource.gallery); if (img == null) return; setState(() { loading = true; });
     await FirebaseFirestore.instance.collection("premium_requests").doc(widget.mobile).set({"mobile": widget.mobile, "amount": 500, "status": "CHECK", "time": Timestamp.now()});
-    Uri wa = Uri.parse("https://wa.me/447397293594text=Check ${widget.mobile}"); await launchUrl(wa, mode: LaunchMode.externalApplication); setState(() { loading = false; });
+    Uri wa = Uri.parse("https://wa.me/44739729394?text=Check ${widget.mobile}"); await launchUrl(wa, mode: LaunchMode.externalApplication); setState(() { loading = false; });
   }
   @override Widget build(BuildContext context) { return Scaffold(backgroundColor: const Color(0xFF0A0E1A), appBar: AppBar(title: const Text("Buy Premium"), backgroundColor: Colors.amber), body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [const Text("Premium Rs 500", style: TextStyle(color: Colors.white, fontSize: 22)), const SizedBox(height: 20), SelectableText(myUpiId, style: const TextStyle(color: Colors.amber, fontSize: 20)), const SizedBox(height: 20), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: payUpi, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("PAY Rs 500", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 16)))), const SizedBox(height: 12), loading? const CircularProgressIndicator() : SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: sendSS, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: const Text("SEND PAYMENT SCREENSHOT", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 15))))]))); }
 }
