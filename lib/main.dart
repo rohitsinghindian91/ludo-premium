@@ -194,7 +194,7 @@ class _OtpPageState extends State<OtpPage> {
       showDialog(context: context, barrierDismissible: false,
         builder: (_) => AlertDialog(
           backgroundColor: const Color(0xFF1E1E2E),
-          title: const Text("â›” Banned", style: TextStyle(color: Colors.red)),
+          title: const Text("⛔ Banned", style: TextStyle(color: Colors.red)),
           content: const Text("Admin ne tumhe ban kiya hai.", style: TextStyle(color: Colors.white)),
           actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
         ));
@@ -650,14 +650,14 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> with SingleTickerPr
   int _lastSpinDay = 0;
   int _streak = 1;
   final List<Map<String, dynamic>> _rewards = [
-    {"label": "10 Coins", "coins": 10, "color": Color(0xFF22C55E), "icon": "ðŸª™"},
-    {"label": "50 Coins", "coins": 50, "color": Color(0xFF3B82F6), "icon": "ðŸ’°"},
-    {"label": "100 Coins", "coins": 100, "color": Color(0xFFF59E0B), "icon": "ðŸ’Ž"},
-    {"label": "5 Coins", "coins": 5, "color": Color(0xFFEF4444), "icon": "ðŸª™"},
-    {"label": "20 Coins", "coins": 20, "color": Color(0xFF8B5CF6), "icon": "ðŸ’°"},
-    {"label": "200 Coins", "coins": 200, "color": Color(0xFFEC4899), "icon": "ðŸŽ‰"},
-    {"label": "15 Coins", "coins": 15, "color": Color(0xFF06B6D4), "icon": "ðŸª™"},
-    {"label": "30 Coins", "coins": 30, "color": Color(0xFFF97316), "icon": "ðŸ’°"},
+    {"label": "10 Coins", "coins": 10, "color": Color(0xFF22C55E), "icon": "🪙"},
+    {"label": "50 Coins", "coins": 50, "color": Color(0xFF3B82F6), "icon": "💰"},
+    {"label": "100 Coins", "coins": 100, "color": Color(0xFFF59E0B), "icon": "💎"},
+    {"label": "5 Coins", "coins": 5, "color": Color(0xFFEF4444), "icon": "🪙"},
+    {"label": "20 Coins", "coins": 20, "color": Color(0xFF8B5CF6), "icon": "💰"},
+    {"label": "200 Coins", "coins": 200, "color": Color(0xFFEC4899), "icon": "🎉"},
+    {"label": "15 Coins", "coins": 15, "color": Color(0xFF06B6D4), "icon": "🪙"},
+    {"label": "30 Coins", "coins": 30, "color": Color(0xFFF97316), "icon": "💰"},
   ];
 
   @override void initState() {
@@ -712,7 +712,7 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> with SingleTickerPr
         setState(() { _currentRotation += targetAngle; _spinning = false; _canSpin = false; _streak++; });
         showDialog(context: context, builder: (_) => AlertDialog(
           backgroundColor: const Color(0xFF1E293B),
-          title: Text("ðŸŽ‰ ${reward["icon"]} Jeet gaye!", style: const TextStyle(color: Colors.white)),
+          title: Text("🎉 ${reward["icon"]} Jeet gaye!", style: const TextStyle(color: Colors.white)),
           content: Text("Aapko ${reward["coins"]} coins mile!\nStreak: $_streak days", style: const TextStyle(color: Colors.white70)),
           actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Awesome!"))],
         ));
@@ -727,10 +727,10 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> with SingleTickerPr
   @override Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(title: const Text("ðŸŽ¡ Lucky Wheel", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
+      appBar: AppBar(title: const Text("🎡 Lucky Wheel", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
       body: Column(children: [
         const SizedBox(height: 20),
-        Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: Colors.orange.withOpacity(0.2), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.orange)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.local_fire_department, color: Colors.orange, size: 20), const SizedBox(width: 6), Text("Streak: $_streak days ðŸ”¥", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold))])),
+        Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: Colors.orange.withOpacity(0.2), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.orange)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.local_fire_department, color: Colors.orange, size: 20), const SizedBox(width: 6), Text("Streak: $_streak days 🔥", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold))])),
         const SizedBox(height: 20),
         Expanded(child: Center(child: Stack(alignment: Alignment.center, children: [
           AnimatedBuilder(animation: _anim, builder: (_, __) {
@@ -743,7 +743,7 @@ class _LuckyWheelScreenState extends State<LuckyWheelScreen> with SingleTickerPr
         Padding(padding: const EdgeInsets.all(16), child: Column(children: [
           if (!_canSpin) Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(10)), child: const Row(children: [Icon(Icons.timer, color: Colors.redAccent), SizedBox(width: 8), Expanded(child: Text("Aaj ka spin ho gaya! Kal wapas aao", style: TextStyle(color: Colors.redAccent)))])),
           const SizedBox(height: 12),
-          SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _canSpin && !_spinning ? _spin : null, style: ElevatedButton.styleFrom(backgroundColor: _canSpin ? Colors.orange : Colors.grey, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: Text(_spinning ? "Spinning..." : _canSpin ? "ðŸŽ¡ SPIN NOW!" : "â° Kal aana", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)))),
+          SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _canSpin && !_spinning ? _spin : null, style: ElevatedButton.styleFrom(backgroundColor: _canSpin ? Colors.orange : Colors.grey, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: Text(_spinning ? "Spinning..." : _canSpin ? "🎡 SPIN NOW!" : "⏰ Kal aana", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)))),
           const SizedBox(height: 8),
           const Text("Har din spin karo aur coins jeeto! Streak se bonus milta hai", style: TextStyle(color: Colors.white54, fontSize: 12), textAlign: TextAlign.center),
         ])),
@@ -898,7 +898,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
         "xp": FieldValue.increment(10),
       });
       if (mounted) setState(() { tasks[taskKey] = true; coinsEarned += reward; });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("+$reward coins! ðŸŽ‰")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("+$reward coins! 🎉")));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
@@ -906,12 +906,12 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
 
   @override Widget build(BuildContext context) {
     final taskList = [
-      {"key": "login", "title": "Daily Login", "desc": "App kholo", "reward": 5, "icon": "ðŸ“…"},
-      {"key": "ludo", "title": "Play Ludo", "desc": "1 game khelo", "reward": 20, "icon": "ðŸŽ²"},
-      {"key": "voice", "title": "Voice Room", "desc": "Voice room join karo", "reward": 15, "icon": "ðŸŽ¤"},
-      {"key": "wheel", "title": "Lucky Wheel", "desc": "Wheel spin karo", "reward": 10, "icon": "ðŸŽ¡"},
-      {"key": "gift", "title": "Send Gift", "desc": "Kisi ko gift bhejo", "reward": 10, "icon": "ðŸŽ"},
-      {"key": "chat", "title": "Chat Karo", "desc": "5 messages bhejo", "reward": 10, "icon": "ðŸ’¬"},
+      {"key": "login", "title": "Daily Login", "desc": "App kholo", "reward": 5, "icon": "📅"},
+      {"key": "ludo", "title": "Play Ludo", "desc": "1 game khelo", "reward": 20, "icon": "🎲"},
+      {"key": "voice", "title": "Voice Room", "desc": "Voice room join karo", "reward": 15, "icon": "🎤"},
+      {"key": "wheel", "title": "Lucky Wheel", "desc": "Wheel spin karo", "reward": 10, "icon": "🎡"},
+      {"key": "gift", "title": "Send Gift", "desc": "Kisi ko gift bhejo", "reward": 10, "icon": "🎁"},
+      {"key": "chat", "title": "Chat Karo", "desc": "5 messages bhejo", "reward": 10, "icon": "💬"},
     ];
 
     final completed = tasks.values.where((v) => v).length;
@@ -919,7 +919,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(title: const Text("ðŸ“‹ Daily Tasks", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
+      appBar: AppBar(title: const Text("📋 Daily Tasks", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
       body: loading ? const Center(child: CircularProgressIndicator()) : Column(children: [
         Container(margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFFDB2777)]), borderRadius: BorderRadius.circular(16)), child: Column(children: [
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("$completed/$total Tasks", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)), Text("$coinsEarned coins earned", style: const TextStyle(color: Colors.white70))]),
@@ -934,9 +934,9 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t["title"] as String, style: TextStyle(color: done ? Colors.green : Colors.white, fontWeight: FontWeight.bold)), Text(t["desc"] as String, style: const TextStyle(color: Colors.white54, fontSize: 12))])),
             Column(children: [
-              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text("+${t["reward"]} ðŸª™", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text("+${t["reward"]} 🪙", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
               const SizedBox(height: 6),
-              done ? Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)), child: const Text("âœ“ Done", style: TextStyle(color: Colors.white, fontSize: 12))) : ElevatedButton(onPressed: () => _claimTask(t["key"] as String, t["reward"] as int), style: ElevatedButton.styleFrom(backgroundColor: Colors.purple, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6)), child: const Text("Claim", style: TextStyle(fontSize: 12))),
+              done ? Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)), child: const Text("✓ Done", style: TextStyle(color: Colors.white, fontSize: 12))) : ElevatedButton(onPressed: () => _claimTask(t["key"] as String, t["reward"] as int), style: ElevatedButton.styleFrom(backgroundColor: Colors.purple, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6)), child: const Text("Claim", style: TextStyle(fontSize: 12))),
             ]),
           ]));
         })),
@@ -978,30 +978,30 @@ class _ShopScreenState extends State<ShopScreen> with SingleTickerProviderStateM
       
       if (vips.isEmpty) {
         vips = [
-          {"id":"vip_bronze","name":"Bronze VIP","price":1000,"days":30,"color":"CD7F32","perks":["Bronze Frame","â­ Entry","2x Coins"]},
-          {"id":"vip_silver","name":"Silver VIP","price":2500,"days":30,"color":"C0C0C0","perks":["Silver Frame","ðŸ”¥ Entry","3x Coins","Room Theme"]},
-          {"id":"vip_gold","name":"Gold VIP","price":5000,"days":30,"color":"FFD700","perks":["Gold Frame","âš¡ Entry + Popup","5x Coins","All Themes","PK Bonus"]},
-          {"id":"vip_diamond","name":"Diamond VIP","price":10000,"days":30,"color":"00FFFF","perks":["Diamond Frame","ðŸ¦š Phoenix Entry","10x Coins","All Themes","PK Bonus","Custom Badge"]},
+          {"id":"vip_bronze","name":"Bronze VIP","price":1000,"days":30,"color":"CD7F32","perks":["Bronze Frame","⭐ Entry","2x Coins"]},
+          {"id":"vip_silver","name":"Silver VIP","price":2500,"days":30,"color":"C0C0C0","perks":["Silver Frame","🔥 Entry","3x Coins","Room Theme"]},
+          {"id":"vip_gold","name":"Gold VIP","price":5000,"days":30,"color":"FFD700","perks":["Gold Frame","⚡ Entry + Popup","5x Coins","All Themes","PK Bonus"]},
+          {"id":"vip_diamond","name":"Diamond VIP","price":10000,"days":30,"color":"00FFFF","perks":["Diamond Frame","🦚 Phoenix Entry","10x Coins","All Themes","PK Bonus","Custom Badge"]},
         ];
       }
       
       if (frames.isEmpty) {
         frames = [
-          {"id":"frame_bronze","name":"Bronze Frame","price":500,"level":3,"image":"ðŸ¥‰"},
-          {"id":"frame_silver","name":"Silver Frame","price":1500,"level":5,"image":"ðŸ¥ˆ"},
-          {"id":"frame_gold","name":"Gold Frame","price":3000,"level":7,"image":"ðŸ¥‡"},
-          {"id":"frame_diamond","name":"Diamond Frame","price":6000,"level":9,"image":"ðŸ’Ž"},
-          {"id":"frame_royal","name":"Royal Frame","price":12000,"level":11,"image":"ðŸ‘‘"},
+          {"id":"frame_bronze","name":"Bronze Frame","price":500,"level":3,"image":"🥉"},
+          {"id":"frame_silver","name":"Silver Frame","price":1500,"level":5,"image":"🥈"},
+          {"id":"frame_gold","name":"Gold Frame","price":3000,"level":7,"image":"🥇"},
+          {"id":"frame_diamond","name":"Diamond Frame","price":6000,"level":9,"image":"💎"},
+          {"id":"frame_royal","name":"Royal Frame","price":12000,"level":11,"image":"👑"},
         ];
       }
       
       if (effects.isEmpty) {
         effects = [
-          {"id":"effect_stars","name":"Stars Entry","price":800,"level":4,"emoji":"â­"},
-          {"id":"effect_fire","name":"Fire Entry","price":2000,"level":6,"emoji":"ðŸ”¥"},
-          {"id":"effect_lightning","name":"Lightning Entry","price":4000,"level":8,"emoji":"âš¡"},
-          {"id":"effect_phoenix","name":"Phoenix Entry","price":8000,"level":10,"emoji":"ðŸ¦š"},
-          {"id":"effect_dragon","name":"Dragon Entry","price":15000,"level":15,"emoji":"ðŸ‰"},
+          {"id":"effect_stars","name":"Stars Entry","price":800,"level":4,"emoji":"⭐"},
+          {"id":"effect_fire","name":"Fire Entry","price":2000,"level":6,"emoji":"🔥"},
+          {"id":"effect_lightning","name":"Lightning Entry","price":4000,"level":8,"emoji":"⚡"},
+          {"id":"effect_phoenix","name":"Phoenix Entry","price":8000,"level":10,"emoji":"🦚"},
+          {"id":"effect_dragon","name":"Dragon Entry","price":15000,"level":15,"emoji":"🐉"},
         ];
       }
       
@@ -1035,7 +1035,7 @@ class _ShopScreenState extends State<ShopScreen> with SingleTickerProviderStateM
       }
       
       if (mounted) setState(() => myCoins -= price);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$name kharid liya! ðŸŽ‰")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$name kharid liya! 🎉")));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
@@ -1045,20 +1045,20 @@ class _ShopScreenState extends State<ShopScreen> with SingleTickerProviderStateM
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
       appBar: AppBar(
-        title: const Text("ðŸ›’ Shop", style: TextStyle(color: Colors.white)),
+        title: const Text("🛒 Shop", style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF1E293B),
         iconTheme: const IconThemeData(color: Colors.white),
-        actions: [Container(margin: const EdgeInsets.all(8), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(20)), child: Row(children: [const Text("ðŸª™", style: TextStyle(fontSize: 16)), const SizedBox(width: 4), Text("$myCoins", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))]))],
-        bottom: TabBar(controller: _tabCtrl, tabs: const [Tab(text: "VIP ðŸ‘‘"), Tab(text: "Frames ðŸ–¼ï¸"), Tab(text: "Effects ðŸŽ†")]),
+        actions: [Container(margin: const EdgeInsets.all(8), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(20)), child: Row(children: [const Text("🪙", style: TextStyle(fontSize: 16)), const SizedBox(width: 4), Text("$myCoins", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))]))],
+        bottom: TabBar(controller: _tabCtrl, tabs: const [Tab(text: "VIP 👑"), Tab(text: "Frames 🖼️"), Tab(text: "Effects 🎆")]),
       ),
       body: loading ? const Center(child: CircularProgressIndicator()) : TabBarView(controller: _tabCtrl, children: [
         // VIP TAB
         ListView.builder(padding: const EdgeInsets.all(12), itemCount: vips.length, itemBuilder: (_, i){
           final vip = vips[i];
           return Container(margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(int.parse("0xFF${vip["color"]}")), Color(int.parse("0xFF${vip["color"]}")).withOpacity(0.5)]), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white24)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [Text(vip["name"], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)), const Spacer(), Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)), child: Text("${vip["price"]} ðŸª™", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)))]),
+            Row(children: [Text(vip["name"], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)), const Spacer(), Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)), child: Text("${vip["price"]} 🪙", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)))]),
             const SizedBox(height: 8),
-            ... (vip["perks"] as List).map((p)=> Padding(padding: const EdgeInsets.only(bottom: 4), child: Row(children: [const Text("âœ“ ", style: TextStyle(color: Colors.white)), Text(p, style: const TextStyle(color: Colors.white70, fontSize: 13))]))),
+            ... (vip["perks"] as List).map((p)=> Padding(padding: const EdgeInsets.only(bottom: 4), child: Row(children: [const Text("✓ ", style: TextStyle(color: Colors.white)), Text(p, style: const TextStyle(color: Colors.white70, fontSize: 13))]))),
             const SizedBox(height: 12),
             SizedBox(width: double.infinity, child: ElevatedButton(onPressed: ()=> _buyItem("shop_vip", vip["id"], vip["price"], vip["name"]), style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black), child: Text("Buy ${vip["name"]} - ${vip["days"]} days"))),
           ]));
@@ -1067,12 +1067,12 @@ class _ShopScreenState extends State<ShopScreen> with SingleTickerProviderStateM
         GridView.builder(padding: const EdgeInsets.all(12), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.8, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: frames.length, itemBuilder: (_, i){
           final fr = frames[i];
           return Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)), child: Column(children: [
-            Text(fr["image"]??"ðŸ–¼ï¸", style: const TextStyle(fontSize: 40)),
+            Text(fr["image"]??"🖼️", style: const TextStyle(fontSize: 40)),
             const SizedBox(height: 8),
             Text(fr["name"], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
             Text("Lv.${fr["level"]}", style: const TextStyle(color: Colors.white54, fontSize: 11)),
             const Spacer(),
-            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text("${fr["price"]} ðŸª™", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text("${fr["price"]} 🪙", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
             const SizedBox(height: 8),
             SizedBox(width: double.infinity, child: ElevatedButton(onPressed: ()=> _buyItem("shop_frames", fr["id"], fr["price"], fr["name"]), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED), padding: const EdgeInsets.symmetric(vertical: 8)), child: const Text("Buy", style: TextStyle(fontSize: 12)))),
           ]));
@@ -1081,12 +1081,12 @@ class _ShopScreenState extends State<ShopScreen> with SingleTickerProviderStateM
         GridView.builder(padding: const EdgeInsets.all(12), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.8, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: effects.length, itemBuilder: (_, i){
           final ef = effects[i];
           return Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)), child: Column(children: [
-            Text(ef["emoji"]??"âœ¨", style: const TextStyle(fontSize: 40)),
+            Text(ef["emoji"]??"✨", style: const TextStyle(fontSize: 40)),
             const SizedBox(height: 8),
             Text(ef["name"], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
             Text("Lv.${ef["level"]}", style: const TextStyle(color: Colors.white54, fontSize: 11)),
             const Spacer(),
-            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text("${ef["price"]} ðŸª™", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text("${ef["price"]} 🪙", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
             const SizedBox(height: 8),
             SizedBox(width: double.infinity, child: ElevatedButton(onPressed: ()=> _buyItem("shop_effects", ef["id"], ef["price"], ef["name"]), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEC4899), padding: const EdgeInsets.symmetric(vertical: 8)), child: const Text("Buy", style: TextStyle(fontSize: 12)))),
           ]));
@@ -1132,9 +1132,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
       final rank = i+1;
       String medal = "";
       Color rankColor = Colors.white54;
-      if (rank==1) { medal="ðŸ¥‡"; rankColor=const Color(0xFFFFD700); }
-      else if (rank==2) { medal="ðŸ¥ˆ"; rankColor=const Color(0xFFC0C0C0); }
-      else if (rank==3) { medal="ðŸ¥‰"; rankColor=const Color(0xFFCD7F32); }
+      if (rank==1) { medal="🥇"; rankColor=const Color(0xFFFFD700); }
+      else if (rank==2) { medal="🥈"; rankColor=const Color(0xFFC0C0C0); }
+      else if (rank==3) { medal="🥉"; rankColor=const Color(0xFFCD7F32); }
       
       return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: rank<=3 ? rankColor.withOpacity(0.15) : const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12), border: Border.all(color: rank<=3 ? rankColor.withOpacity(0.5) : Colors.white10)), child: Row(children: [
         Container(width: 32, height: 32, decoration: BoxDecoration(color: rankColor.withOpacity(0.2), shape: BoxShape.circle), child: Center(child: Text(medal.isNotEmpty ? medal : "$rank", style: TextStyle(color: rankColor, fontWeight: FontWeight.bold, fontSize: medal.isNotEmpty ? 18 : 12)))),
@@ -1150,11 +1150,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
   @override Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(title: const Text("ðŸ† Leaderboard", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white), bottom: TabBar(controller: _tabCtrl, tabs: const [Tab(text: "ðŸª™ Coins"), Tab(text: "ðŸ‘‘ Level"), Tab(text: "ðŸŽ Gifts")])),
+      appBar: AppBar(title: const Text("🏆 Leaderboard", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white), bottom: TabBar(controller: _tabCtrl, tabs: const [Tab(text: "🪙 Coins"), Tab(text: "👑 Level"), Tab(text: "🎁 Gifts")])),
       body: loading ? const Center(child: CircularProgressIndicator()) : TabBarView(controller: _tabCtrl, children: [
-        _buildList(topCoins, "coins", "ðŸª™"),
+        _buildList(topCoins, "coins", "🪙"),
         _buildList(topLevel, "xp", "XP"),
-        _buildList(topGifts, "totalGiftsSent", "ðŸŽ"),
+        _buildList(topGifts, "totalGiftsSent", "🎁"),
       ]),
     );
   }
@@ -1193,7 +1193,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
       });
       await FirebaseFirestore.instance.collection("tournaments").doc(activeTournament!["id"]).update({"participantsCount": FieldValue.increment(1)});
       if (mounted) setState(() => joined = true);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tournament join ho gaya! ðŸŽ‰")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tournament join ho gaya! 🎉")));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
@@ -1202,7 +1202,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
   @override Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(title: const Text("ðŸ† Tournament", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
+      appBar: AppBar(title: const Text("🏆 Tournament", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
       body: loading ? const Center(child: CircularProgressIndicator()) : activeTournament==null ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         const Icon(Icons.emoji_events, size: 20),
         const SizedBox(height: 16),
@@ -1216,7 +1216,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
           Text(activeTournament!["desc"]??"Sabse zyada Ludo jeeto!", style: const TextStyle(color: Colors.black87)),
           const SizedBox(height: 16),
           Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-            Column(children: [Text("${activeTournament!["prize"]??5000}", style: const TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold)), const Text("Prize ðŸª™", style: TextStyle(color: Colors.black87, fontSize: 12))]),
+            Column(children: [Text("${activeTournament!["prize"]??5000}", style: const TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold)), const Text("Prize 🪙", style: TextStyle(color: Colors.black87, fontSize: 12))]),
             Container(width: 1, height: 40, color: Colors.black26),
             Column(children: [Text("${activeTournament!["participantsCount"]??0}", style: const TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold)), const Text("Players", style: TextStyle(color: Colors.black87, fontSize: 12))]),
             Container(width: 1, height: 40, color: Colors.black26),
@@ -1224,11 +1224,11 @@ class _TournamentScreenState extends State<TournamentScreen> {
           ]),
         ])),
         const SizedBox(height: 20),
-        if (!joined) SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: _joinTournament, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("JOIN TOURNAMENT ðŸ†", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)))) 
+        if (!joined) SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: _joinTournament, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("JOIN TOURNAMENT 🏆", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)))) 
         else Container(width: double.infinity, padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: const Color(0xFF14532D), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF22C55E))), child: const Row(children: [Icon(Icons.check_circle, color: Color(0xFF22C55E)), SizedBox(width: 8), Text("Tournament me ho! Ludo khelo aur score badhao!", style: TextStyle(color: Colors.white))])),
 
         const SizedBox(height: 20),
-        const Text("ðŸ† Top Players", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        const Text("🏆 Top Players", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
         const SizedBox(height: 12),
         StreamBuilder<QuerySnapshot>(stream: FirebaseFirestore.instance.collection("tournaments").doc(activeTournament!["id"]).collection("participants").orderBy("score", descending: true).limit(10).snapshots(), builder: (_, snap){
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
@@ -1291,7 +1291,7 @@ class _PrivateRoomScreenState extends State<PrivateRoomScreen> {
       });
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Private Room $roomNo bana! ðŸŽ‰")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Private Room $roomNo bana! 🎉")));
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => VoiceRoomScreen(roomNo: roomNo)));
       }
     } catch (e) {
@@ -1303,7 +1303,7 @@ class _PrivateRoomScreenState extends State<PrivateRoomScreen> {
   @override Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(title: const Text("ðŸ”’ Private Room", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
+      appBar: AppBar(title: const Text("🔒 Private Room", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
       body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
         Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text("Room Name", style: TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.bold)),
@@ -1323,7 +1323,7 @@ class _PrivateRoomScreenState extends State<PrivateRoomScreen> {
           ],
         ])),
         const SizedBox(height: 20),
-        SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: loading ? null : _createPrivateRoom, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFBBF24), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: loading ? const CircularProgressIndicator(color: Colors.black) : const Text("CREATE PRIVATE ROOM ðŸ”’", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)))),
+        SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: loading ? null : _createPrivateRoom, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFBBF24), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: loading ? const CircularProgressIndicator(color: Colors.black) : const Text("CREATE PRIVATE ROOM 🔒", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)))),
         const SizedBox(height: 20),
         Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF14532D), borderRadius: BorderRadius.circular(12)), child: const Row(children: [Icon(Icons.info, color: Color(0xFF22C55E)), SizedBox(width: 8), Expanded(child: Text("Private room me sirf password wale aa sakte hain. Invite link share karo!", style: TextStyle(color: Colors.white, fontSize: 12)))])),
       ])),
@@ -1369,7 +1369,7 @@ class _FollowSystemScreenState extends State<FollowSystemScreen> with SingleTick
   }
 
   Widget _buildList(List<Map<String,dynamic>> list, bool isFollowers) {
-    if (list.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(isFollowers ? "ðŸ‘¥" : "ðŸ’«", style: const TextStyle(fontSize: 50)), const SizedBox(height: 12), Text(isFollowers ? "Koi follower nahi" : "Kisi ko follow nahi kiya", style: const TextStyle(color: Colors.white54))])); 
+    if (list.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(isFollowers ? "👥" : "💫", style: const TextStyle(fontSize: 50)), const SizedBox(height: 12), Text(isFollowers ? "Koi follower nahi" : "Kisi ko follow nahi kiya", style: const TextStyle(color: Colors.white54))])); 
     return ListView.builder(padding: const EdgeInsets.all(12), itemCount: list.length, itemBuilder: (_, i){
       final u = list[i];
       return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)), child: Row(children: [
@@ -1384,7 +1384,7 @@ class _FollowSystemScreenState extends State<FollowSystemScreen> with SingleTick
   @override Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(title: const Text("ðŸ‘¥ Follow System", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white), bottom: TabBar(controller: _tabCtrl, tabs: [Tab(text: "Followers (${followers.length})"), Tab(text: "Following (${following.length})")])),
+      appBar: AppBar(title: const Text("👥 Follow System", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white), bottom: TabBar(controller: _tabCtrl, tabs: [Tab(text: "Followers (${followers.length})"), Tab(text: "Following (${following.length})")])),
       body: loading ? const Center(child: CircularProgressIndicator()) : TabBarView(controller: _tabCtrl, children: [_buildList(followers, true), _buildList(following, false)]),
     );
   }
@@ -1444,7 +1444,7 @@ class _StreakScreenState extends State<StreakScreen> {
       });
       
       if (mounted) setState(() { weekDays[6] = true; currentStreak++; if (currentStreak > maxStreak) maxStreak = currentStreak; });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("+$reward coins! Streak: $currentStreak ðŸ”¥")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("+$reward coins! Streak: $currentStreak 🔥")));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
@@ -1453,7 +1453,7 @@ class _StreakScreenState extends State<StreakScreen> {
   @override Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(title: const Text("ðŸ”¥ Daily Streak", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
+      appBar: AppBar(title: const Text("🔥 Daily Streak", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
       body: loading ? const Center(child: CircularProgressIndicator()) : SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
         Container(width: double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFF6B35), Color(0xFFF7931E)]), borderRadius: BorderRadius.circular(20)), child: Column(children: [
           const Icon(Icons.local_fire_department, size: 20),
@@ -1479,15 +1479,15 @@ class _StreakScreenState extends State<StreakScreen> {
           ]);
         })),
         const SizedBox(height: 20),
-        SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: _claimDaily, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6B35), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("CLAIM TODAY'S REWARD ðŸŽ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)))),
+        SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: _claimDaily, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6B35), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("CLAIM TODAY'S REWARD 🎁", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)))),
         const SizedBox(height: 16),
         Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text("Rewards:", style: TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.bold)),
           SizedBox(height: 8),
-          Text("â€¢ Day 1-2: 10 coins", style: TextStyle(color: Colors.white70, fontSize: 12)),
-          Text("â€¢ Day 3-6: 20 coins + 5 XP", style: TextStyle(color: Colors.white70, fontSize: 12)),
-          Text("â€¢ Day 7+: 50 coins + 10 XP + Lucky Spin", style: TextStyle(color: Colors.white70, fontSize: 12)),
-          Text("â€¢ Miss 1 day = Streak reset!", style: TextStyle(color: Colors.red, fontSize: 12)),
+          Text("• Day 1-2: 10 coins", style: TextStyle(color: Colors.white70, fontSize: 12)),
+          Text("• Day 3-6: 20 coins + 5 XP", style: TextStyle(color: Colors.white70, fontSize: 12)),
+          Text("• Day 7+: 50 coins + 10 XP + Lucky Spin", style: TextStyle(color: Colors.white70, fontSize: 12)),
+          Text("• Miss 1 day = Streak reset!", style: TextStyle(color: Colors.red, fontSize: 12)),
         ])),
       ])),
     );
@@ -1527,8 +1527,8 @@ class _BlockReportScreenState extends State<BlockReportScreen> {
   @override Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(title: const Text("ðŸš« Block List", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
-      body: loading ? const Center(child: CircularProgressIndicator()) : blocked.isEmpty ? const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text("ðŸš«", style: TextStyle(fontSize: 50)), SizedBox(height: 12), Text("Koi blocked user nahi", style: TextStyle(color: Colors.white54))])) : ListView.builder(padding: const EdgeInsets.all(12), itemCount: blocked.length, itemBuilder: (_, i){
+      appBar: AppBar(title: const Text("🚫 Block List", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
+      body: loading ? const Center(child: CircularProgressIndicator()) : blocked.isEmpty ? const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text("🚫", style: TextStyle(fontSize: 50)), SizedBox(height: 12), Text("Koi blocked user nahi", style: TextStyle(color: Colors.white54))])) : ListView.builder(padding: const EdgeInsets.all(12), itemCount: blocked.length, itemBuilder: (_, i){
         final b = blocked[i];
         return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)), child: Row(children: [
           const CircleAvatar(radius: 20, backgroundColor: Color(0xFF7F1D1D), child: Icon(Icons.block, color: Colors.white)),
@@ -1596,3 +1596,4 @@ class _CropDialogState extends State<_CropDialog> {
     );
   }
 }
+
