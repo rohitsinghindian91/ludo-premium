@@ -549,6 +549,93 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   }
 
 
+
+  // ===== STEP 8: VOICE FILTERS + BLOCK/REPORT + FOLLOW =====
+  String voiceFilter = "normal";
+  final Map<String, Map<String,dynamic>> _voiceFilters = {
+    "normal": {"name":"Normal","icon":"ðŸŽ™ï¸"},
+    "robot": {"name":"Robot","icon":"ðŸ¤–"},
+    "girl": {"name":"Girl Voice","icon":"ðŸ‘§"},
+    "boy": {"name":"Boy Voice","icon":"ðŸ‘¦"},
+    "echo": {"name":"Echo","icon":"ðŸ”Š"},
+    "deep": {"name":"Deep","icon":"ðŸŽ¤"},
+  };
+
+  Future<void> _changeVoiceFilter(String filter) async {
+    setState(() => voiceFilter = filter);
+    _toast("Voice filter: ${_voiceFilters[filter]?["name"]} ${_voiceFilters[filter]?["icon"]}");
+    // Actual voice filter would need Agora extension, here we just save preference
+    await FirebaseFirestore.instance.collection("users").doc(myMobile).update({"voiceFilter": filter});
+  }
+
+  void _showVoiceFilterPicker() {
+    showModalBottomSheet(context: context, backgroundColor: const Color(0xFF1E293B), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))), builder: (_) => Container(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, children: [
+      const Text("ðŸŽ™ï¸ Voice Filter Chuno", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+      const SizedBox(height: 16),
+      GridView.builder(shrinkWrap: true, gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 1.2, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: _voiceFilters.length, itemBuilder: (_, i){
+        final key = _voiceFilters.keys.elementAt(i);
+        final filter = _voiceFilters[key]!;
+        final isSelected = voiceFilter == key;
+        return InkWell(onTap: (){ Navigator.pop(context); _changeVoiceFilter(key); }, child: Container(decoration: BoxDecoration(color: isSelected ? const Color(0xFF7C3AED) : const Color(0xFF0F172A), borderRadius: BorderRadius.circular(12), border: Border.all(color: isSelected ? const Color(0xFF7C3AED) : Colors.white24, width: isSelected ? 2 : 1)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(filter["icon"], style: const TextStyle(fontSize: 28)),
+          const SizedBox(height: 4),
+          Text(filter["name"], style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+        ])));
+      }),
+    ])));
+  }
+
+  Future<void> _blockUser(String targetMobile, String targetName) async {
+    final confirm = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      title: const Text("Block User?", style: TextStyle(color: Colors.white)),
+      content: Text("$targetName ko block karna hai? Wo tumhe message nahi bhej payega.", style: const TextStyle(color: Colors.white70)),
+      actions: [TextButton(onPressed: ()=> Navigator.pop(context, false), child: const Text("Cancel")), TextButton(onPressed: ()=> Navigator.pop(context, true), child: const Text("Block", style: TextStyle(color: Colors.red)))],
+    ));
+    if (confirm != true) return;
+    try {
+      await FirebaseFirestore.instance.collection("users").doc(myMobile).collection("blocked").doc(targetMobile).set({
+        "id": targetMobile, "name": targetName, "blockedAt": FieldValue.serverTimestamp()
+      });
+      _toast("$targetName blocked ðŸš«");
+    } catch (e) { _toast("Block failed: $e"); }
+  }
+
+  Future<void> _reportUser(String targetMobile, String targetName) async {
+    final reasonCtrl = TextEditingController();
+    final confirm = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      title: const Text("Report User", style: TextStyle(color: Colors.white)),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text("$targetName ko report karna hai?", style: const TextStyle(color: Colors.white70)),
+        const SizedBox(height: 12),
+        TextField(controller: reasonCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "Reason likho...", hintStyle: const TextStyle(color: Colors.white54), filled: true, fillColor: const Color(0xFF0A0E1A), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+      ]),
+      actions: [TextButton(onPressed: ()=> Navigator.pop(context, false), child: const Text("Cancel")), TextButton(onPressed: ()=> Navigator.pop(context, true), child: const Text("Report", style: TextStyle(color: Colors.orange)))],
+    ));
+    if (confirm != true) return;
+    try {
+      await FirebaseFirestore.instance.collection("reports").add({
+        "reporter": myMobile, "reported": targetMobile, "reporterName": myName, "reportedName": targetName,
+        "reason": reasonCtrl.text.trim(), "roomNo": widget.roomNo, "at": FieldValue.serverTimestamp()
+      });
+      _toast("Report sent âœ…");
+    } catch (e) { _toast("Report failed: $e"); }
+  }
+
+  Future<void> _followUser(String targetMobile, String targetName, String targetPhoto) async {
+    try {
+      await FirebaseFirestore.instance.collection("users").doc(myMobile).collection("following").doc(targetMobile).set({
+        "id": targetMobile, "name": targetName, "photoUrl": targetPhoto, "followedAt": FieldValue.serverTimestamp()
+      });
+      await FirebaseFirestore.instance.collection("users").doc(targetMobile).collection("followers").doc(myMobile).set({
+        "id": myMobile, "name": myName, "photoUrl": myPhoto, "followedAt": FieldValue.serverTimestamp()
+      });
+      _toast("$targetName followed âœ…");
+    } catch (e) { _toast("Follow failed: $e"); }
+  }
+
+
   // ===== GIFT SYSTEM (Step 2) =====
   int myCoins = 0;
   List<Map<String, dynamic>> giftList = [];
@@ -2584,4 +2671,30 @@ class _PkChallengeSheetState extends State<PkChallengeSheet> {
       ]),
     );
   }
+
+class _CropDialogVoice extends StatefulWidget {
+  final Uint8List originalBytes;
+  const _CropDialogVoice({required this.originalBytes});
+  @override State<_CropDialogVoice> createState() => _CropDialogVoiceState();
+}
+class _CropDialogVoiceState extends State<_CropDialogVoice> {
+  bool isSquareCrop = true;
+  @override Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      title: const Text("DP Crop Karo", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(12)), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(widget.originalBytes, height: 200, fit: BoxFit.contain))),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=true), icon: Icon(isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Square"), style: ElevatedButton.styleFrom(backgroundColor: isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: isSquareCrop ? Colors.black : Colors.white))),
+          const SizedBox(width: 8),
+          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=false), icon: Icon(!isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Original"), style: ElevatedButton.styleFrom(backgroundColor: !isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: !isSquareCrop ? Colors.black : Colors.white))),
+        ]),
+      ])),
+      actions: [TextButton(onPressed: ()=> Navigator.pop(context), child: const Text("Cancel")), ElevatedButton(onPressed: (){ Navigator.pop(context, widget.originalBytes); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)), child: const Text("Use This"))],
+    );
+  }
+}
+
 }
