@@ -366,12 +366,16 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   String pkTimeLeft = "00:00";
   Timer? _pkTimer;
 
+  void _handlePk() {
+    if (inPk) { _showPkEndDialog(); } else { _showPkChallengeSheet(); }
+  }
+
   void _showPkEndDialog() {
     if (!mounted) return;
     showDialog(context: context, builder: (_) => AlertDialog(
       backgroundColor: const Color(0xFF1E293B),
       title: const Text("PK Battle Ended", style: TextStyle(color: Colors.white)),
-      content: Text("Score: $myPkScore vs $oppPkScore Time left: ${pkTimeLeft}s", style: const TextStyle(color: Colors.white70)),
+      content: Text("Score: $myPkScore vs $oppPkScore Time left: $pkTimeLeft", style: const TextStyle(color: Colors.white70)),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text("Continue")),
         TextButton(onPressed: () { Navigator.pop(context); _endPk(force: true); }, child: const Text("End PK", style: TextStyle(color: Colors.red))),
@@ -2741,7 +2745,3 @@ class _PkChallengeSheetState extends State<PkChallengeSheet> {
   }
 
 
-
-
-
-}
