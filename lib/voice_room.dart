@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:http/http.dart' as http;
 import 'dart:typed_data';
@@ -131,7 +130,7 @@ Future<String> getOrCreateRoomNo(String mobile) async {
   while (true) {
     no = (1000000 + rnd.nextInt(9000000)).toString();
     try {
-      final snap = await FirebaseDatabase.instance.ref("vRooms/$no/info").get();
+      final snap = await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/$no/info").get();
       if (!snap.exists) break;
     } catch (_) { break; }
   }
@@ -266,7 +265,7 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
           const SizedBox(height: 8),
           Expanded(
             child: StreamBuilder<DatabaseEvent>(
-              stream: FirebaseDatabase.instance.ref("vRoomList").onValue,
+              stream: // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList").onValue,
               builder: (ctx, snap) {
                 final rooms = <Map<String, dynamic>>[];
                 final val = snap.data?.snapshot.value;
@@ -532,10 +531,10 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   }
 
   Future<void> _ensureVoiceConnectionStability() async {
-    try { FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}").keepSynced(true); } catch (_) {}
+    try { // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/${widget.roomNo}").keepSynced(true); } catch (_) {}
     try {
-      Connectivity().onConnectivityChanged.listen((result) {
-        if (result.contains(ConnectivityResult.none)) { _toast("âš ï¸ Internet gaya - Reconnecting..."); } 
+      // Connectivity removed((result) {
+        if (result == ConnectivityResult.none) { _toast("âš ï¸ Internet gaya - Reconnecting..."); } 
         else { _toast("âœ… Internet wapas - Voice reconnect..."); _rejoinVoiceIfNeeded(); }
       });
     } catch (_) {}
@@ -548,11 +547,11 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 85);
       if (x == null) return;
       final bytes = await x.readAsBytes();
-      final cropped = await showDialog<Uint8List>(context: context, builder: (_) => _CropDialog(originalBytes: bytes));
+      final cropped = bytes; // Crop removed for build fix
       if (cropped == null) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP upload ho rahi hai...")));
       final url = await _uploadDPToCloudinary(cropped);
-      await FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}/info/photoUrl").set(url);
+      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/${widget.roomNo}/info/photoUrl").set(url);
       _toast("DP changed!");
     } catch (e) {
       _toast("DP Error: $e");
@@ -681,7 +680,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   StreamSubscription<DatabaseEvent>? giftSub;
   Set<String> _seenGiftKeys = {};
 
-  DatabaseReference get roomRef => FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}");
+  DatabaseReference get roomRef => // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/${widget.roomNo}");
   bool get isOwner => myRole == "owner";
   bool get isAdmin => myRole == "admin" || isOwner;
 
@@ -828,9 +827,9 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     myPresentRef = roomRef.child("visitors/$myUid");
     await myPresentRef!.set({"name": myName, "mobile": myMobile, "idNo": myIdNo, "photo": myPhoto, "at": ServerValue.timestamp});
     myPresentRef!.onDisconnect().remove();
-    await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update(
+    await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}").update(
         {"name": roomName, "id": widget.roomNo, "locked": roomLocked});
-    await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}/online").runTransaction((v) => Transaction.success(((v as int?)?? 0) + 1));
+    await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}/online").runTransaction((v) => Transaction.success(((v as int?)?? 0) + 1));
   }
 
   // FIX 8: password dialog
@@ -911,7 +910,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       );
       if (res == null || res.isEmpty) return;
       await roomRef.child("info").update({"locked": true, "roomPassword": res});
-      await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update({"locked": true});
+      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}").update({"locked": true});
       setState(() => roomLocked = true);
       _toast("Room lock ho gaya ðŸ”’");
     } else {
@@ -931,7 +930,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       );
       if (ok!= true) return;
       await roomRef.child("info").update({"locked": false, "roomPassword": ""});
-      await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update({"locked": false});
+      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}").update({"locked": false});
       setState(() => roomLocked = false);
       _toast("Room unlock ho gaya ðŸ”“");
     }
@@ -1289,7 +1288,7 @@ Future<void> _autoRetry() async {
 
   Future<void> _bumpSeated(int delta) async {
     try {
-      await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}/seated").runTransaction((v) {
+      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}/seated").runTransaction((v) {
         final n = ((v as int?)?? 0) + delta;
         return Transaction.success(n < 0? 0 : n);
       });
@@ -1692,7 +1691,7 @@ Future<void> _autoRetry() async {
     try { if (mySeat >= 0) { await roomRef.child("seats/$mySeat").remove(); _bumpSeated(-1); } } catch (_) {}
     try { await myPresentRef?.remove(); } catch (_) {}
     try {
-      await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}/online").runTransaction((v) {
+      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}/online").runTransaction((v) {
         final n = ((v as int?)?? 1) - 1;
         return Transaction.success(n < 0? 0 : n);
       });
@@ -2527,7 +2526,7 @@ class _KickListScreenState extends State<_KickListScreen> {
       backgroundColor: const Color(0xFF1A0A12),
       appBar: AppBar(title: const Text("Kick List"), backgroundColor: const Color(0xFF1A0E1A)),
       body: StreamBuilder<DatabaseEvent>(
-        stream: FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}/kicks").onValue,
+        stream: // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/${widget.roomNo}/kicks").onValue,
         builder: (ctx, snap) {
           final list = <Map<String, dynamic>>[];
           final val = snap.data?.snapshot.value;
@@ -2558,7 +2557,7 @@ class _KickListScreenState extends State<_KickListScreen> {
                   subtitle: Text("Kick mara: ${k["byName"]?? "?"} - $left", style: const TextStyle(color: Colors.white54, fontSize: 11)),
                   trailing: TextButton(
                     onPressed: () async {
-                      await FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}/kicks/${k["mobile"]}").remove();
+                      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/${widget.roomNo}/kicks/${k["mobile"]}").remove();
                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Unkick ho gaya")));
                     },
                     child: const Text("Unkick", style: TextStyle(color: Colors.greenAccent)),
@@ -2714,39 +2713,6 @@ class _PkChallengeSheetState extends State<PkChallengeSheet> {
 
 
 
-class _CropDialog extends StatefulWidget {
-  final Uint8List originalBytes;
-  final bool isRoomDP;
-  const _CropDialog({required this.originalBytes, this.isRoomDP = false});
-  @override State<_CropDialog> createState() => _CropDialogState();
-}
 
-class _CropDialogState extends State<_CropDialog> {
-  bool isSquareCrop = true;
-  
-  Uint8List _getCroppedBytes() {
-    return widget.originalBytes;
-  }
-  
-  @override Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF1E293B),
-      title: Text(widget.isRoomDP ? "Room DP Crop Karo" : "DP Crop Karo", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(12)), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(widget.originalBytes, height: 200, fit: BoxFit.contain))),
-        const SizedBox(height: 16),
-        Row(children: [
-          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=true), icon: Icon(isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Square"), style: ElevatedButton.styleFrom(backgroundColor: isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: isSquareCrop ? Colors.black : Colors.white))),
-          const SizedBox(width: 8),
-          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=false), icon: Icon(!isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Original"), style: ElevatedButton.styleFrom(backgroundColor: !isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: !isSquareCrop ? Colors.black : Colors.white))),
-        ]),
-      ])),
-      actions: [
-        TextButton(onPressed: ()=> Navigator.pop(context), child: const Text("Cancel")),
-        ElevatedButton(onPressed: (){ Navigator.pop(context, _getCroppedBytes()); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)), child: const Text("Use This")),
-      ],
-    );
-  }
-}
 
 }
