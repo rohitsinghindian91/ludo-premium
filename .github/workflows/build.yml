@@ -16,6 +16,8 @@ jobs:
           flutter-version: '3.22.0'
       - run: flutter clean
       - run: flutter pub get
+      - name: Generate App Icons from assets/icon.png
+        run: dart run flutter_launcher_icons
       - name: Fix gal 2.3.3 - DIRECT PATH
         run: |
           FILE="/home/runner/.pub-cache/hosted/pub.dev/gal-2.3.3/android/build.gradle"
