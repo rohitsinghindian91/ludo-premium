@@ -355,7 +355,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Connectivity listener
     try {
       Connectivity().onConnectivityChanged.listen((result) {
-        if (result == ConnectivityResult.none) {
+        if (result.contains(ConnectivityResult.none)) {
           _isConnectionStable = false;
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("âš ï¸ Internet nahi hai - Reconnecting..."), backgroundColor: Colors.orange, duration: Duration(seconds: 2)));
@@ -406,6 +406,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
 
+  static const String currentAppVersion = "8.0";
+  bool _forceUpdateChecked = false;
+  bool _isOldApk = false;
+  
   @override void initState() { super.initState();
     _checkDeviceSecurity();
     _ensureConnectionStability();
@@ -487,9 +491,6 @@ class _HomeScreenState extends State<HomeScreen> {
     ]);
   }
   
-  static const String currentAppVersion = "8.0";
-  bool _forceUpdateChecked = false;
-  bool _isOldApk = false;
   Future<bool> _checkForceUpdate() async {
     try {
       final versionDoc = await FirebaseFirestore.instance.collection("config").doc("appVersion").get();
@@ -547,8 +548,8 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: 16),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: () { if (!isPrem) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pehle Premium Lo"))); openPremium(); return; } Navigator.push(context, MaterialPageRoute(builder: (_) => LobbyScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("PLAY LUDO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
       const SizedBox(height: 12),
-      Container(margin: const EdgeInsets.only(bottom: 12), width: double.infinity, height: 54, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LuckyWheelScreen(mobile: widget.mobile))), icon: const Icon(Icons.casino, style: TextStyle(fontSize: 20)), label: const Text("LUCKY WHEEL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
-      Container(margin: const EdgeInsets.only(bottom: 12), width: double.infinity, height: 54, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DailyTasksScreen(mobile: widget.mobile))), icon: const Icon(Icons.task_alt, style: TextStyle(fontSize: 20)), label: const Text("DAILY TASKS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
+      Container(margin: const EdgeInsets.only(bottom: 12), width: double.infinity, height: 54, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LuckyWheelScreen(mobile: widget.mobile))), icon: const Icon(Icons.casino, size: 20), label: const Text("LUCKY WHEEL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
+      Container(margin: const EdgeInsets.only(bottom: 12), width: double.infinity, height: 54, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DailyTasksScreen(mobile: widget.mobile))), icon: const Icon(Icons.task_alt, size: 20), label: const Text("DAILY TASKS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
       Row(children: [
         Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PrivateRoomScreen(mobile: widget.mobile))), icon: const Icon(Icons.lock, size: 18), label: const Text("PRIVATE", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1F2937), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
         const SizedBox(width: 6),
@@ -1297,7 +1298,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
       backgroundColor: const Color(0xFF0A0E1A),
       appBar: AppBar(title: const Text("ðŸ† Tournament", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
       body: loading ? const Center(child: CircularProgressIndicator()) : activeTournament==null ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.emoji_events, style: TextStyle(fontSize: 60)),
+        const Icon(Icons.emoji_events, size: 60),
         const SizedBox(height: 16),
         const Text("Koi active tournament nahi", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
@@ -1549,7 +1550,7 @@ class _StreakScreenState extends State<StreakScreen> {
       appBar: AppBar(title: const Text("ðŸ”¥ Daily Streak", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
       body: loading ? const Center(child: CircularProgressIndicator()) : SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
         Container(width: double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFF6B35), Color(0xFFF7931E)]), borderRadius: BorderRadius.circular(20)), child: Column(children: [
-          const Icon(Icons.local_fire_department, style: TextStyle(fontSize: 50)),
+          const Icon(Icons.local_fire_department, size: 50),
           const SizedBox(height: 8),
           Text("$currentStreak Days", style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
           const Text("Current Streak", style: TextStyle(color: Colors.white70)),
