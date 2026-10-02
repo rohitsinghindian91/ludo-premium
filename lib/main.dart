@@ -1633,57 +1633,30 @@ class _BlockReportScreenState extends State<BlockReportScreen> {
     );
   }
 
-
 class _CropDialog extends StatefulWidget {
   final Uint8List originalBytes;
-  const _CropDialog({required this.originalBytes});
-  @override
-  State<_CropDialog> createState() => _CropDialogState();
+  final bool isRoomDP;
+  const _CropDialog({required this.originalBytes, this.isRoomDP = false});
+  @override State<_CropDialog> createState() => _CropDialogState();
 }
-
 class _CropDialogState extends State<_CropDialog> {
-  double _scale = 1.0;
-  double _prevScale = 1.0;
-  Offset _offset = Offset.zero;
-  Offset _prevOffset = Offset.zero;
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.black,
-      insetPadding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onScaleStart: (d) {
-                _prevScale = _scale;
-                _prevOffset = _offset;
-              },
-              onScaleUpdate: (d) {
-                setState(() {
-                  _scale = (_prevScale * d.scale).clamp(0.5, 3.0);
-                  _offset = _prevOffset + d.focalPointDelta;
-                });
-              },
-              child: ClipRect(
-                child: Transform(
-                  transform: Matrix4.identity()..translate(_offset.dx, _offset.dy)..scale(_scale),
-                  child: Image.memory(widget.originalBytes, fit: BoxFit.contain),
-                ),
-              ),
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-              ElevatedButton(onPressed: () => Navigator.pop(context, widget.originalBytes), child: const Text("Done")),
-            ],
-          ),
-        ],
-      ),
+  bool isSquareCrop = true;
+  @override Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      title: Text(widget.isRoomDP ? "Room DP Crop Karo" : "DP Crop Karo", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(12)), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(widget.originalBytes, height: 200, fit: BoxFit.contain))),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=true), icon: Icon(isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Square"), style: ElevatedButton.styleFrom(backgroundColor: isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: isSquareCrop ? Colors.black : Colors.white))),
+          const SizedBox(width: 8),
+          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=false), icon: Icon(!isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Original"), style: ElevatedButton.styleFrom(backgroundColor: !isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: !isSquareCrop ? Colors.black : Colors.white))),
+        ]),
+      ])),
+      actions: [TextButton(onPressed: ()=> Navigator.pop(context), child: const Text("Cancel")), ElevatedButton(onPressed: (){ Navigator.pop(context, widget.originalBytes); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)), child: const Text("Use This"))],
     );
   }
+}
+
 }
