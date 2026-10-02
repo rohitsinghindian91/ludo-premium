@@ -130,7 +130,7 @@ Future<String> getOrCreateRoomNo(String mobile) async {
   while (true) {
     no = (1000000 + rnd.nextInt(9000000)).toString();
     try {
-      final snap = await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/$no/info").get();
+      final snap = await FirebaseDatabase.instance.ref("vRooms/$no/info").get();
       if (!snap.exists) break;
     } catch (_) { break; }
   }
@@ -265,7 +265,7 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
           const SizedBox(height: 8),
           Expanded(
             child: StreamBuilder<DatabaseEvent>(
-              stream: // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList").onValue,
+              stream: FirebaseDatabase.instance.ref("vRoomList").onValue,
               builder: (ctx, snap) {
                 final rooms = <Map<String, dynamic>>[];
                 final val = snap.data?.snapshot.value;
@@ -359,6 +359,35 @@ class VoiceRoomScreen extends StatefulWidget {
 }
 
 class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProviderStateMixin {
+  bool _inPk = false;
+  bool get inPk => _inPk;
+  int myPkScore = 0;
+  int oppPkScore = 0;
+  String pkTimeLeft = "00:00";
+  Timer? _pkTimer;
+
+  void _showPkEndDialog() {
+    if (!mounted) return;
+    showDialog(context: context, builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      title: const Text("PK Battle Ended", style: TextStyle(color: Colors.white)),
+      content: Text("Score: $myPkScore vs $oppPkScore Time left: ${pkTimeLeft}s", style: const TextStyle(color: Colors.white70)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Continue")),
+        TextButton(onPressed: () { Navigator.pop(context); _endPk(force: true); }, child: const Text("End PK", style: TextStyle(color: Colors.red))),
+      ],
+    ));
+  }
+
+  void _showPkChallengeSheet() {}
+
+  void _endPk({bool force = false}) {
+    _inPk = false;
+    _pkTimer?.cancel();
+    setState(() {});
+  }
+
+
   RtcEngine? get engine => globalVoiceEngine;
   late int myUid;
   late String myName;
@@ -531,9 +560,9 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   }
 
   Future<void> _ensureVoiceConnectionStability() async {
-    try { // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/${widget.roomNo}").keepSynced(true); } catch (_) {}
+    try { FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}").keepSynced(true); } catch (_) {}
     try {
-      // Connectivity removed((result) {
+      Connectivity().onConnectivityChanged.listen((result) {
         if (result == ConnectivityResult.none) { _toast("âš ï¸ Internet gaya - Reconnecting..."); } 
         else { _toast("âœ… Internet wapas - Voice reconnect..."); _rejoinVoiceIfNeeded(); }
       });
@@ -547,11 +576,11 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 85);
       if (x == null) return;
       final bytes = await x.readAsBytes();
-      final cropped = bytes; // Crop removed for build fix
+      final cropped = await showDialog<Uint8List>(context: context, builder: (_) => _CropDialog(originalBytes: bytes));
       if (cropped == null) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP upload ho rahi hai...")));
       final url = await _uploadDPToCloudinary(cropped);
-      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/${widget.roomNo}/info/photoUrl").set(url);
+      await FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}/info/photoUrl").set(url);
       _toast("DP changed!");
     } catch (e) {
       _toast("DP Error: $e");
@@ -680,7 +709,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   StreamSubscription<DatabaseEvent>? giftSub;
   Set<String> _seenGiftKeys = {};
 
-  DatabaseReference get roomRef => // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/${widget.roomNo}");
+  DatabaseReference get roomRef => FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}");
   bool get isOwner => myRole == "owner";
   bool get isAdmin => myRole == "admin" || isOwner;
 
@@ -827,9 +856,9 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
     myPresentRef = roomRef.child("visitors/$myUid");
     await myPresentRef!.set({"name": myName, "mobile": myMobile, "idNo": myIdNo, "photo": myPhoto, "at": ServerValue.timestamp});
     myPresentRef!.onDisconnect().remove();
-    await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}").update(
+    await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update(
         {"name": roomName, "id": widget.roomNo, "locked": roomLocked});
-    await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}/online").runTransaction((v) => Transaction.success(((v as int?)?? 0) + 1));
+    await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}/online").runTransaction((v) => Transaction.success(((v as int?)?? 0) + 1));
   }
 
   // FIX 8: password dialog
@@ -910,7 +939,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       );
       if (res == null || res.isEmpty) return;
       await roomRef.child("info").update({"locked": true, "roomPassword": res});
-      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}").update({"locked": true});
+      await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update({"locked": true});
       setState(() => roomLocked = true);
       _toast("Room lock ho gaya ðŸ”’");
     } else {
@@ -930,7 +959,7 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
       );
       if (ok!= true) return;
       await roomRef.child("info").update({"locked": false, "roomPassword": ""});
-      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}").update({"locked": false});
+      await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}").update({"locked": false});
       setState(() => roomLocked = false);
       _toast("Room unlock ho gaya ðŸ”“");
     }
@@ -1288,7 +1317,7 @@ Future<void> _autoRetry() async {
 
   Future<void> _bumpSeated(int delta) async {
     try {
-      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}/seated").runTransaction((v) {
+      await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}/seated").runTransaction((v) {
         final n = ((v as int?)?? 0) + delta;
         return Transaction.success(n < 0? 0 : n);
       });
@@ -1691,7 +1720,7 @@ Future<void> _autoRetry() async {
     try { if (mySeat >= 0) { await roomRef.child("seats/$mySeat").remove(); _bumpSeated(-1); } } catch (_) {}
     try { await myPresentRef?.remove(); } catch (_) {}
     try {
-      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRoomList/${widget.roomNo}/online").runTransaction((v) {
+      await FirebaseDatabase.instance.ref("vRoomList/${widget.roomNo}/online").runTransaction((v) {
         final n = ((v as int?)?? 1) - 1;
         return Transaction.success(n < 0? 0 : n);
       });
@@ -2526,7 +2555,7 @@ class _KickListScreenState extends State<_KickListScreen> {
       backgroundColor: const Color(0xFF1A0A12),
       appBar: AppBar(title: const Text("Kick List"), backgroundColor: const Color(0xFF1A0E1A)),
       body: StreamBuilder<DatabaseEvent>(
-        stream: // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/${widget.roomNo}/kicks").onValue,
+        stream: FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}/kicks").onValue,
         builder: (ctx, snap) {
           final list = <Map<String, dynamic>>[];
           final val = snap.data?.snapshot.value;
@@ -2557,7 +2586,7 @@ class _KickListScreenState extends State<_KickListScreen> {
                   subtitle: Text("Kick mara: ${k["byName"]?? "?"} - $left", style: const TextStyle(color: Colors.white54, fontSize: 11)),
                   trailing: TextButton(
                     onPressed: () async {
-                      await // FirebaseDatabase removed - FirebaseFirestore.instance.collection("vRooms/${widget.roomNo}/kicks/${k["mobile"]}").remove();
+                      await FirebaseDatabase.instance.ref("vRooms/${widget.roomNo}/kicks/${k["mobile"]}").remove();
                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Unkick ho gaya")));
                     },
                     child: const Text("Unkick", style: TextStyle(color: Colors.greenAccent)),
