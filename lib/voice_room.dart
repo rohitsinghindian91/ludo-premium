@@ -414,6 +414,58 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
 
   // ===== STEP 6: VIP FRAMES + ENTRY EFFECTS =====
   int myLevel = 1;
+  
+  // ===== STEP 7: ROOM THEMES =====
+  String roomTheme = "default";
+  final Map<String, Map<String,dynamic>> _roomThemes = {
+    "default": {"name":"Default","color": Color(0xFF4A0E2A),"icon":"ðŸ "},
+    "royal": {"name":"Royal Palace","color": Color(0xFF4A1A6B),"icon":"ðŸ‘‘","vip":"vip_gold"},
+    "beach": {"name":"Beach Party","color": Color(0xFF0E4A6B),"icon":"ðŸ–ï¸","vip":"vip_silver"},
+    "space": {"name":"Space Station","color": Color(0xFF0A1A3A),"icon":"ðŸš€","vip":"vip_gold"},
+    "jungle": {"name":"Jungle","color": Color(0xFF1A4A1A),"icon":"ðŸŒ´","vip":"vip_silver"},
+    "neon": {"name":"Neon City","color": Color(0xFF4A0E4A),"icon":"ðŸŒƒ","vip":"vip_diamond"},
+    "gold": {"name":"Gold Luxury","color": Color(0xFF4A3A0E),"icon":"ðŸ’Ž","vip":"vip_diamond"},
+  };
+
+  Future<void> _loadRoomTheme() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection("vRooms").doc(roomId).get();
+      if (snap.exists) {
+        final theme = snap.data()?["theme"] ?? "default";
+        if (mounted) setState(() => roomTheme = theme);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _changeRoomTheme(String newTheme) async {
+    try {
+      await FirebaseFirestore.instance.collection("vRooms").doc(roomId).update({"theme": newTheme});
+      if (mounted) setState(() => roomTheme = newTheme);
+      _toast("Theme changed to ${_roomThemes[newTheme]?["name"]} ðŸŽ¨");
+    } catch (e) {
+      _toast("Theme change failed: $e");
+    }
+  }
+
+  void _showThemePicker() {
+    showModalBottomSheet(context: context, backgroundColor: const Color(0xFF1E293B), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))), builder: (_) => Container(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, children: [
+      const Text("ðŸŽ¨ Room Theme Chuno", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+      const SizedBox(height: 16),
+      GridView.builder(shrinkWrap: true, gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 1, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: _roomThemes.length, itemBuilder: (_, i){
+        final key = _roomThemes.keys.elementAt(i);
+        final theme = _roomThemes[key]!;
+        final isSelected = roomTheme == key;
+        return InkWell(onTap: (){ Navigator.pop(context); _changeRoomTheme(key); }, child: Container(decoration: BoxDecoration(color: theme["color"], borderRadius: BorderRadius.circular(12), border: Border.all(color: isSelected ? Colors.amber : Colors.white24, width: isSelected ? 3 : 1)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(theme["icon"], style: const TextStyle(fontSize: 32)),
+          const SizedBox(height: 4),
+          Text(theme["name"], style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+          if (theme["vip"]!=null) Text("VIP", style: TextStyle(color: Colors.amber, fontSize: 9)),
+        ])));
+      }),
+    ])));
+  }
+
+
   String myFrame = "none";
   
   int _getLevelFromXp(int xp) {
