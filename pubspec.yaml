@@ -20,7 +20,7 @@ dependencies:
   share_plus: ^8.0.2
   url_launcher: ^6.2.5
   image_picker: ^1.0.7
-  gal: ^2.3.4
+  gal: ^2.3.3
   http: ^1.2.0
 
 dev_dependencies:
