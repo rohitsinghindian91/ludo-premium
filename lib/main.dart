@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
@@ -477,7 +478,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
   void openPremium() { Navigator.push(context, MaterialPageRoute(builder: (_) => PremiumPayScreen(mobile: widget.mobile, onPaid: (){}))); }
   void doLogout() async { await prefs.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false); }
-  @override Widget build(BuildContext context) {
+  
   // ===== DP SYSTEM (Step 1) =====
   Widget _dpAvatar() {
     return Stack(alignment: Alignment.bottomRight, children: [
@@ -526,7 +527,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return json.decode(res.body)['secure_url'] as String;
   }
 
-    Future<void> _changeDP() async {
+  Future<void> _changeDP() async {
     try {
       final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 512, imageQuality: 80);
       if (x == null) return;
@@ -535,12 +536,13 @@ class _HomeScreenState extends State<HomeScreen> {
       final url = await _uploadDPToCloudinary(bytes);
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"photoUrl": url});
       if (mounted) setState(() => myPhotoUrl = url);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP lag gayi âœ…")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP lag gayi \u2705")));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("DP fail: $e")));
     }
   }
-
+    
+  @override Widget build(BuildContext context) {
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
       Row(children: [InkWell(onTap: _changeDP, child: _dpAvatar()), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), InkWell(onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => BuyCoinsScreen(mobile: widget.mobile))); }, child: Text("\u{1FA99} $myCoins", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))), const SizedBox(width: 8), Text("Rs $wallet", style: const TextStyle(color: Colors.white70)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
       const SizedBox(height: 16),
@@ -1637,4 +1639,58 @@ class _BlockReportScreenState extends State<BlockReportScreen> {
   }
 
 
+}
+
+class _CropDialog extends StatefulWidget {
+  final Uint8List originalBytes;
+  const _CropDialog({required this.originalBytes});
+  @override
+  State<_CropDialog> createState() => _CropDialogState();
+}
+
+class _CropDialogState extends State<_CropDialog> {
+  double _scale = 1.0;
+  double _prevScale = 1.0;
+  Offset _offset = Offset.zero;
+  Offset _prevOffset = Offset.zero;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.black,
+      insetPadding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onScaleStart: (d) {
+                _prevScale = _scale;
+                _prevOffset = _offset;
+              },
+              onScaleUpdate: (d) {
+                setState(() {
+                  _scale = (_prevScale * d.scale).clamp(0.5, 3.0);
+                  _offset = _prevOffset + d.focalPointDelta;
+                });
+              },
+              child: ClipRect(
+                child: Transform(
+                  transform: Matrix4.identity()..translate(_offset.dx, _offset.dy)..scale(_scale),
+                  child: Image.memory(widget.originalBytes, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+              ElevatedButton(onPressed: () => Navigator.pop(context, widget.originalBytes), child: const Text("Done")),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
