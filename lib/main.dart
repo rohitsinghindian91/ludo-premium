@@ -382,6 +382,14 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: 12),
       Container(margin: const EdgeInsets.only(bottom: 12), width: double.infinity, height: 54, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LuckyWheelScreen(mobile: widget.mobile))), icon: const Text("ðŸŽ¡", style: TextStyle(fontSize: 20)), label: const Text("LUCKY WHEEL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
       Container(margin: const EdgeInsets.only(bottom: 12), width: double.infinity, height: 54, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DailyTasksScreen(mobile: widget.mobile))), icon: const Text("ðŸ“‹", style: TextStyle(fontSize: 20)), label: const Text("DAILY TASKS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
+      Row(children: [
+        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopScreen(mobile: widget.mobile))), icon: const Text("ðŸ›’", style: TextStyle(fontSize: 18)), label: const Text("SHOP", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEC4899), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
+        const SizedBox(width: 8),
+        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())), icon: const Text("ðŸ†", style: TextStyle(fontSize: 18)), label: const Text("TOP", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
+        const SizedBox(width: 8),
+        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TournamentScreen(mobile: widget.mobile))), icon: const Text("ðŸŽ¯", style: TextStyle(fontSize: 18)), label: const Text("EVENT", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
+      ]),
+      const SizedBox(height: 8),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton.icon(
         onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const VoiceLobbyScreen())); },
         icon: const Icon(Icons.mic, color: Colors.white),
@@ -851,6 +859,310 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
           ]));
         })),
       ]),
+    );
+  }
+}
+
+
+class ShopScreen extends StatefulWidget {
+  final String mobile;
+  const ShopScreen({super.key, required this.mobile});
+  @override State<ShopScreen> createState() => _ShopScreenState();
+}
+
+class _ShopScreenState extends State<ShopScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabCtrl;
+  List<Map<String,dynamic>> frames = [];
+  List<Map<String,dynamic>> effects = [];
+  List<Map<String,dynamic>> vips = [];
+  int myCoins = 0;
+  bool loading = true;
+
+  @override void initState() { super.initState(); _tabCtrl = TabController(length: 3, vsync: this); _loadShop(); }
+
+  Future<void> _loadShop() async {
+    try {
+      final userDoc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
+      myCoins = userDoc.data()?["coins"] ?? 0;
+      
+      final framesSnap = await FirebaseFirestore.instance.collection("shop_frames").get();
+      frames = framesSnap.docs.map((d)=> {"id":d.id, ...d.data()}).toList();
+      
+      final effectsSnap = await FirebaseFirestore.instance.collection("shop_effects").get();
+      effects = effectsSnap.docs.map((d)=> {"id":d.id, ...d.data()}).toList();
+      
+      final vipsSnap = await FirebaseFirestore.instance.collection("shop_vip").get();
+      vips = vipsSnap.docs.map((d)=> {"id":d.id, ...d.data()}).toList();
+      
+      if (vips.isEmpty) {
+        vips = [
+          {"id":"vip_bronze","name":"Bronze VIP","price":1000,"days":30,"color":"CD7F32","perks":["Bronze Frame","â­ Entry","2x Coins"]},
+          {"id":"vip_silver","name":"Silver VIP","price":2500,"days":30,"color":"C0C0C0","perks":["Silver Frame","ðŸ”¥ Entry","3x Coins","Room Theme"]},
+          {"id":"vip_gold","name":"Gold VIP","price":5000,"days":30,"color":"FFD700","perks":["Gold Frame","âš¡ Entry + Popup","5x Coins","All Themes","PK Bonus"]},
+          {"id":"vip_diamond","name":"Diamond VIP","price":10000,"days":30,"color":"00FFFF","perks":["Diamond Frame","ðŸ¦š Phoenix Entry","10x Coins","All Themes","PK Bonus","Custom Badge"]},
+        ];
+      }
+      
+      if (frames.isEmpty) {
+        frames = [
+          {"id":"frame_bronze","name":"Bronze Frame","price":500,"level":3,"image":"ðŸ¥‰"},
+          {"id":"frame_silver","name":"Silver Frame","price":1500,"level":5,"image":"ðŸ¥ˆ"},
+          {"id":"frame_gold","name":"Gold Frame","price":3000,"level":7,"image":"ðŸ¥‡"},
+          {"id":"frame_diamond","name":"Diamond Frame","price":6000,"level":9,"image":"ðŸ’Ž"},
+          {"id":"frame_royal","name":"Royal Frame","price":12000,"level":11,"image":"ðŸ‘‘"},
+        ];
+      }
+      
+      if (effects.isEmpty) {
+        effects = [
+          {"id":"effect_stars","name":"Stars Entry","price":800,"level":4,"emoji":"â­"},
+          {"id":"effect_fire","name":"Fire Entry","price":2000,"level":6,"emoji":"ðŸ”¥"},
+          {"id":"effect_lightning","name":"Lightning Entry","price":4000,"level":8,"emoji":"âš¡"},
+          {"id":"effect_phoenix","name":"Phoenix Entry","price":8000,"level":10,"emoji":"ðŸ¦š"},
+          {"id":"effect_dragon","name":"Dragon Entry","price":15000,"level":15,"emoji":"ðŸ‰"},
+        ];
+      }
+      
+      if (mounted) setState(() => loading = false);
+    } catch (e) { if (mounted) setState(() => loading = false); }
+  }
+
+  Future<void> _buyItem(String collection, String itemId, int price, String name) async {
+    if (myCoins < price) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Coins kam hain! Need $price, you have $myCoins"))); return; }
+    
+    final confirm = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      title: Text("Buy $name?", style: const TextStyle(color: Colors.white)),
+      content: Text("$price coins lagenge. Pakka kharidna hai?", style: const TextStyle(color: Colors.white70)),
+      actions: [TextButton(onPressed: ()=> Navigator.pop(context, false), child: const Text("Cancel")), TextButton(onPressed: ()=> Navigator.pop(context, true), child: const Text("Buy"))],
+    ));
+    
+    if (confirm != true) return;
+    
+    try {
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"coins": FieldValue.increment(-price)});
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("purchases").doc(itemId).set({
+        "itemId": itemId, "name": name, "price": price, "boughtAt": FieldValue.serverTimestamp(), "type": collection
+      });
+      
+      if (collection == "shop_vip") {
+        final days = vips.firstWhere((v)=> v["id"]==itemId, orElse: ()=> {"days":30})["days"] as int;
+        await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({
+          "vip": itemId, "vipExpiry": DateTime.now().add(Duration(days: days)).millisecondsSinceEpoch
+        });
+      }
+      
+      if (mounted) setState(() => myCoins -= price);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$name kharid liya! ðŸŽ‰")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
+
+  @override Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(
+        title: const Text("ðŸ›’ Shop", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF1E293B),
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [Container(margin: const EdgeInsets.all(8), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(20)), child: Row(children: [const Text("ðŸª™", style: TextStyle(fontSize: 16)), const SizedBox(width: 4), Text("$myCoins", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))]))],
+        bottom: TabBar(controller: _tabCtrl, tabs: const [Tab(text: "VIP ðŸ‘‘"), Tab(text: "Frames ðŸ–¼ï¸"), Tab(text: "Effects ðŸŽ†")]),
+      ),
+      body: loading ? const Center(child: CircularProgressIndicator()) : TabBarView(controller: _tabCtrl, children: [
+        // VIP TAB
+        ListView.builder(padding: const EdgeInsets.all(12), itemCount: vips.length, itemBuilder: (_, i){
+          final vip = vips[i];
+          return Container(margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(int.parse("0xFF${vip["color"]}")), Color(int.parse("0xFF${vip["color"]}")).withOpacity(0.5)]), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white24)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [Text(vip["name"], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)), const Spacer(), Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)), child: Text("${vip["price"]} ðŸª™", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)))]),
+            const SizedBox(height: 8),
+            ... (vip["perks"] as List).map((p)=> Padding(padding: const EdgeInsets.only(bottom: 4), child: Row(children: [const Text("âœ“ ", style: TextStyle(color: Colors.white)), Text(p, style: const TextStyle(color: Colors.white70, fontSize: 13))]))),
+            const SizedBox(height: 12),
+            SizedBox(width: double.infinity, child: ElevatedButton(onPressed: ()=> _buyItem("shop_vip", vip["id"], vip["price"], vip["name"]), style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black), child: Text("Buy ${vip["name"]} - ${vip["days"]} days"))),
+          ]));
+        }),
+        // FRAMES TAB
+        GridView.builder(padding: const EdgeInsets.all(12), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.8, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: frames.length, itemBuilder: (_, i){
+          final fr = frames[i];
+          return Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)), child: Column(children: [
+            Text(fr["image"]??"ðŸ–¼ï¸", style: const TextStyle(fontSize: 40)),
+            const SizedBox(height: 8),
+            Text(fr["name"], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
+            Text("Lv.${fr["level"]}", style: const TextStyle(color: Colors.white54, fontSize: 11)),
+            const Spacer(),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text("${fr["price"]} ðŸª™", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, child: ElevatedButton(onPressed: ()=> _buyItem("shop_frames", fr["id"], fr["price"], fr["name"]), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED), padding: const EdgeInsets.symmetric(vertical: 8)), child: const Text("Buy", style: TextStyle(fontSize: 12)))),
+          ]));
+        }),
+        // EFFECTS TAB
+        GridView.builder(padding: const EdgeInsets.all(12), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.8, crossAxisSpacing: 12, mainAxisSpacing: 12), itemCount: effects.length, itemBuilder: (_, i){
+          final ef = effects[i];
+          return Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)), child: Column(children: [
+            Text(ef["emoji"]??"âœ¨", style: const TextStyle(fontSize: 40)),
+            const SizedBox(height: 8),
+            Text(ef["name"], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
+            Text("Lv.${ef["level"]}", style: const TextStyle(color: Colors.white54, fontSize: 11)),
+            const Spacer(),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text("${ef["price"]} ðŸª™", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, child: ElevatedButton(onPressed: ()=> _buyItem("shop_effects", ef["id"], ef["price"], ef["name"]), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEC4899), padding: const EdgeInsets.symmetric(vertical: 8)), child: const Text("Buy", style: TextStyle(fontSize: 12)))),
+          ]));
+        }),
+      ]),
+    );
+  }
+}
+
+class LeaderboardScreen extends StatefulWidget {
+  const LeaderboardScreen({super.key});
+  @override State<LeaderboardScreen> createState() => _LeaderboardScreenState();
+}
+
+class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabCtrl;
+  List<Map<String,dynamic>> topCoins = [];
+  List<Map<String,dynamic>> topLevel = [];
+  List<Map<String,dynamic>> topGifts = [];
+  bool loading = true;
+
+  @override void initState() { super.initState(); _tabCtrl = TabController(length: 3, vsync: this); _loadLeaderboards(); }
+
+  Future<void> _loadLeaderboards() async {
+    try {
+      final coinsSnap = await FirebaseFirestore.instance.collection("users").orderBy("coins", descending: true).limit(20).get();
+      topCoins = coinsSnap.docs.map((d)=> {"mobile":d.id, ...d.data()}).toList();
+      
+      final levelSnap = await FirebaseFirestore.instance.collection("users").orderBy("xp", descending: true).limit(20).get();
+      topLevel = levelSnap.docs.map((d)=> {"mobile":d.id, ...d.data()}).toList();
+      
+      final giftsSnap = await FirebaseFirestore.instance.collection("users").orderBy("totalGiftsSent", descending: true).limit(20).get();
+      topGifts = giftsSnap.docs.map((d)=> {"mobile":d.id, ...d.data()}).toList();
+      
+      if (mounted) setState(() => loading = false);
+    } catch (e) { if (mounted) setState(() => loading = false); }
+  }
+
+  Widget _buildList(List<Map<String,dynamic>> list, String valueKey, String suffix) {
+    if (list.isEmpty) return const Center(child: Text("Koi data nahi", style: TextStyle(color: Colors.white54)));
+    return ListView.builder(padding: const EdgeInsets.all(12), itemCount: list.length, itemBuilder: (_, i){
+      final u = list[i];
+      final rank = i+1;
+      String medal = "";
+      Color rankColor = Colors.white54;
+      if (rank==1) { medal="ðŸ¥‡"; rankColor=const Color(0xFFFFD700); }
+      else if (rank==2) { medal="ðŸ¥ˆ"; rankColor=const Color(0xFFC0C0C0); }
+      else if (rank==3) { medal="ðŸ¥‰"; rankColor=const Color(0xFFCD7F32); }
+      
+      return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: rank<=3 ? rankColor.withOpacity(0.15) : const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12), border: Border.all(color: rank<=3 ? rankColor.withOpacity(0.5) : Colors.white10)), child: Row(children: [
+        Container(width: 32, height: 32, decoration: BoxDecoration(color: rankColor.withOpacity(0.2), shape: BoxShape.circle), child: Center(child: Text(medal.isNotEmpty ? medal : "$rank", style: TextStyle(color: rankColor, fontWeight: FontWeight.bold, fontSize: medal.isNotEmpty ? 18 : 12)))),
+        const SizedBox(width: 12),
+        CircleAvatar(radius: 20, backgroundColor: const Color(0xFF0F172A), backgroundImage: u["photoUrl"]!=null ? NetworkImage(u["photoUrl"]) : null, child: u["photoUrl"]==null ? Text((u["name"]??"U")[0].toUpperCase(), style: const TextStyle(color: Colors.white)) : null),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(u["name"]??"Unknown", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)), Text("ID: ${u["idNo"]??u["mobile"]}", style: const TextStyle(color: Colors.white54, fontSize: 11))])),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text("${u[valueKey]??0} $suffix", style: TextStyle(color: rankColor, fontWeight: FontWeight.bold, fontSize: 14)), Text("Lv.${LevelSystem.getLevelFromXp(u["xp"]??0)}", style: const TextStyle(color: Colors.white54, fontSize: 11))]),
+      ]));
+    });
+  }
+
+  @override Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(title: const Text("ðŸ† Leaderboard", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white), bottom: TabBar(controller: _tabCtrl, tabs: const [Tab(text: "ðŸª™ Coins"), Tab(text: "ðŸ‘‘ Level"), Tab(text: "ðŸŽ Gifts")])),
+      body: loading ? const Center(child: CircularProgressIndicator()) : TabBarView(controller: _tabCtrl, children: [
+        _buildList(topCoins, "coins", "ðŸª™"),
+        _buildList(topLevel, "xp", "XP"),
+        _buildList(topGifts, "totalGiftsSent", "ðŸŽ"),
+      ]),
+    );
+  }
+}
+
+class TournamentScreen extends StatefulWidget {
+  final String mobile;
+  const TournamentScreen({super.key, required this.mobile});
+  @override State<TournamentScreen> createState() => _TournamentScreenState();
+}
+
+class _TournamentScreenState extends State<TournamentScreen> {
+  Map<String,dynamic>? activeTournament;
+  bool loading = true;
+  bool joined = false;
+
+  @override void initState() { super.initState(); _loadTournament(); }
+
+  Future<void> _loadTournament() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection("tournaments").where("active", isEqualTo: true).limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        activeTournament = {"id": snap.docs.first.id, ...snap.docs.first.data()};
+        final joinDoc = await FirebaseFirestore.instance.collection("tournaments").doc(activeTournament!["id"]).collection("participants").doc(widget.mobile).get();
+        joined = joinDoc.exists;
+      }
+      if (mounted) setState(() => loading = false);
+    } catch (e) { if (mounted) setState(() => loading = false); }
+  }
+
+  Future<void> _joinTournament() async {
+    if (activeTournament==null) return;
+    try {
+      await FirebaseFirestore.instance.collection("tournaments").doc(activeTournament!["id"]).collection("participants").doc(widget.mobile).set({
+        "mobile": widget.mobile, "joinedAt": FieldValue.serverTimestamp(), "score": 0
+      });
+      await FirebaseFirestore.instance.collection("tournaments").doc(activeTournament!["id"]).update({"participantsCount": FieldValue.increment(1)});
+      if (mounted) setState(() => joined = true);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tournament join ho gaya! ðŸŽ‰")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
+
+  @override Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(title: const Text("ðŸ† Tournament", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
+      body: loading ? const Center(child: CircularProgressIndicator()) : activeTournament==null ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Text("ðŸ†", style: TextStyle(fontSize: 60)),
+        const SizedBox(height: 16),
+        const Text("Koi active tournament nahi", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        const Text("Jald hi naya tournament ayega!", style: TextStyle(color: Colors.white54)),
+      ])) : SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
+        Container(width: double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFF8C00)]), borderRadius: BorderRadius.circular(20)), child: Column(children: [
+          Text(activeTournament!["name"]??"Weekly Tournament", style: const TextStyle(color: Colors.black, fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(activeTournament!["desc"]??"Sabse zyada Ludo jeeto!", style: const TextStyle(color: Colors.black87)),
+          const SizedBox(height: 16),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+            Column(children: [Text("${activeTournament!["prize"]??5000}", style: const TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold)), const Text("Prize ðŸª™", style: TextStyle(color: Colors.black87, fontSize: 12))]),
+            Container(width: 1, height: 40, color: Colors.black26),
+            Column(children: [Text("${activeTournament!["participantsCount"]??0}", style: const TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold)), const Text("Players", style: TextStyle(color: Colors.black87, fontSize: 12))]),
+            Container(width: 1, height: 40, color: Colors.black26),
+            Column(children: [Text("${activeTournament!["daysLeft"]??3} days", style: const TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold)), const Text("Left", style: TextStyle(color: Colors.black87, fontSize: 12))]),
+          ]),
+        ])),
+        const SizedBox(height: 20),
+        if (!joined) SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: _joinTournament, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("JOIN TOURNAMENT ðŸ†", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)))) 
+        else Container(width: double.infinity, padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: const Color(0xFF14532D), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF22C55E))), child: const Row(children: [Icon(Icons.check_circle, color: Color(0xFF22C55E)), SizedBox(width: 8), Text("Tournament me ho! Ludo khelo aur score badhao!", style: TextStyle(color: Colors.white))])),
+
+        const SizedBox(height: 20),
+        const Text("ðŸ† Top Players", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 12),
+        StreamBuilder<QuerySnapshot>(stream: FirebaseFirestore.instance.collection("tournaments").doc(activeTournament!["id"]).collection("participants").orderBy("score", descending: true).limit(10).snapshots(), builder: (_, snap){
+          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          final parts = snap.data!.docs;
+          if (parts.isEmpty) return const Text("Abhi koi participant nahi", style: TextStyle(color: Colors.white54));
+          return Column(children: parts.asMap().entries.map((e){
+            final i = e.key; final p = e.value.data() as Map<String,dynamic>;
+            return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(10)), child: Row(children: [
+              Text("${i+1}", style: TextStyle(color: i<3 ? const Color(0xFFFFD700) : Colors.white54, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 12),
+              Expanded(child: Text(p["mobile"]??"", style: const TextStyle(color: Colors.white))),
+              Text("${p["score"]??0} pts", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+            ]));
+          }).toList());
+        }),
+      ])),
     );
   }
 }
