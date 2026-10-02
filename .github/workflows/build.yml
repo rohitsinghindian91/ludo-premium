@@ -1,4 +1,4 @@
-name: Build APK - Fixed
+name: Build APK - Final
 on:
   push:
     branches: [ main ]
@@ -16,11 +16,35 @@ jobs:
         with:
           flutter-version: '3.22.0'
           channel: 'stable'
-          cache: true
+          cache: false
       - run: flutter clean
       - run: flutter pub get
+      - name: Fix gal plugin
+        run: |
+          FILE=$(find ~/.pub-cache -path "*/gal-2.3.3/android/build.gradle" | head -1)
+          echo "Patching $FILE"
+          cat > "$FILE" <<'EOF'
+          group 'studio.midorii.gal'
+          version '1.0'
+          buildscript {
+              ext.kotlin_version = '1.8.0'
+              repositories { google(); mavenCentral() }
+              dependencies { classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
+          }
+          rootProject.allprojects { repositories { google(); mavenCentral() } }
+          apply plugin: 'com.android.library'
+          apply plugin: 'kotlin-android'
+          android {
+              compileSdkVersion 34
+              defaultConfig { minSdkVersion 21 }
+              compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+              kotlinOptions { jvmTarget = '1.8' }
+          }
+          dependencies { implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version" }
+          EOF
+          cat "$FILE"
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
-          name: apk
+          name: apk-release
           path: build/app/outputs/flutter-apk/app-release.apk
