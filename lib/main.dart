@@ -169,7 +169,7 @@ class _OtpPageState extends State<OtpPage> {
       final newId = await genUniqueUserId();
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).set({
         "name": widget.name, "mobile": widget.mobile, "password": widget.password,
-        "referralCode": widget.mobile, "referredBy": widget.referral, "wallet": 0, "upi": "",
+        "referralCode": newId, "referCode": newId, "myReferCode": newId, "myReferralCode": newId, "idNo": newId, "idNumber": newId, "referredBy": widget.referral, "wallet": 0, "upi": "",
         "deviceId": devId,
         "gameId": newId, "voiceRoomNo": newId,
         "isPremium": false, "premiumExpiry": null, "premiumDistributed": false, "createdAt": FieldValue.serverTimestamp(),
@@ -270,6 +270,63 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int wallet = 0; int myCoins = 0; String myCode = ""; String referredBy = ""; bool isPrem = false; String expiry = ""; String myName = ""; String referredByName = ""; String myIdNo = ""; String myPhotoUrl = "";
+  
+  // ===== FINAL: Force Update - Purani APK me ID login block =====
+  static const String currentAppVersion = "8.0";
+  bool _forceUpdateChecked = false;
+  bool _isOldApk = false;
+  Future<bool> _checkForceUpdate() async {
+    try {
+      final versionDoc = await FirebaseFirestore.instance.collection("config").doc("appVersion").get();
+      if (!versionDoc.exists) return false;
+      final data = versionDoc.data()!;
+      final latestVersion = (data["latestVersion"] ?? "8.0").toString();
+      final forceUpdate = data["forceUpdate"] ?? false;
+      final minVersion = (data["minVersion"] ?? "8.0").toString();
+      final updateMessage = data["message"] ?? "Naya APK update aa gaya hai! Purana APK ab kaam nahi karega. Naya APK download karo.";
+      bool isOld = false;
+      try {
+        final curr = double.parse(currentAppVersion);
+        final min = double.parse(minVersion);
+        if (curr < min) isOld = true;
+      } catch (_) {
+        isOld = currentAppVersion != latestVersion && forceUpdate;
+      }
+      if (isOld && forceUpdate) {
+        _isOldApk = true;
+        if (mounted) {
+          showDialog(barrierDismissible: false, context: context, builder: (_) => AlertDialog(
+            backgroundColor: const Color(0xFF1E293B),
+            title: const Row(children: [Icon(Icons.system_update, color: Colors.orange, size: 28), SizedBox(width: 8), Text("APK Updated!", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]),
+            content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(updateMessage, style: const TextStyle(color: Colors.white70)),
+              const SizedBox(height: 12),
+              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFF7F1D1D), borderRadius: BorderRadius.circular(8)), child: const Row(children: [Icon(Icons.error, color: Colors.white, size: 18), SizedBox(width: 8), Expanded(child: Text("ID Login purani APK me band hai! Naya APK download karo.", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)))])),
+            ]),
+            actions: [ElevatedButton(onPressed: (){ Navigator.pop(context); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)), child: const Text("OK"))],
+          ));
+        }
+        return true;
+      }
+      return false;
+    } catch (e) { return false; }
+  }
+  Future<bool> _blockIfOldApkIdLogin() async {
+    if (!_forceUpdateChecked) {
+      _forceUpdateChecked = true;
+      final isOld = await _checkForceUpdate();
+      if (isOld) return true;
+    }
+    if (_isOldApk) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("APK Updated! Naya APK download karo - ID login purani APK me band hai!"), backgroundColor: Colors.red, duration: Duration(seconds: 3)));
+      }
+      return true;
+    }
+    return false;
+  }
+
+
   @override void initState() { super.initState(); checkDeviceBan(); listenUser(); }
   Future<void> checkDeviceBan() async {
     if (await isDeviceBanned()) {
@@ -359,20 +416,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _changeDP() async {
     try {
-      final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 512, imageQuality: 80);
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 85);
       if (x == null) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP upload ho rahi hai...")));
       final bytes = await x.readAsBytes();
-      final url = await _uploadDPToCloudinary(bytes);
+      final cropped = await showDialog<Uint8List>(context: context, builder: (_) => _CropDialog(originalBytes: bytes));
+      if (cropped == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP upload ho rahi hai...")));
+      final url = await _uploadDPToCloudinary(cropped);
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"photoUrl": url});
       if (mounted) setState(() => myPhotoUrl = url);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP lag gayi \u2705")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP change ho gayi!")));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("DP fail: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("DP Error: $e")));
     }
   }
+
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
-      Row(children: [InkWell(onTap: _changeDP, child: _dpAvatar()), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), InkWell(onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => BuyCoinsScreen(mobile: widget.mobile))); }, child: Text("\u{1FA99} $myCoins", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))), const SizedBox(width: 8), Text("Rs $wallet", style: const TextStyle(color: Colors.white70)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
+      Row(children: [InkWell(onTap: _changeDP, child: _dpAvatar()), const SizedBox(width: 8), Text(myName.isNotEmpty ? myName : widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), InkWell(onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => BuyCoinsScreen(mobile: widget.mobile))); }, child: Text("\u{1FA99} $myCoins", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))), const SizedBox(width: 8), Text("Rs $wallet", style: const TextStyle(color: Colors.white70)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
       const SizedBox(height: 16),
       Container(width: double.infinity, padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: LinearGradient(colors: isPrem? [Colors.amber, Colors.orange] : [const Color(0xFF1E293B), const Color(0xFF151A2B)]), borderRadius: BorderRadius.circular(16)), child: Text(isPrem? "PREMIUM ACTIVE Till $expiry" : "FREE USER - Buy Premium", style: TextStyle(color: isPrem? Colors.black : Colors.white, fontWeight: FontWeight.bold))),
       const SizedBox(height: 12),
@@ -383,11 +443,19 @@ class _HomeScreenState extends State<HomeScreen> {
       Container(margin: const EdgeInsets.only(bottom: 12), width: double.infinity, height: 54, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LuckyWheelScreen(mobile: widget.mobile))), icon: const Text("ðŸŽ¡", style: TextStyle(fontSize: 20)), label: const Text("LUCKY WHEEL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
       Container(margin: const EdgeInsets.only(bottom: 12), width: double.infinity, height: 54, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DailyTasksScreen(mobile: widget.mobile))), icon: const Text("ðŸ“‹", style: TextStyle(fontSize: 20)), label: const Text("DAILY TASKS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
       Row(children: [
-        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopScreen(mobile: widget.mobile))), icon: const Text("ðŸ›’", style: TextStyle(fontSize: 18)), label: const Text("SHOP", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEC4899), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
+        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PrivateRoomScreen(mobile: widget.mobile))), icon: const Icon(Icons.lock, size: 18), label: const Text("PRIVATE", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1F2937), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
+        const SizedBox(width: 6),
+        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StreakScreen(mobile: widget.mobile))), icon: const Icon(Icons.local_fire_department, size: 18), label: const Text("STREAK", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6B35), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
+        const SizedBox(width: 6),
+        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FollowSystemScreen(mobile: widget.mobile))), icon: const Icon(Icons.people, size: 18), label: const Text("FOLLOW", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
+      ]),
+      const SizedBox(height: 6),
+      Row(children: [
+        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShopScreen(mobile: widget.mobile))), icon: const Icon(Icons.shopping_cart, size: 18), label: const Text("SHOP", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEC4899), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
         const SizedBox(width: 8),
-        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())), icon: const Text("ðŸ†", style: TextStyle(fontSize: 18)), label: const Text("TOP", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
+        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())), icon: const Icon(Icons.emoji_events, size: 18), label: const Text("TOP", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
         const SizedBox(width: 8),
-        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TournamentScreen(mobile: widget.mobile))), icon: const Text("ðŸŽ¯", style: TextStyle(fontSize: 18)), label: const Text("EVENT", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
+        Expanded(child: SizedBox(height: 48, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TournamentScreen(mobile: widget.mobile))), icon: const Icon(Icons.event, size: 18), label: const Text("EVENT", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))))),
       ]),
       const SizedBox(height: 8),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton.icon(
@@ -1165,4 +1233,323 @@ class _TournamentScreenState extends State<TournamentScreen> {
       ])),
     );
   }
+}
+
+
+class PrivateRoomScreen extends StatefulWidget {
+  final String mobile;
+  const PrivateRoomScreen({super.key, required this.mobile});
+  @override State<PrivateRoomScreen> createState() => _PrivateRoomScreenState();
+}
+
+class _PrivateRoomScreenState extends State<PrivateRoomScreen> {
+  final _nameCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  bool isPrivate = true;
+  bool loading = false;
+
+  Future<void> _createPrivateRoom() async {
+    final name = _nameCtrl.text.trim();
+    final pass = _passCtrl.text.trim();
+    if (name.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Room naam likho"))); return; }
+    if (isPrivate && pass.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password likho"))); return; }
+    
+    setState(() => loading = true);
+    try {
+      final roomNo = (1000000 + DateTime.now().millisecondsSinceEpoch % 9000000).toString();
+      await FirebaseFirestore.instance.collection("private_rooms").doc(roomNo).set({
+        "roomNo": roomNo,
+        "name": name,
+        "password": isPrivate ? pass : "",
+        "isPrivate": isPrivate,
+        "owner": widget.mobile,
+        "createdAt": FieldValue.serverTimestamp(),
+        "members": [widget.mobile],
+      });
+      
+      // Also create in RTDB for voice
+      await FirebaseDatabase.instance.ref("vRooms/$roomNo/info").set({
+        "name": name,
+        "owner": widget.mobile,
+        "isPrivate": isPrivate,
+        "password": isPrivate ? pass : "",
+        "createdAt": DateTime.now().millisecondsSinceEpoch,
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Private Room $roomNo bana! ðŸŽ‰")));
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => VoiceRoomScreen(roomNo: roomNo)));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+    if (mounted) setState(() => loading = false);
+  }
+
+  @override Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(title: const Text("ðŸ”’ Private Room", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
+      body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
+        Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text("Room Name", style: TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          TextField(controller: _nameCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "Mera Private Room", hintStyle: const TextStyle(color: Colors.white54), filled: true, fillColor: const Color(0xFF0A0E1A), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), prefixIcon: const Icon(Icons.meeting_room, color: Colors.white54))),
+          const SizedBox(height: 16),
+          Row(children: [
+            const Text("Private Room?", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Switch(value: isPrivate, onChanged: (v)=> setState(()=> isPrivate=v), activeColor: const Color(0xFFFBBF24)),
+          ]),
+          if (isPrivate) ...[
+            const SizedBox(height: 12),
+            const Text("Password", style: TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            TextField(controller: _passCtrl, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "1234", hintStyle: const TextStyle(color: Colors.white54), filled: true, fillColor: const Color(0xFF0A0E1A), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), prefixIcon: const Icon(Icons.lock, color: Colors.white54))),
+          ],
+        ])),
+        const SizedBox(height: 20),
+        SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: loading ? null : _createPrivateRoom, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFBBF24), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: loading ? const CircularProgressIndicator(color: Colors.black) : const Text("CREATE PRIVATE ROOM ðŸ”’", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)))),
+        const SizedBox(height: 20),
+        Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF14532D), borderRadius: BorderRadius.circular(12)), child: const Row(children: [Icon(Icons.info, color: Color(0xFF22C55E)), SizedBox(width: 8), Expanded(child: Text("Private room me sirf password wale aa sakte hain. Invite link share karo!", style: TextStyle(color: Colors.white, fontSize: 12)))])),
+      ])),
+    );
+  }
+}
+
+class FollowSystemScreen extends StatefulWidget {
+  final String mobile;
+  const FollowSystemScreen({super.key, required this.mobile});
+  @override State<FollowSystemScreen> createState() => _FollowSystemScreenState();
+}
+
+class _FollowSystemScreenState extends State<FollowSystemScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabCtrl;
+  List<Map<String,dynamic>> followers = [];
+  List<Map<String,dynamic>> following = [];
+  bool loading = true;
+
+  @override void initState() { super.initState(); _tabCtrl = TabController(length: 2, vsync: this); _loadFollows(); }
+
+  Future<void> _loadFollows() async {
+    try {
+      final followersSnap = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("followers").get();
+      followers = followersSnap.docs.map((d)=> {"id":d.id, ...d.data()}).toList();
+      
+      final followingSnap = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("following").get();
+      following = followingSnap.docs.map((d)=> {"id":d.id, ...d.data()}).toList();
+      
+      if (mounted) setState(() => loading = false);
+    } catch (e) { if (mounted) setState(() => loading = false); }
+  }
+
+  Future<void> _unfollow(String targetMobile) async {
+    try {
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("following").doc(targetMobile).delete();
+      await FirebaseFirestore.instance.collection("users").doc(targetMobile).collection("followers").doc(widget.mobile).delete();
+      if (mounted) setState(() => following.removeWhere((f)=> f["id"]==targetMobile));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Unfollowed")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
+
+  Widget _buildList(List<Map<String,dynamic>> list, bool isFollowers) {
+    if (list.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(isFollowers ? "ðŸ‘¥" : "ðŸ’«", style: const TextStyle(fontSize: 50)), const SizedBox(height: 12), Text(isFollowers ? "Koi follower nahi" : "Kisi ko follow nahi kiya", style: const TextStyle(color: Colors.white54))])); 
+    return ListView.builder(padding: const EdgeInsets.all(12), itemCount: list.length, itemBuilder: (_, i){
+      final u = list[i];
+      return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)), child: Row(children: [
+        CircleAvatar(radius: 22, backgroundColor: const Color(0xFF0F172A), backgroundImage: u["photoUrl"]!=null ? NetworkImage(u["photoUrl"]) : null, child: u["photoUrl"]==null ? Text((u["name"]??"U")[0], style: const TextStyle(color: Colors.white)) : null),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(u["name"]??"Unknown", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)), Text("ID: ${u["idNo"]??u["id"]}", style: const TextStyle(color: Colors.white54, fontSize: 11))])),
+        if (!isFollowers) ElevatedButton(onPressed: ()=> _unfollow(u["id"]), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7F1D1D)), child: const Text("Unfollow", style: TextStyle(fontSize: 11))),
+      ]));
+    });
+  }
+
+  @override Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(title: const Text("ðŸ‘¥ Follow System", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white), bottom: TabBar(controller: _tabCtrl, tabs: [Tab(text: "Followers (${followers.length})"), Tab(text: "Following (${following.length})")])),
+      body: loading ? const Center(child: CircularProgressIndicator()) : TabBarView(controller: _tabCtrl, children: [_buildList(followers, true), _buildList(following, false)]),
+    );
+  }
+}
+
+class StreakScreen extends StatefulWidget {
+  final String mobile;
+  const StreakScreen({super.key, required this.mobile});
+  @override State<StreakScreen> createState() => _StreakScreenState();
+}
+
+class _StreakScreenState extends State<StreakScreen> {
+  int currentStreak = 0;
+  int maxStreak = 0;
+  List<bool> weekDays = List.filled(7, false);
+  bool loading = true;
+
+  @override void initState() { super.initState(); _loadStreak(); }
+
+  Future<void> _loadStreak() async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
+      final data = doc.data();
+      currentStreak = data?["currentStreak"] ?? 0;
+      maxStreak = data?["maxStreak"] ?? 0;
+      
+      // Load last 7 days login
+      final today = DateTime.now();
+      for (int i=0; i<7; i++) {
+        final date = today.subtract(Duration(days: 6-i));
+        final key = "${date.year}-${date.month}-${date.day}";
+        final loginDoc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("logins").doc(key).get();
+        weekDays[i] = loginDoc.exists;
+      }
+      
+      if (mounted) setState(() => loading = false);
+    } catch (e) { if (mounted) setState(() => loading = false); }
+  }
+
+  Future<void> _claimDaily() async {
+    try {
+      final today = DateTime.now();
+      final key = "${today.year}-${today.month}-${today.day}";
+      final doc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("logins").doc(key).get();
+      if (doc.exists) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Aaj ka reward le liya hai!"))); return; }
+      
+      int reward = 10;
+      if (currentStreak >= 7) reward = 50;
+      else if (currentStreak >= 3) reward = 20;
+      
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("logins").doc(key).set({"at": FieldValue.serverTimestamp(), "streak": currentStreak+1});
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({
+        "coins": FieldValue.increment(reward),
+        "currentStreak": currentStreak+1,
+        "maxStreak": currentStreak+1 > maxStreak ? currentStreak+1 : maxStreak,
+        "xp": FieldValue.increment(5),
+      });
+      
+      if (mounted) setState(() { weekDays[6] = true; currentStreak++; if (currentStreak > maxStreak) maxStreak = currentStreak; });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("+$reward coins! Streak: $currentStreak ðŸ”¥")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
+
+  @override Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(title: const Text("ðŸ”¥ Daily Streak", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
+      body: loading ? const Center(child: CircularProgressIndicator()) : SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
+        Container(width: double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFF6B35), Color(0xFFF7931E)]), borderRadius: BorderRadius.circular(20)), child: Column(children: [
+          const Icon(Icons.local_fire_department, style: TextStyle(fontSize: 50)),
+          const SizedBox(height: 8),
+          Text("$currentStreak Days", style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+          const Text("Current Streak", style: TextStyle(color: Colors.white70)),
+          const SizedBox(height: 16),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+            Column(children: [Text("$currentStreak", style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)), const Text("Current", style: TextStyle(color: Colors.white70, fontSize: 12))]),
+            Container(width: 1, height: 40, color: Colors.white30),
+            Column(children: [Text("$maxStreak", style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)), const Text("Best", style: TextStyle(color: Colors.white70, fontSize: 12))]),
+          ]),
+        ])),
+        const SizedBox(height: 20),
+        const Text("Last 7 Days", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 12),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: List.generate(7, (i){
+          final done = weekDays[i];
+          return Column(children: [
+            Container(width: 40, height: 40, decoration: BoxDecoration(color: done ? const Color(0xFF22C55E) : const Color(0xFF1E293B), shape: BoxShape.circle, border: Border.all(color: done ? const Color(0xFF22C55E) : Colors.white24)), child: Center(child: done ? const Icon(Icons.check, color: Colors.white, size: 20) : Text("${i+1}", style: const TextStyle(color: Colors.white54)))),
+            const SizedBox(height: 4),
+            Text(["M","T","W","T","F","S","S"][i], style: const TextStyle(color: Colors.white54, fontSize: 11)),
+          ]);
+        })),
+        const SizedBox(height: 20),
+        SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: _claimDaily, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6B35), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("CLAIM TODAY'S REWARD ðŸŽ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)))),
+        const SizedBox(height: 16),
+        Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text("Rewards:", style: TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.bold)),
+          SizedBox(height: 8),
+          Text("â€¢ Day 1-2: 10 coins", style: TextStyle(color: Colors.white70, fontSize: 12)),
+          Text("â€¢ Day 3-6: 20 coins + 5 XP", style: TextStyle(color: Colors.white70, fontSize: 12)),
+          Text("â€¢ Day 7+: 50 coins + 10 XP + Lucky Spin", style: TextStyle(color: Colors.white70, fontSize: 12)),
+          Text("â€¢ Miss 1 day = Streak reset!", style: TextStyle(color: Colors.red, fontSize: 12)),
+        ])),
+      ])),
+    );
+  }
+}
+
+class BlockReportScreen extends StatefulWidget {
+  final String mobile;
+  const BlockReportScreen({super.key, required this.mobile});
+  @override State<BlockReportScreen> createState() => _BlockReportScreenState();
+}
+
+class _BlockReportScreenState extends State<BlockReportScreen> {
+  List<Map<String,dynamic>> blocked = [];
+  bool loading = true;
+
+  @override void initState() { super.initState(); _loadBlocked(); }
+
+  Future<void> _loadBlocked() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("blocked").get();
+      blocked = snap.docs.map((d)=> {"id":d.id, ...d.data()}).toList();
+      if (mounted) setState(() => loading = false);
+    } catch (e) { if (mounted) setState(() => loading = false); }
+  }
+
+  Future<void> _unblock(String target) async {
+    try {
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("blocked").doc(target).delete();
+      if (mounted) setState(() => blocked.removeWhere((b)=> b["id"]==target));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Unblocked")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
+
+  @override Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(title: const Text("ðŸš« Block List", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
+      body: loading ? const Center(child: CircularProgressIndicator()) : blocked.isEmpty ? const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text("ðŸš«", style: TextStyle(fontSize: 50)), SizedBox(height: 12), Text("Koi blocked user nahi", style: TextStyle(color: Colors.white54))])) : ListView.builder(padding: const EdgeInsets.all(12), itemCount: blocked.length, itemBuilder: (_, i){
+        final b = blocked[i];
+        return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)), child: Row(children: [
+          const CircleAvatar(radius: 20, backgroundColor: Color(0xFF7F1D1D), child: Icon(Icons.block, color: Colors.white)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(b["name"]??"Unknown", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), Text("ID: ${b["id"]}", style: const TextStyle(color: Colors.white54, fontSize: 11))])),
+          ElevatedButton(onPressed: ()=> _unblock(b["id"]), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)), child: const Text("Unblock", style: TextStyle(fontSize: 11))),
+        ]));
+      }),
+    );
+  }
+
+class _CropDialog extends StatefulWidget {
+  final Uint8List originalBytes;
+  final bool isRoomDP;
+  const _CropDialog({required this.originalBytes, this.isRoomDP = false});
+  @override State<_CropDialog> createState() => _CropDialogState();
+}
+class _CropDialogState extends State<_CropDialog> {
+  bool isSquareCrop = true;
+  @override Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      title: Text(widget.isRoomDP ? "Room DP Crop Karo" : "DP Crop Karo", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(12)), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(widget.originalBytes, height: 200, fit: BoxFit.contain))),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=true), icon: Icon(isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Square (1:1)"), style: ElevatedButton.styleFrom(backgroundColor: isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: isSquareCrop ? Colors.black : Colors.white))),
+          const SizedBox(width: 8),
+          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=false), icon: Icon(!isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Original"), style: ElevatedButton.styleFrom(backgroundColor: !isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: !isSquareCrop ? Colors.black : Colors.white))),
+        ]),
+      ])),
+      actions: [TextButton(onPressed: ()=> Navigator.pop(context), child: const Text("Cancel")), ElevatedButton(onPressed: (){ Navigator.pop(context, widget.originalBytes); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)), child: const Text("Use This"))],
+    );
+  }
+}
+
 }
