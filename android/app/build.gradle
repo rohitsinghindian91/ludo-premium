@@ -21,7 +21,7 @@ if (flutterVersionName == null) {
 android {
     namespace "com.example.ludo_premium"
     compileSdk = 34
-    ndkVersion = "25.1.8937393"
+    ndkVersion = "27.0.12077973"
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -34,7 +34,7 @@ android {
     }
     defaultConfig {
         applicationId "com.example.ludo_premium"
-        minSdk = 21
+        minSdk = 23
         targetSdk = 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
