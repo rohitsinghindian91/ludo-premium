@@ -347,6 +347,16 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.camera_alt, size: 12, color: Colors.black)),
     ]);
   }
+  Future<String> _uploadDPToCloudinary(Uint8List bytes) async {
+    final req = http.MultipartRequest("POST", Uri.parse("https://api.cloudinary.com/v1_1/i5r1swhi/image/upload"))
+      ..fields['upload_preset'] = 'ludo_chat'
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'dp.jpg'));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (streamed.statusCode != 200) throw Exception("Cloudinary: ${res.body}");
+    return json.decode(res.body)['secure_url'] as String;
+  }
+
   Future<void> _changeDP() async {
     try {
       final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 512, imageQuality: 80);
@@ -370,7 +380,6 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: 16),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: () { if (!isPrem) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pehle Premium Lo"))); openPremium(); return; } Navigator.push(context, MaterialPageRoute(builder: (_) => LobbyScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("PLAY LUDO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
       const SizedBox(height: 12),
-      Container(margin: const EdgeInsets.only(bottom: 12), width: double.infinity, height: 54, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LuckyWheelScreen(mobile: widget.mobile))), icon: const Text("ðŸŽ¡", style: TextStyle(fontSize: 20)), label: const Text("LUCKY WHEEL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton.icon(
         onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const VoiceLobbyScreen())); },
         icon: const Icon(Icons.mic, color: Colors.white),
@@ -531,149 +540,4 @@ class _BuyCoinsScreenState extends State<BuyCoinsScreen> {
             style: TextStyle(color: Colors.white54, fontSize: 12)),
       ])));
   }
-}
-
-
-class LuckyWheelScreen extends StatefulWidget {
-  final String mobile;
-  const LuckyWheelScreen({super.key, required this.mobile});
-  @override State<LuckyWheelScreen> createState() => _LuckyWheelScreenState();
-}
-
-class _LuckyWheelScreenState extends State<LuckyWheelScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-  double _currentRotation = 0;
-  bool _spinning = false;
-  bool _canSpin = true;
-  int _lastSpinDay = 0;
-  int _streak = 1;
-  final List<Map<String, dynamic>> _rewards = [
-    {"label": "10 Coins", "coins": 10, "color": Color(0xFF22C55E), "icon": "ðŸª™"},
-    {"label": "50 Coins", "coins": 50, "color": Color(0xFF3B82F6), "icon": "ðŸ’°"},
-    {"label": "100 Coins", "coins": 100, "color": Color(0xFFF59E0B), "icon": "ðŸ’Ž"},
-    {"label": "5 Coins", "coins": 5, "color": Color(0xFFEF4444), "icon": "ðŸª™"},
-    {"label": "20 Coins", "coins": 20, "color": Color(0xFF8B5CF6), "icon": "ðŸ’°"},
-    {"label": "200 Coins", "coins": 200, "color": Color(0xFFEC4899), "icon": "ðŸŽ‰"},
-    {"label": "15 Coins", "coins": 15, "color": Color(0xFF06B6D4), "icon": "ðŸª™"},
-    {"label": "30 Coins", "coins": 30, "color": Color(0xFFF97316), "icon": "ðŸ’°"},
-  ];
-
-  @override void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 4));
-    _anim = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
-    _checkDaily();
-  }
-
-  Future<void> _checkDaily() async {
-    try {
-      final doc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
-      if (doc.exists) {
-        final data = doc.data()!;
-        final lastSpin = (data["lastWheelSpin"] ?? 0) as int;
-        final today = DateTime.now();
-        final todayDay = today.year * 10000 + today.month * 100 + today.day;
-        if (lastSpin == todayDay) {
-          if (mounted) setState(() => _canSpin = false);
-        }
-        if (mounted) setState(() => _streak = (data["wheelStreak"] ?? 1) as int);
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _spin() async {
-    if (_spinning || !_canSpin) return;
-    setState(() => _spinning = true);
-    
-    final random = (DateTime.now().millisecondsSinceEpoch % 8);
-    final targetIndex = random;
-    final reward = _rewards[targetIndex];
-    
-    final extraRotations = 5 + (DateTime.now().millisecond % 3);
-    final targetAngle = (2 * 3.14159 * extraRotations) + (2 * 3.14159 * targetIndex / _rewards.length) + (2 * 3.14159 / _rewards.length / 2);
-    
-    _anim = Tween<double>(begin: _currentRotation, end: _currentRotation + targetAngle).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
-    _ctrl.forward(from: 0);
-    
-    await Future.delayed(const Duration(seconds: 4));
-    
-    try {
-      final coins = reward["coins"] as int;
-      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({
-        "coins": FieldValue.increment(coins),
-        "lastWheelSpin": DateTime.now().year * 10000 + DateTime.now().month * 100 + DateTime.now().day,
-        "wheelStreak": _streak + 1,
-        "xp": FieldValue.increment(5),
-      });
-      
-      if (mounted) {
-        setState(() { _currentRotation += targetAngle; _spinning = false; _canSpin = false; _streak++; });
-        showDialog(context: context, builder: (_) => AlertDialog(
-          backgroundColor: const Color(0xFF1E293B),
-          title: Text("ðŸŽ‰ ${reward["icon"]} Jeet gaye!", style: const TextStyle(color: Colors.white)),
-          content: Text("Aapko ${reward["coins"]} coins mile!\nStreak: $_streak days", style: const TextStyle(color: Colors.white70)),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Awesome!"))],
-        ));
-      }
-    } catch (e) {
-      if (mounted) setState(() => _spinning = false);
-    }
-  }
-
-  @override void dispose() { _ctrl.dispose(); super.dispose(); }
-
-  @override Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0E1A),
-      appBar: AppBar(title: const Text("ðŸŽ¡ Lucky Wheel", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
-      body: Column(children: [
-        const SizedBox(height: 20),
-        Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: Colors.orange.withOpacity(0.2), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.orange)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.local_fire_department, color: Colors.orange, size: 20), const SizedBox(width: 6), Text("Streak: $_streak days ðŸ”¥", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold))])),
-        const SizedBox(height: 20),
-        Expanded(child: Center(child: Stack(alignment: Alignment.center, children: [
-          AnimatedBuilder(animation: _anim, builder: (_, __) {
-            return Transform.rotate(angle: _anim.value, child: CustomPaint(size: const Size(300, 300), painter: _WheelPainter(rewards: _rewards)));
-          }),
-          Container(width: 60, height: 60, decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.orange, width: 3)), child: const Icon(Icons.star, color: Colors.orange, size: 30)),
-          Positioned(top: 0, child: Transform.rotate(angle: 3.14, child: const Icon(Icons.arrow_drop_down, color: Colors.white, size: 50))),
-        ]))),
-        const SizedBox(height: 20),
-        Padding(padding: const EdgeInsets.all(16), child: Column(children: [
-          if (!_canSpin) Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(10)), child: const Row(children: [Icon(Icons.timer, color: Colors.redAccent), SizedBox(width: 8), Expanded(child: Text("Aaj ka spin ho gaya! Kal wapas aao", style: TextStyle(color: Colors.redAccent)))])),
-          const SizedBox(height: 12),
-          SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _canSpin && !_spinning ? _spin : null, style: ElevatedButton.styleFrom(backgroundColor: _canSpin ? Colors.orange : Colors.grey, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: Text(_spinning ? "Spinning..." : _canSpin ? "ðŸŽ¡ SPIN NOW!" : "â° Kal aana", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)))),
-          const SizedBox(height: 8),
-          const Text("Har din spin karo aur coins jeeto! Streak se bonus milta hai", style: TextStyle(color: Colors.white54, fontSize: 12), textAlign: TextAlign.center),
-        ])),
-      ]),
-    );
-  }
-}
-
-class _WheelPainter extends CustomPainter {
-  final List<Map<String, dynamic>> rewards;
-  _WheelPainter({required this.rewards});
-  @override void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    final paint = Paint()..style = PaintingStyle.fill;
-    final sweep = 2 * 3.14159 / rewards.length;
-    for (int i = 0; i < rewards.length; i++) {
-      paint.color = rewards[i]["color"] as Color;
-      canvas.drawArc(Rect.fromCircle(center: center, radius: radius), i * sweep, sweep, true, paint);
-      final textAngle = i * sweep + sweep / 2;
-      final textX = center.dx + (radius * 0.65) * 3.14159 / 3 * 0.6; // simplified
-      final textPainter = TextPainter(text: TextSpan(text: "${rewards[i]["icon"]}\n${rewards[i]["coins"]}", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)), textDirection: TextDirection.ltr, textAlign: TextAlign.center);
-      textPainter.layout();
-      canvas.save();
-      canvas.translate(center.dx + (radius * 0.6) * 0.6, center.dy);
-      canvas.rotate(textAngle + 1.57);
-      textPainter.paint(canvas, Offset(-textPainter.width / 2, -textPainter.height / 2));
-      canvas.restore();
-    }
-    final borderPaint = Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 3;
-    canvas.drawCircle(center, radius, borderPaint);
-  }
-  @override bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
