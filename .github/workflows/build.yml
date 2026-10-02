@@ -21,6 +21,8 @@ jobs:
         run: flutter pub get
       - name: Generate App Icon
         run: dart run flutter_launcher_icons
+      - name: Generate Native Splash
+        run: dart run flutter_native_splash:create
       - name: Build APK Release
         run: flutter build apk --release --split-per-abi --obfuscate --split-debug-info=./debug-info --no-tree-shake-icons
       - name: Upload APK
