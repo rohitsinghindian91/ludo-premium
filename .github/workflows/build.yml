@@ -19,7 +19,7 @@ jobs:
           cache: false
       - run: flutter clean
       - run: flutter pub get
-      - name: Fix gal plugin
+      - name: Fix gal plugin - namespace + sdk
         run: |
           FILE=$(find ~/.pub-cache -path "*/gal-2.3.3/android/build.gradle" | head -1)
           echo "Patching $FILE"
@@ -35,6 +35,7 @@ jobs:
           apply plugin: 'com.android.library'
           apply plugin: 'kotlin-android'
           android {
+              namespace 'studio.midorii.gal'
               compileSdkVersion 34
               defaultConfig { minSdkVersion 21 }
               compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
