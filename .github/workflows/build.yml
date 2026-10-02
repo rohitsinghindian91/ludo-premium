@@ -1,4 +1,4 @@
-name: Build APK - Final
+name: Build APK - Final Fixed
 on:
   push:
     branches: [ main ]
@@ -16,36 +16,26 @@ jobs:
         with:
           flutter-version: '3.22.0'
           channel: 'stable'
-          cache: false
       - run: flutter clean
       - run: flutter pub get
-      - name: Fix gal plugin - namespace + manifest
+      - name: Fix gal 2.3.3 namespace without deleting deps
         run: |
-          BASE=$(find ~/.pub-cache -type d -name "gal-2.3.3" | head -1)
-          FILE="$BASE/android/build.gradle"
-          MANIFEST="$BASE/android/src/main/AndroidManifest.xml"
-          cat > "$FILE" <<'EOF'
-          group 'studio.midorii.gal'
-          version '1.0'
-          buildscript {
-              ext.kotlin_version = '1.8.0'
-              repositories { google(); mavenCentral() }
-              dependencies { classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
-          }
-          rootProject.allprojects { repositories { google(); mavenCentral() } }
-          apply plugin: 'com.android.library'
-          apply plugin: 'kotlin-android'
-          android {
-              namespace 'studio.midoridesign.gal'
-              compileSdkVersion 34
-              defaultConfig { minSdkVersion 21 }
-              compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
-              kotlinOptions { jvmTarget = '1.8' }
-          }
-          dependencies { implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version" }
-          EOF
-          sed -i 's/package="studio.midoridesign.gal"//g' "$MANIFEST"
-          sed -i 's/package="studio.midorii.gal"//g' "$MANIFEST"
+          FILE=$(find ~/.pub-cache -name "build.gradle" -path "*gal-2.3.3*android*" | head -1)
+          MANIFEST=$(find ~/.pub-cache -name "AndroidManifest.xml" -path "*gal-2.3.3*android*" | head -1)
+          echo "Found $FILE"
+          cat "$FILE"
+          # sirf compileSdk update karo, pura file mat udao
+          sed -i "s/flutter.compileSdkVersion/34/g" "$FILE" || true
+          sed -i "s/flutter.minSdkVersion/21/g" "$FILE" || true
+          sed -i "s/flutter.targetSdkVersion/34/g" "$FILE" || true
+          # namespace agar nahi hai toh add karo, hai toh chhod do
+          if ! grep -q "namespace" "$FILE"; then
+            sed -i "/^android {/a \    namespace 'studio.midoridesign.gal'" "$FILE"
+          fi
+          # manifest se package attribute hatao
+          sed -i 's/package="studio.midoridesign.gal"//g' "$MANIFEST" || true
+          echo "--- AFTER FIX ---"
+          cat "$FILE"
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
