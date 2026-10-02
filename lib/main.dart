@@ -524,7 +524,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return json.decode(res.body)['secure_url'] as String;
   }
 
-  Future<void> _changeDP() async {
+    Future<void> _changeDP() async {
     try {
       final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 512, imageQuality: 80);
       if (x == null) return;
@@ -533,11 +533,12 @@ class _HomeScreenState extends State<HomeScreen> {
       final url = await _uploadDPToCloudinary(bytes);
       await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({"photoUrl": url});
       if (mounted) setState(() => myPhotoUrl = url);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP lag gayi \u2705")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("DP lag gayi âœ…")));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("DP fail: $e")));
     }
   }
+
     return Scaffold(backgroundColor: const Color(0xFF0A0E1A), body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
       Row(children: [InkWell(onTap: _changeDP, child: _dpAvatar()), const SizedBox(width: 8), Text(widget.mobile, style: const TextStyle(color: Colors.white)), const Spacer(), InkWell(onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => BuyCoinsScreen(mobile: widget.mobile))); }, child: Text("\u{1FA99} $myCoins", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))), const SizedBox(width: 8), Text("Rs $wallet", style: const TextStyle(color: Colors.white70)), const SizedBox(width: 8), InkWell(onTap: doLogout, child: const Icon(Icons.logout, color: Colors.white54))]),
       const SizedBox(height: 16),
@@ -1633,30 +1634,6 @@ class _BlockReportScreenState extends State<BlockReportScreen> {
     );
   }
 
-class _CropDialog extends StatefulWidget {
-  final Uint8List originalBytes;
-  final bool isRoomDP;
-  const _CropDialog({required this.originalBytes, this.isRoomDP = false});
-  @override State<_CropDialog> createState() => _CropDialogState();
-}
-class _CropDialogState extends State<_CropDialog> {
-  bool isSquareCrop = true;
-  @override Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF1E293B),
-      title: Text(widget.isRoomDP ? "Room DP Crop Karo" : "DP Crop Karo", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(12)), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(widget.originalBytes, height: 200, fit: BoxFit.contain))),
-        const SizedBox(height: 16),
-        Row(children: [
-          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=true), icon: Icon(isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Square"), style: ElevatedButton.styleFrom(backgroundColor: isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: isSquareCrop ? Colors.black : Colors.white))),
-          const SizedBox(width: 8),
-          Expanded(child: ElevatedButton.icon(onPressed: ()=> setState(()=> isSquareCrop=false), icon: Icon(!isSquareCrop ? Icons.check_box : Icons.check_box_outline_blank), label: const Text("Original"), style: ElevatedButton.styleFrom(backgroundColor: !isSquareCrop ? const Color(0xFFFBBF24) : const Color(0xFF0F172A), foregroundColor: !isSquareCrop ? Colors.black : Colors.white))),
-        ]),
-      ])),
-      actions: [TextButton(onPressed: ()=> Navigator.pop(context), child: const Text("Cancel")), ElevatedButton(onPressed: (){ Navigator.pop(context, widget.originalBytes); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)), child: const Text("Use This"))],
-    );
-  }
-}
+
 
 }
