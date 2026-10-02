@@ -1,37 +1,18 @@
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
-}
-def flutterRoot = localProperties.getProperty('flutter.sdk')
-if (flutterRoot == null) { throw new GradleException("Flutter SDK not found.") }
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '9'
-def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '9.0.0'
-
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
-
-android {
-    namespace = "com.ludo.premium"
-    compileSdk = 35
-    ndkVersion = flutter.ndkVersion
-    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
-    kotlinOptions { jvmTarget = '1.8' }
-    sourceSets { main.java.srcDirs += 'src/main/kotlin' }
-    defaultConfig {
-        applicationId = "com.ludo.premium"
-        minSdk = 21
-        targetSdk = 35
-        versionCode = flutterVersionCode.toInteger()
-        versionName = flutterVersionName
-        multiDexEnabled true
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
     }
-    buildTypes { release { signingConfig = signingConfigs.debug; minifyEnabled false; shrinkResources false } }
 }
 
-flutter { source = '../..' }
+rootProject.buildDir = '../build'
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+subprojects {
+    project.evaluationDependsOn(':app')
+}
 
-dependencies {
-    implementation 'androidx.multidex:multidex:2.0.1'
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
 }
