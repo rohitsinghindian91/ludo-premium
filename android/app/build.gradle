@@ -4,54 +4,66 @@ if (localPropertiesFile.exists()) {
     localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
 }
 def flutterRoot = localProperties.getProperty('flutter.sdk')
-if (flutterRoot == null) { 
-    throw new GradleException("Flutter SDK not found.") 
+if (flutterRoot == null) {
+    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
 }
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '9'
-def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '9.0.0'
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '9'
+}
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '9.0.0'
+}
 
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
+    // For AGP 8+ (new)
     namespace = "com.ludo.premium"
     compileSdk = 35
+    // For AGP 7 (old) - both needed!
+    compileSdkVersion 35
+    
     ndkVersion = flutter.ndkVersion
-    
-    compileOptions { 
+
+    compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8 
+        targetCompatibility JavaVersion.VERSION_1_8
     }
-    
-    kotlinOptions { 
-        jvmTarget = '1.8' 
+
+    kotlinOptions {
+        jvmTarget = '1.8'
     }
-    
-    sourceSets { 
-        main.java.srcDirs += 'src/main/kotlin' 
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
     }
-    
+
     defaultConfig {
         applicationId = "com.ludo.premium"
-        minSdk = 21
-        targetSdk = 35
-        versionCode = flutterVersionCode.toInteger()
-        versionName = flutterVersionName
+        minSdkVersion 21
+        minSdk 21
+        targetSdkVersion 35
+        targetSdk 35
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
         multiDexEnabled true
     }
-    
-    buildTypes { 
-        release { 
-            signingConfig = signingConfigs.debug
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
             minifyEnabled false
             shrinkResources false
-        } 
+        }
     }
 }
 
-flutter { 
-    source = '../..' 
+flutter {
+    source '../..'
 }
 
 dependencies {
