@@ -498,6 +498,8 @@ class _HomeScreenState extends State<HomeScreen> {
       const Text("MASSAGE FOR HELP ID NUMBER 0000001 (INDIAN HELPLINE SERVICE)", textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
     ]))));
   }
+  return true;
+
 }
 
 class WalletScreen extends StatefulWidget { final String mobile; const WalletScreen({super.key, required this.mobile}); @override State<WalletScreen> createState() => _WalletScreenState(); }
