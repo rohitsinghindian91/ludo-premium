@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
@@ -498,9 +496,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const Text("MASSAGE FOR HELP ID NUMBER 0000001 (INDIAN HELPLINE SERVICE)", textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
     ]))));
   }
-  return true;
-
-}
+  }
 
 class WalletScreen extends StatefulWidget { final String mobile; const WalletScreen({super.key, required this.mobile}); @override State<WalletScreen> createState() => _WalletScreenState(); }
 class _WalletScreenState extends State<WalletScreen> {
