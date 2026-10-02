@@ -23,9 +23,17 @@ late SharedPreferences prefs;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  } catch (e) {
+    debugPrint("Firebase init error: $e");
+  }
   prefs = await SharedPreferences.getInstance();
-  getRtdb();
+  try {
+    getRtdb();
+  } catch (e) {
+    debugPrint("RTDB error: $e");
+  }
   runApp(const MyApp());
 }
 
@@ -394,15 +402,33 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
 
-  @override void initState() { super.initState();
-    _checkDeviceSecurity();
-    _ensureConnectionStability();
-    _checkAppIntegrity(); checkDeviceBan(); listenUser(); }
+  @override void initState() { 
+    super.initState(); 
+    try {
+      _checkDeviceSecurity();
+    } catch (e) { debugPrint("DeviceSecurity error: $e"); }
+    try {
+      _ensureConnectionStability();
+    } catch (e) { debugPrint("ConnectionStability error: $e"); }
+    try {
+      _checkAppIntegrity();
+    } catch (e) { debugPrint("AppIntegrity error: $e"); }
+    try {
+      checkDeviceBan();
+    } catch (e) { debugPrint("DeviceBan error: $e"); }
+    try {
+      listenUser();
+    } catch (e) { debugPrint("listenUser error: $e"); }
+  }
   Future<void> checkDeviceBan() async {
-    if (await isDeviceBanned()) {
-      await prefs.clear();
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false);
+    try {
+      if (await isDeviceBanned()) {
+        await prefs.clear();
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false);
+      }
+    } catch (e) {
+      debugPrint("checkDeviceBan error: $e");
     }
   }
   void listenUser() {
