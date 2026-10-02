@@ -381,6 +381,7 @@ class _HomeScreenState extends State<HomeScreen> {
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton(onPressed: () { if (!isPrem) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pehle Premium Lo"))); openPremium(); return; } Navigator.push(context, MaterialPageRoute(builder: (_) => LobbyScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("PLAY LUDO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
       const SizedBox(height: 12),
       Container(margin: const EdgeInsets.only(bottom: 12), width: double.infinity, height: 54, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LuckyWheelScreen(mobile: widget.mobile))), icon: const Text("ðŸŽ¡", style: TextStyle(fontSize: 20)), label: const Text("LUCKY WHEEL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
+      Container(margin: const EdgeInsets.only(bottom: 12), width: double.infinity, height: 54, child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DailyTasksScreen(mobile: widget.mobile))), icon: const Text("ðŸ“‹", style: TextStyle(fontSize: 20)), label: const Text("DAILY TASKS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
       SizedBox(width: double.infinity, height: 54, child: ElevatedButton.icon(
         onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const VoiceLobbyScreen())); },
         icon: const Icon(Icons.mic, color: Colors.white),
@@ -686,4 +687,170 @@ class _WheelPainter extends CustomPainter {
     canvas.drawCircle(center, radius, borderPaint);
   }
   @override bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+
+class LevelSystem {
+  static int getLevelFromXp(int xp) {
+    if (xp < 100) return 1;
+    if (xp < 300) return 2;
+    if (xp < 600) return 3;
+    if (xp < 1000) return 4;
+    if (xp < 1500) return 5;
+    if (xp < 2200) return 6;
+    if (xp < 3000) return 7;
+    if (xp < 4000) return 8;
+    if (xp < 5500) return 9;
+    return 10 + ((xp - 5500) ~/ 2000);
+  }
+
+  static String getLevelTitle(int level) {
+    if (level <= 1) return "Newbie";
+    if (level <= 2) return "Rookie";
+    if (level <= 3) return "Explorer";
+    if (level <= 4) return "Adventurer";
+    if (level <= 5) return "Warrior";
+    if (level <= 6) return "Champion";
+    if (level <= 7) return "Hero";
+    if (level <= 8) return "Legend";
+    if (level <= 9) return "Mythic";
+    if (level <= 15) return "VIP $level";
+    return "SUPREME $level";
+  }
+
+  static Color getLevelColor(int level) {
+    if (level <= 1) return Color(0xFF9CA3AF);
+    if (level <= 3) return Color(0xFF22C55E);
+    if (level <= 5) return Color(0xFF3B82F6);
+    if (level <= 7) return Color(0xFF8B5CF6);
+    if (level <= 9) return Color(0xFFF59E0B);
+    if (level <= 15) return Color(0xFFEC4899);
+    return Color(0xFFFFD700);
+  }
+
+  static String getFrameForLevel(int level) {
+    if (level <= 2) return "none";
+    if (level <= 4) return "bronze";
+    if (level <= 6) return "silver";
+    if (level <= 8) return "gold";
+    if (level <= 10) return "diamond";
+    if (level <= 15) return "royal";
+    return "supreme";
+  }
+
+  static String getEntryEffect(int level) {
+    if (level <= 3) return "none";
+    if (level <= 5) return "stars";
+    if (level <= 7) return "fire";
+    if (level <= 9) return "lightning";
+    if (level <= 15) return "phoenix";
+    return "dragon";
+  }
+}
+
+class DailyTasksScreen extends StatefulWidget {
+  final String mobile;
+  const DailyTasksScreen({super.key, required this.mobile});
+  @override State<DailyTasksScreen> createState() => _DailyTasksScreenState();
+}
+
+class _DailyTasksScreenState extends State<DailyTasksScreen> {
+  Map<String, bool> tasks = {
+    "login": true,
+    "ludo": false,
+    "voice": false,
+    "wheel": false,
+    "gift": false,
+    "chat": false,
+  };
+  int coinsEarned = 0;
+  bool loading = true;
+
+  @override void initState() { super.initState(); _loadTasks(); }
+
+  Future<void> _loadTasks() async {
+    try {
+      final today = DateTime.now();
+      final todayKey = "${today.year}-${today.month}-${today.day}";
+      final doc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("dailyTasks").doc(todayKey).get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        if (mounted) setState(() { 
+          tasks = {
+            "login": data["login"] ?? true,
+            "ludo": data["ludo"] ?? false,
+            "voice": data["voice"] ?? false,
+            "wheel": data["wheel"] ?? false,
+            "gift": data["gift"] ?? false,
+            "chat": data["chat"] ?? false,
+          };
+          coinsEarned = data["coinsEarned"] ?? 0;
+          loading = false;
+        });
+      } else {
+        if (mounted) setState(() => loading = false);
+      }
+    } catch (_) { if (mounted) setState(() => loading = false); }
+  }
+
+  Future<void> _claimTask(String taskKey, int reward) async {
+    if (tasks[taskKey] == true) return;
+    try {
+      final today = DateTime.now();
+      final todayKey = "${today.year}-${today.month}-${today.day}";
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).collection("dailyTasks").doc(todayKey).set({
+        taskKey: true,
+        "coinsEarned": FieldValue.increment(reward),
+        "lastUpdate": FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection("users").doc(widget.mobile).update({
+        "coins": FieldValue.increment(reward),
+        "xp": FieldValue.increment(10),
+      });
+      if (mounted) setState(() { tasks[taskKey] = true; coinsEarned += reward; });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("+$reward coins! ðŸŽ‰")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
+
+  @override Widget build(BuildContext context) {
+    final taskList = [
+      {"key": "login", "title": "Daily Login", "desc": "App kholo", "reward": 5, "icon": "ðŸ“…"},
+      {"key": "ludo", "title": "Play Ludo", "desc": "1 game khelo", "reward": 20, "icon": "ðŸŽ²"},
+      {"key": "voice", "title": "Voice Room", "desc": "Voice room join karo", "reward": 15, "icon": "ðŸŽ¤"},
+      {"key": "wheel", "title": "Lucky Wheel", "desc": "Wheel spin karo", "reward": 10, "icon": "ðŸŽ¡"},
+      {"key": "gift", "title": "Send Gift", "desc": "Kisi ko gift bhejo", "reward": 10, "icon": "ðŸŽ"},
+      {"key": "chat", "title": "Chat Karo", "desc": "5 messages bhejo", "reward": 10, "icon": "ðŸ’¬"},
+    ];
+
+    final completed = tasks.values.where((v) => v).length;
+    final total = tasks.length;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      appBar: AppBar(title: const Text("ðŸ“‹ Daily Tasks", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF1E293B), iconTheme: const IconThemeData(color: Colors.white)),
+      body: loading ? const Center(child: CircularProgressIndicator()) : Column(children: [
+        Container(margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFFDB2777)]), borderRadius: BorderRadius.circular(16)), child: Column(children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("$completed/$total Tasks", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)), Text("$coinsEarned coins earned", style: const TextStyle(color: Colors.white70))]),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(value: completed / total, backgroundColor: Colors.white24, valueColor: const AlwaysStoppedAnimation<Color>(Colors.white)),
+        ])),
+        Expanded(child: ListView.builder(padding: const EdgeInsets.symmetric(horizontal: 16), itemCount: taskList.length, itemBuilder: (_, i) {
+          final t = taskList[i];
+          final done = tasks[t["key"]] ?? false;
+          return Container(margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12), border: Border.all(color: done ? Colors.green.withOpacity(0.5) : Colors.white10)), child: Row(children: [
+            Container(width: 48, height: 48, decoration: BoxDecoration(color: done ? Colors.green.withOpacity(0.2) : const Color(0xFF0F172A), borderRadius: BorderRadius.circular(12)), child: Center(child: Text(t["icon"] as String, style: const TextStyle(fontSize: 24)))),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t["title"] as String, style: TextStyle(color: done ? Colors.green : Colors.white, fontWeight: FontWeight.bold)), Text(t["desc"] as String, style: const TextStyle(color: Colors.white54, fontSize: 12))])),
+            Column(children: [
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text("+${t["reward"]} ðŸª™", style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold))),
+              const SizedBox(height: 6),
+              done ? Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)), child: const Text("âœ“ Done", style: TextStyle(color: Colors.white, fontSize: 12))) : ElevatedButton(onPressed: () => _claimTask(t["key"] as String, t["reward"] as int), style: ElevatedButton.styleFrom(backgroundColor: Colors.purple, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6)), child: const Text("Claim", style: TextStyle(fontSize: 12))),
+            ]),
+          ]));
+        })),
+      ]),
+    );
+  }
 }
