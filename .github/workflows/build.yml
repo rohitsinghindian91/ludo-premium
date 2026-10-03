@@ -1,4 +1,4 @@
-name: Build APK FINAL - GAL MANIFEST + BUILD FIX
+concurrency: name: Build APK FINAL FINAL - GAL Dependency Fixed
 
 on:
   push:
@@ -11,29 +11,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: 0. AUTO FIX ALL DART FILES
+      - name: 0. AUTO FIX DART
         run: |
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs!\?\.setString/prefs?.setString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs!\?\.getString/prefs?.getString/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/prefs\.setString/prefs?.setString/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/prefs\.getString/prefs?.getString/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/prefs\.getInt/prefs?.getInt/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/prefs\.setInt/prefs?.setInt/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.getBool/prefs?.getBool/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.setBool/prefs?.setBool/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.clear/prefs?.clear/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.remove/prefs?.remove/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/prefs!/prefs?/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/ludoPrefs!/ludoPrefs?/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/late SharedPreferences prefs;/SharedPreferences? prefs;/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/late SharedPreferences ludoPrefs;/SharedPreferences? ludoPrefs;/g' {} \;
-          echo "Dart fix done"
 
       - name: 1. DELETE duplicate MainActivity
         run: rm -rf android/app/src/main/kotlin/com/example
 
-      - name: 2. Ensure correct MainActivity
+      - name: 2. Ensure MainActivity
         run: |
           mkdir -p android/app/src/main/kotlin/com/ludo/premium/vludo_premium
-          cat > android/app/src/main/kotlin/com/ludo/premium/vludo_premium/MainActivity.kt << 'EOF'
+          cat > [STRIPPED 71 bytes].kt << 'EOF'
           package com.ludo.premium.vludo_premium
           import io.flutter.embedding.android.FlutterActivity
           class MainActivity: FlutterActivity()
@@ -42,20 +38,16 @@ jobs:
       - name: 3. Fix icon
         run: rm -rf android/app/src/main/res/mipmap-anydpi-v26
 
-      - name: 4. Create GAL ULTIMATE fix script
+      - name: 4. Create ULTIMATE GAL FIX script with dependencies
         run: |
           cat > /tmp/fix_gal.sh << 'SCRIPT'
           #!/bin/bash
           GAL=$(find $HOME/.pub-cache -type d -name "gal-2.3.3" 2>/dev/null | head -n 1)
-          if [ -z "$GAL" ]; then
-            GAL=$(find /opt -type d -name "gal-2.3.3" 2>/dev/null | head -n 1)
-          fi
+          if [ -z "$GAL" ]; then GAL=$(find /opt -type d -name "gal-2.3.3" 2>/dev/null | head -n 1); fi
           if [ ! -z "$GAL" ]; then
             echo "Fixing GAL at $GAL"
-            # Fix Java file
             sed -i 's/Registrar/FlutterPlugin/g' $GAL/android/src/main/java/media/suvov/gal/GalPlugin.java || true
             
-            # Fix build.gradle
             cat > $GAL/android/build.gradle << 'GRADLE'
           group 'media.suvov.gal'
           version '1.0'
@@ -74,24 +66,17 @@ jobs:
               }
               defaultConfig { minSdkVersion 21 }
           }
-          dependencies { implementation 'androidx.annotation:annotation:1.6.0' }
+          dependencies {
+              implementation 'androidx.annotation:annotation:1.6.0'
+              implementation 'org.apache.commons:commons-imaging:1.0-alpha3'
+              implementation 'androidx.exifinterface:exifinterface:1.3.6'
+          }
           GRADLE
 
-            # FIX AndroidManifest.xml - REMOVE package attribute - THIS IS THE KEY FIX
             MANIFEST="$GAL/android/src/main/AndroidManifest.xml"
-            echo "Fixing manifest: $MANIFEST"
-            echo "Before:"
-            cat $MANIFEST
-            # Remove package="studio.midoridesign.gal" 
             sed -i 's/package="studio.midoridesign.gal"//g' $MANIFEST
-            sed -i 's/package=.*gal.*//g' $MANIFEST
-            # Clean double spaces
-            sed -i 's/  / /g' $MANIFEST
-            echo "After:"
-            cat $MANIFEST
-            echo "GAL ULTIMATE fixed!"
-          else
-            echo "GAL not found"
+            echo "GAL fixed with dependencies!"
+            cat $GAL/android/build.gradle
           fi
           SCRIPT
           chmod +x /tmp/fix_gal.sh
@@ -111,17 +96,8 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Fix gal AFTER pub get - FINAL
-        run: |
-          /tmp/fix_gal.sh
-          GAL=$(find $HOME/.pub-cache -type d -name "gal-2.3.3" | head -n 1)
-          echo "GAL path: $GAL"
-          if [ ! -z "$GAL" ]; then
-            echo "=== build.gradle ==="
-            cat $GAL/android/build.gradle
-            echo "=== AndroidManifest.xml ==="
-            cat $GAL/android/src/main/AndroidManifest.xml
-          fi
+      - name: Fix gal AFTER pub get
+        run: /tmp/fix_gal.sh
 
       - name: Build APK
         run: flutter build apk --release --split-per-abi
@@ -129,5 +105,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: apk-FINAL-FIXED
+          name: apk-FINAL-SUCCESS
           path: build/app/outputs/flutter-apk/*.apk
