@@ -41,8 +41,8 @@ jobs:
           if [ -n "$GAL" ]; then
             sed -i 's/Registrar/FlutterPlugin/g' $GAL/android/src/main/java/media/suvov/gal/GalPlugin.java || true
             echo '<manifest></manifest>' > $GAL/android/src/main/AndroidManifest.xml
-            printf "apply plugin: 'com.android.library'\nandroid {\n    namespace 'media.suvov.gal'\n    compileSdk 34\n    defaultConfig {\n        minSdk 21\n    }\n}\n" > $GAL/android/build.gradle
-            echo "Gal fixed with minimal build.gradle"
+            printf "apply plugin: 'com.android.library'\nandroid {\n    namespace 'media.suvov.gal'\n    compileSdk 34\n    defaultConfig {\n        minSdk 21\n    }\n}\ndependencies {\n    implementation 'org.apache.commons:commons-imaging:1.0-alpha3'\n}\n" > $GAL/android/build.gradle
+            echo "Gal fixed"
             cat $GAL/android/build.gradle
           fi
           find $HOME/.pub-cache -name "AndroidManifest.xml" -exec sh -c 'grep -q "package=" "$1" && echo "<manifest></manifest>" > "$1"' _ {} \; || true
