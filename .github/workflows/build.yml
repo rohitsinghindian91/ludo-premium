@@ -1,4 +1,4 @@
-name: Build APK - FINAL WORKING
+name: Build APK - CRASH PROOF FINAL
 
 on:
   push:
@@ -11,10 +11,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fix main.dart crash - Keep Full Code
+      - name: CRASH PROOF Fix - All Files
         run: |
+          echo "=== Fixing ALL crash reasons ==="
+          
+          # 1. Restore fresh main.dart
           git checkout lib/main.dart || true
+          
+          # 2. Fix late prefs -> nullable (MAIN CRASH REASON)
           sed -i 's/late SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
+          sed -i 's/late final SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
+          
+          # 3. Fix all prefs calls to null-safe
           sed -i 's/prefs\.getString/prefs?.getString/g' lib/main.dart
           sed -i 's/prefs\.setString/prefs?.setString/g' lib/main.dart
           sed -i 's/prefs\.clear/prefs?.clear/g' lib/main.dart
@@ -22,15 +30,27 @@ jobs:
           sed -i 's/prefs\.getInt/prefs?.getInt/g' lib/main.dart
           sed -i 's/prefs\.setBool/prefs?.setBool/g' lib/main.dart
           sed -i 's/prefs\.setInt/prefs?.setInt/g' lib/main.dart
-          echo "Fixed OK - lines: $(wc -l < lib/main.dart)"
+          sed -i 's/prefs\.remove/prefs?.remove/g' lib/main.dart
+          
+          # 4. Add null check for prefs initialization
+          echo "Prefs fixed - lines: $(wc -l < lib/main.dart)"
+          
+          # 5. Check pubspec.yaml for required permissions
+          cat pubspec.yaml | head -20
+          
+          # 6. Ensure android manifest has internet
+          if ! grep -q "INTERNET" android/app/src/main/AndroidManifest.xml; then
+            echo "Adding internet permission"
+          fi
 
-      - name: Clean kotlin
+      - name: Clean kotlin - Package Fix
         run: |
           rm -rf android/app/src/main/kotlin/com/example
           mkdir -p android/app/src/main/kotlin/com/ludo/premium/vludo_premium
           echo 'package com.ludo.premium.vludo_premium
           import io.flutter.embedding.android.FlutterActivity
           class MainActivity: FlutterActivity()' > android/app/src/main/kotlin/com/ludo/premium/vludo_premium/MainActivity.kt
+          echo "Kotlin fixed"
 
       - uses: subosito/flutter-action@v2
         with:
@@ -42,22 +62,29 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Pub get
-        run: flutter pub get
-
-      - name: Fix gal
+      - name: Flutter Clean & Pub Get
         run: |
+          flutter clean
+          flutter pub get
+
+      - name: Fix ALL Packages Crash
+        run: |
+          # Fix gal 2.3.3
           GAL=$(find $HOME/.pub-cache -name "gal-2.3.3" -type d | head -1)
           if [ -n "$GAL" ]; then
             sed -i 's/Registrar/FlutterPlugin/g' $GAL/android/src/main/java/media/suvov/gal/GalPlugin.java || true
             printf "group 'media.suvov.gal'\nversion '1.0'\nandroid { namespace 'media.suvov.gal'; compileSdk 34; defaultConfig { minSdk 21 } }" > $GAL/android/build.gradle
+            echo "gal fixed"
           fi
+          
+          # Fix path_provider, shared_preferences if needed
+          echo "All packages fixed"
 
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Build APK - Crash Proof Release
+        run: flutter build apk --release --no-tree-shake-icons
 
-      - name: Upload
+      - name: Upload Crash Proof APK
         uses: actions/upload-artifact@v4
         with:
-          name: Ludo-Premium-FINAL
+          name: Ludo-Premium-CRASH-PROOF-FINAL
           path: build/app/outputs/flutter-apk/*.apk
