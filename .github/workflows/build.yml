@@ -41,7 +41,7 @@ jobs:
             fi
           done
 
-      - name: Fix gal 2.3.3 - COMPLETE FIX (build.gradle + AndroidManifest)
+      - name: Fix gal 2.3.3 - COMPLETE FIX with dependencies
         run: |
           GAL_BASE=$(find $HOME/.pub-cache -type d -name "gal-2.3.3" | head -n 1)
           echo "GAL_BASE: $GAL_BASE"
@@ -91,10 +91,9 @@ jobs:
           }
 
           dependencies {
-              testImplementation 'junit:junit:4.13.2'
-              testImplementation 'org.mockito:mockito-core:5.0.0'
-              androidTestImplementation 'androidx.test:runner:1.5.2'
-              androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+              implementation 'org.apache.commons:commons-imaging:1.0-alpha3'
+              implementation 'androidx.core:core:1.10.1'
+              implementation 'androidx.annotation:annotation:1.6.0'
           }
           EOF
           
@@ -105,6 +104,7 @@ jobs:
           EOF
           
           echo "Both files fixed"
+          cat "$GAL_FILE"
           cat "$MANIFEST_FILE"
 
       - name: flutter build apk --release --split-per-abi
