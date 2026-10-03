@@ -1,4 +1,4 @@
-name: Build APK - ULTIMATE FINAL FIX
+name: Build APK - AUTO FIX CRASH (No Manual Edit Needed)
 
 on:
   push:
@@ -27,29 +27,47 @@ jobs:
           flutter clean
           flutter pub get
 
-      - name: 1. DELETE duplicate MainActivity (CRASH REASON)
+      - name: AUTO-FIX main.dart - 7 Crash Points (Tujhe manual edit nahi karna)
         run: |
-          echo "Checking duplicate folders..."
-          ls -R android/app/src/main/kotlin/com/ || true
-          echo "Deleting com/example - YEHI CRASH KARA RAHA HAI"
+          echo "Fixing main.dart automatically..."
+          # 1. late -> nullable
+          sed -i 's/late SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
+          
+          # 2. prefs.getString -> prefs?.getString
+          sed -i 's/prefs\.getString/prefs?.getString/g' lib/main.dart
+          
+          # 3. prefs.setString -> prefs?.setString
+          sed -i 's/prefs\.setString/prefs?.setString/g' lib/main.dart
+          
+          # 4. prefs.clear -> prefs?.clear
+          sed -i 's/prefs\.clear/prefs?.clear/g' lib/main.dart
+          
+          # 5. substring(6) -> safe substring (last 4 chars)
+          sed -i 's/widget\.mobile\.substring(6)/widget.mobile.length >= 4 ? widget.mobile.substring(widget.mobile.length - 4) : widget.mobile/g' lib/main.dart
+          
+          # 6. Color parse crash fix
+          sed -i 's/Color(int.parse("0xFF\${vip\["color"\]}"))/Color(int.tryParse("0xFF${vip["color"]}") ?? 0xFF000000)/g' lib/main.dart
+          
+          echo "Fixed lines:"
+          grep -n "SharedPreferences" lib/main.dart | head -5
+          grep -n "prefs?." lib/main.dart | head -10
+
+      - name: 1. DELETE duplicate MainActivity
+        run: |
           rm -rf android/app/src/main/kotlin/com/example
           rm -rf android/app/src/main/kotlin/com/example/ludo_premium
-          echo "After delete:"
-          ls -R android/app/src/main/kotlin/com/ || true
+          ls -R android/app/src/main/kotlin/com/ || echo "Cleaned"
 
       - name: 2. Ensure correct MainActivity exists
         run: |
           mkdir -p android/app/src/main/kotlin/com/ludo/premium/vludo_premium
           cat > android/app/src/main/kotlin/com/ludo/premium/vludo_premium/MainActivity.kt << 'EOF'
           package com.ludo.premium.vludo_premium
-
           import io.flutter.embedding.android.FlutterActivity
-
           class MainActivity: FlutterActivity()
           EOF
-          cat android/app/src/main/kotlin/com/ludo/premium/vludo_premium/MainActivity.kt
 
-      - name: 3. Fix icon crash - delete broken xml
+      - name: 3. Fix icon crash
         run: |
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
           rm -f android/app/src/main/res/mipmap-*/ic_launcher.xml
@@ -58,65 +76,36 @@ jobs:
           for d in android/app/src/main/res/mipmap-*; do
             if [ -d "$d" ]; then
               cp assets/icon.png "$d/ic_launcher.png" || true
-              cp assets/icon.png "$d/ic_launcher_foreground.png" || true
             fi
           done
 
-      - name: 4. Fix gal 2.3.3 - COMPLETE FIX with dependencies
+      - name: 4. Fix gal 2.3.3
         run: |
           GAL_BASE=$(find $HOME/.pub-cache -type d -name "gal-2.3.3" | head -n 1)
-          echo "GAL_BASE: $GAL_BASE"
           GAL_FILE="$GAL_BASE/android/build.gradle"
           MANIFEST_FILE="$GAL_BASE/android/src/main/AndroidManifest.xml"
           cat > "$GAL_FILE" << 'EOF'
           group 'com.gal'
           version '1.0'
-
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:7.3.0'
-              }
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:7.3.0' }
           }
-
-          rootProject.allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
+          rootProject.allprojects { repositories { google(); mavenCentral() } }
           apply plugin: 'com.android.library'
-
           android {
               compileSdkVersion 34
               namespace "com.gal"
-
-              defaultConfig {
-                  minSdkVersion 21
-                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-              }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_1_8
-                  targetCompatibility JavaVersion.VERSION_1_8
-              }
+              defaultConfig { minSdkVersion 21; testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner" }
+              buildTypes { release { minifyEnabled false } }
+              compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
           }
-
           dependencies {
               implementation 'org.apache.commons:commons-imaging:1.0-alpha3'
               implementation 'androidx.core:core:1.10.1'
               implementation 'androidx.annotation:annotation:1.6.0'
           }
           EOF
-          
           cat > "$MANIFEST_FILE" << 'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
           </manifest>
@@ -125,17 +114,12 @@ jobs:
 
       - name: 5. Check google-services.json
         run: |
-          if [ -f "android/app/google-services.json" ]; then
-            echo "✅ google-services.json FOUND"
-          else
-            echo "⚠️ WARNING: google-services.json NOT FOUND - Isse bhi crash ho sakta hai"
-            echo "Firebase use kar raha hai to ye file android/app me hona chahiye"
-          fi
+          if [ -f "android/app/google-services.json" ]; then echo "✅ FOUND"; else echo "⚠️ NOT FOUND"; fi
 
       - name: Build APK
         run: flutter build apk --release --split-per-abi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: apk-release-ULTIMATE-FIXED
+          name: apk-FIXED-FULL-CODE
           path: build/app/outputs/flutter-apk/*.apk
