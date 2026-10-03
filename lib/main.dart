@@ -151,7 +151,7 @@ class _OtpPageState extends State<OtpPage> {
       return;
     }
     setState(() => load = true);
-    String? devId = prefs?.setString("device_id");
+    String? devId = prefs?.getString("device_id");
     if (devId == null || devId.isEmpty) {
       devId = "dev_${DateTime.now().millisecondsSinceEpoch}_${widget.mobile.substring(6)}";
       await prefs?.setString("device_id", devId);
