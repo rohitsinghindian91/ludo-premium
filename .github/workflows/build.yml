@@ -1,4 +1,4 @@
-name: Build APK - FINAL FIXED - Keep Full Code
+name: Build APK - Fix Original Main.dart - Keep Admin Panel
 
 on:
   push:
@@ -11,14 +11,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fix main.dart - Keep 1600 lines - Only 2 line crash fix
+      - name: FIX Original main.dart - Keep Full 2850 Lines - Only Crash Fix
         run: |
-          echo "Fixing crash but keeping full admin panel..."
+          # Always start from original git version to avoid double ?? bug
+          git checkout lib/main.dart || true
+          
+          echo "Fixing original main.dart - keeping full code, only fixing crash..."
+          
+          # Fix 1: late -> nullable (only if still late)
           sed -i 's/late SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
+          sed -i 's/late final SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
+          
+          # Fix 2: prefs. -> prefs?.  BUT only if not already ?.  Use trick to avoid double
+          # First restore any double ?? from previous bad runs
+          sed -i 's/prefs??\./prefs?. /g; s/prefs?\?\./prefs?. /g' lib/main.dart || true
+          sed -i 's/prefs?\.\?\. /prefs?. /g' lib/main.dart || true
+          # Now fix single . to ?. only where it's still .
           sed -i 's/prefs\.getString/prefs?.getString/g' lib/main.dart
           sed -i 's/prefs\.setString/prefs?.setString/g' lib/main.dart
           sed -i 's/prefs\.clear/prefs?.clear/g' lib/main.dart
-          echo "Fixed - lines still: $(wc -l < lib/main.dart)"
+          sed -i 's/prefs\.getBool/prefs?.getBool/g' lib/main.dart
+          sed -i 's/prefs\.getInt/prefs?.getInt/g' lib/main.dart
+          sed -i 's/prefs\.setBool/prefs?.setBool/g' lib/main.dart
+          sed -i 's/prefs\.setInt/prefs?.setInt/g' lib/main.dart
+          
+          # Clean any accidental double ??
+          sed -i 's/prefs??\./prefs?. /g' lib/main.dart || true
+          sed -i 's/prefs?\.get/prefs?.get/g' lib/main.dart
+          sed -i 's/prefs?\.set/prefs?.set/g' lib/main.dart
+          sed -i 's/prefs?\.clear/prefs?.clear/g' lib/main.dart
+          
+          echo "Fixed! Checking..."
+          grep -n "SharedPreferences" lib/main.dart | head -5
+          echo "Lines: $(wc -l < lib/main.dart)"
 
       - name: Clean kotlin
         run: |
@@ -26,7 +51,7 @@ jobs:
           mkdir -p android/app/src/main/kotlin/com/ludo/premium/vludo_premium
           echo 'package com.ludo.premium.vludo_premium
           import io.flutter.embedding.android.FlutterActivity
-          class MainActivity: FlutterActivity()' > [STRIPPED 71 bytes].kt
+          class MainActivity: FlutterActivity()' > android/app/src/main/kotlin/com/ludo/premium/vludo_premium/MainActivity.kt
 
       - uses: subosito/flutter-action@v2
         with:
@@ -41,7 +66,7 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
-      - name: Fix gal 2.3.3
+      - name: Fix gal
         run: |
           GAL=$(find $HOME/.pub-cache -name "gal-2.3.3" -type d | head -1)
           if [ -n "$GAL" ]; then
@@ -55,5 +80,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Ludo-Premium-FINAL-FIXED
+          name: Ludo-Premium-FULL-FIXED-Admin-Kept
           path: build/app/outputs/flutter-apk/*.apk
