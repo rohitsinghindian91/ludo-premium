@@ -337,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (exp.isBefore(DateTime.now())) stillBanned = false;
         }
         if (stillBanned) {
-          await prefs.clear();
+          await prefs?.clear();
           if (!mounted) return;
           Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false);
           return;
