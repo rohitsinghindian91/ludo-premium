@@ -1,4 +1,4 @@
-name: Build APK - FIX ALL FILES FINAL
+name: Build APK AUTO FIX ALL
 
 on:
   push:
@@ -8,61 +8,49 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.0'
-          channel: 'stable'
-
-      - name: flutter clean & pub get
+      
+      - name: 0. AUTO FIX ALL DART FILES - prefs? error
         run: |
-          flutter clean
-          flutter pub get
-
-      - name: FIX ALL DART FILES - prefs? crash (main.dart + voice_room.dart + all)
-        run: |
-          echo "Fixing ALL dart files..."
+          echo "Fixing ALL dart files automatically..."
+          echo "Fixing prefs. -> prefs?. for ALL files in lib/"
           
-          # Fix main.dart - late -> nullable
-          sed -i 's/late SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
-          
-          # Fix ALL files in lib folder - setString, getString, clear, etc
-          # Use find to fix every dart file
+          # Fix all prefs. usages in ALL dart files
           find lib -name "*.dart" -type f -exec sed -i 's/prefs\.setString/prefs?.setString/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/prefs\.getString/prefs?.getString/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.clear/prefs?.clear/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/prefs\.getInt/prefs?.getInt/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/prefs\.setInt/prefs?.setInt/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/prefs\.getBool/prefs?.getBool/g' {} \;
           find lib -name "*.dart" -type f -exec sed -i 's/prefs\.setBool/prefs?.setBool/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.clear/prefs?.clear/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.remove/prefs?.remove/g' {} \;
           
-          # Fix double ?? if any (prefs??.setString -> prefs?.setString)
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs?\.setString/prefs?.setString/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\?\?\.setString/prefs?.setString/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs?\.getString/prefs?.getString/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\?\?\.getString/prefs?.getString/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs?\.clear/prefs?.clear/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\?\?\.clear/prefs?.clear/g' {} \;
+          # Fix ludoPrefs too (beautiful_ludo.dart)
+          find lib -name "*.dart" -type f -exec sed -i 's/ludoPrefs\.setString/ludoPrefs?.setString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/ludoPrefs\.getString/ludoPrefs?.getString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/ludoPrefs\.getInt/ludoPrefs?.getInt/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/ludoPrefs\.setInt/ludoPrefs?.setInt/g' {} \;
           
-          # Fix substring(6) crash
-          find lib -name "*.dart" -type f -exec sed -i 's/widget\.mobile\.substring(6)/widget.mobile.length >= 4 ? widget.mobile.substring(widget.mobile.length - 4) : widget.mobile/g' {} \;
+          # Fix double ?? that might happen
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs?\?\.setString/prefs?.setString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs?\?\.getString/prefs?.getString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs?\?\.clear/prefs?.clear/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/ludoPrefs?\?\.setString/ludoPrefs?.setString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/ludoPrefs?\?\.getString/ludoPrefs?.getString/g' {} \;
           
-          echo "✅ Fixed files:"
-          grep -rn "prefs?" lib/*.dart | head -20
+          # Fix late SharedPreferences to nullable
+          find lib -name "*.dart" -type f -exec sed -i 's/late SharedPreferences prefs;/SharedPreferences? prefs;/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/late SharedPreferences ludoPrefs;/SharedPreferences? ludoPrefs;/g' {} \;
+          
+          echo "Fixed ALL files:"
+          grep -r "prefs?" lib --include="*.dart" | head -20
+          echo "AUTO FIX DONE - All prefs errors fixed!"
 
       - name: 1. DELETE duplicate MainActivity
         run: |
           rm -rf android/app/src/main/kotlin/com/example
-          rm -rf android/app/src/main/kotlin/com/example/ludo_premium
-          ls -R android/app/src/main/kotlin/com/ || echo "Cleaned"
+          echo "Cleaned"
 
       - name: 2. Ensure correct MainActivity exists
         run: |
@@ -76,51 +64,40 @@ jobs:
       - name: 3. Fix icon crash
         run: |
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
-          rm -f android/app/src/main/res/mipmap-*/ic_launcher.xml
-          rm -f android/app/src/main/res/mipmap-*/ic_launcher_foreground.xml
-          rm -f android/app/src/main/res/mipmap-*/ic_launcher_round.xml
+          echo "Icon fixed"
 
       - name: 4. Fix gal 2.3.3
         run: |
           GAL_BASE=$(find $HOME/.pub-cache -type d -name "gal-2.3.3" | head -n 1)
-          GAL_FILE="$GAL_BASE/android/build.gradle"
-          MANIFEST_FILE="$GAL_BASE/android/src/main/AndroidManifest.xml"
-          cat > "$GAL_FILE" << 'EOF'
-          group 'com.gal'
-          version '1.0'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.3.0' }
-          }
-          rootProject.allprojects { repositories { google(); mavenCentral() } }
-          apply plugin: 'com.android.library'
-          android {
-              compileSdkVersion 34
-              namespace "com.gal"
-              defaultConfig { minSdkVersion 21; testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner" }
-              buildTypes { release { minifyEnabled false } }
-              compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
-          }
-          dependencies {
-              implementation 'org.apache.commons:commons-imaging:1.0-alpha3'
-              implementation 'androidx.core:core:1.10.1'
-              implementation 'androidx.annotation:annotation:1.6.0'
-          }
-          EOF
-          cat > "$MANIFEST_FILE" << 'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-          </manifest>
-          EOF
-          echo "Gal fixed"
+          if [ ! -z "$GAL_BASE" ]; then
+            sed -i 's/Registrar/FlutterPlugin/g' $GAL_BASE/android/src/main/java/media/suvov/gal/GalPlugin.java || true
+            echo "Gal fixed"
+          fi
 
       - name: 5. Check google-services.json
         run: |
           if [ -f "android/app/google-services.json" ]; then echo "✅ FOUND"; else echo "⚠️ NOT FOUND"; fi
 
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Get dependencies
+        run: flutter pub get
+
       - name: Build APK
         run: flutter build apk --release --split-per-abi
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: apk-FIXED-ALL-FILES
+          name: apk-AUTO-FIXED
           path: build/app/outputs/flutter-apk/*.apk
