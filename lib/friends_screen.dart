@@ -121,7 +121,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           .set({"clearedBy": {widget.mobile: FieldValue.serverTimestamp()}}, SetOptions(merge: true));
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sabhi chats clear ho gayi âœ…")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sabhi chats clear ho gayi ✅")));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fail: $e")));
@@ -281,14 +281,14 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           IconButton(icon: Icon(Icons.delete_sweep, color: Colors.black), tooltip: "Sabhi chats clear karo",
             onPressed: _clearAllChats),
         ],
-        bottom: TabBar(controller: tabCtrl, labelColor: Colors.black, unselectedLabelColor: Colors.black54, isScrollable: true, tabs: [Tab(text: "ADD"), Tab(text: "REQUESTS (${pending.length})"), Tab(text: "MY FRIENDS (${friendsWithName.length})"), Tab(text: "BLOCKED (${blockedWithName.length})")])),
+        bottom: TabBar(controller: tabCtrl, labelColor: Colors.black, unselectedLabelColor: Colors.black54, isScrollable: true, tabs: [Tab(text: "ADD"), Tab(text: "REQUESTS (${pending.length})"), Tab(text: "MY FRIENDS (${friendsWithName.length})"), Tab(text: "BLOCKED (${blockedWithName.length})")] )),
       body: loading? Center(child: CircularProgressIndicator(color: Colors.amber)):
       TabBarView(controller: tabCtrl, children: [
         // ===== TAB 1: ADD (search) =====
         Padding(padding: EdgeInsets.all(16), child: Column(children: [
           if(myIdNo.isNotEmpty)
             Container(margin: EdgeInsets.only(bottom:12), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFF151A2B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withOpacity(0.4))),
-              child: Row(children: [Icon(Icons.badge, color: Colors.amber), SizedBox(width:8), Text("Tumhari ID: $myIdNo", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), SizedBox(width:4), Expanded(child: Text("(dosto ko ye ID do)", style: TextStyle(color: Colors.white54, fontSize: 11)))])),
+              child: Row(children: [Icon(Icons.badge, color: Colors.amber), SizedBox(width:8), Text("Tumhari ID: $myIdNo", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), SizedBox(width:4), Expanded(child: Text("(dosto ko ye ID do)", style: TextStyle(color: Colors.white54, fontSize: 11)))] )),
           Row(children: [Expanded(child: TextField(controller: searchCtrl, keyboardType: TextInputType.text, maxLength: 20, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold), decoration: InputDecoration(counterText: "", labelText: "ID ya Naam se Search", labelStyle: TextStyle(color: Colors.white54, fontSize: 12), filled: true, fillColor: Color(0xFF151A2B), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))), SizedBox(width:8), ElevatedButton(onPressed: searchUser, style: ElevatedButton.styleFrom(backgroundColor: Colors.amber), child: Text("SEARCH", style: TextStyle(color: Colors.black))) ]),
           SizedBox(height:8),
           Text("Mobile number kisi ko nahi dikhega - ID ya naam se add karo", style: TextStyle(color: Colors.white38, fontSize: 11)),
@@ -440,7 +440,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       await FirebaseFirestore.instance.collection("friend_chats").doc(getChatId())
         .set({"clearedBy": {widget.myMobile: FieldValue.serverTimestamp()}}, SetOptions(merge: true));
       if (mounted) setState(() => _clearedAt = DateTime.now());
-      _toast("Chat clear ho gayi âœ…");
+      _toast("Chat clear ho gayi ✅");
     } catch (e) { _toast("Fail: $e"); }
   }
 
@@ -524,7 +524,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       if (!hasAccess) await Gal.requestAccess();
       final res = await http.get(Uri.parse(url));
       await Gal.putImageBytes(Uint8List.fromList(res.bodyBytes), name: "chat_${DateTime.now().millisecondsSinceEpoch}");
-      _toast("Gallery me save ho gayi âœ…");
+      _toast("Gallery me save ho gayi ✅");
     } catch (e) { _toast("Save fail: $e"); }
   }
 
@@ -559,7 +559,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       final Map viewedBy = Map.from(d["viewedBy"]?? {});
       final bool seen = viewedBy[widget.myMobile] == true;
       if (viewOnce && seen &&!isMe) {
-        content = const Text("Dekh liya ðŸ‘€", style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic));
+        content = const Text("Dekh liya 👀", style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic));
       } else if (viewOnce &&!seen &&!isMe) {
         content = GestureDetector(
           onTap: () => _openPhoto(doc),
@@ -574,7 +574,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
-              child: const Text("ðŸ‘ Tap to view", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              child: const Text("👁 Tap to view", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
             ),
           ]),
         );
@@ -662,7 +662,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
               }
               return true;
             }).toList();
-            if (docs.isEmpty) return const Center(child: Text("Abhi koi message nahi â€” pehla message bhejo ðŸ‘‹", style: TextStyle(color: Colors.white54)));
+            if (docs.isEmpty) return const Center(child: Text("Abhi koi message nahi — pehla message bhejo 👋", style: TextStyle(color: Colors.white54)));
             List<Widget> items = [];
             String lastDay = "";
             for (var doc in docs) {
