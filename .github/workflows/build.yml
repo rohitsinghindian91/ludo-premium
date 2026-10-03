@@ -1,0 +1,51 @@
+name: Build APK - FINAL WORKING
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: flutter clean
+        run: flutter clean
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      - name: Fix icon + Fix gal COMPLETE
+        run: |
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          rm -f android/app/src/main/res/mipmap-*/ic_launcher.xml
+          rm -f android/app/src/main/res/mipmap-*/ic_launcher_foreground.xml
+          rm -f android/app/src/main/res/mipmap-*/ic_launcher_round.xml
+          for d in android/app/src/main/res/mipmap-*; do [ -d "$d" ] && cp assets/icon.png "$d/ic_launcher.png" || true; done
+          GAL=$(find $HOME -type d -name "gal-2.3.3" | head -1)
+          if [ -n "$GAL" ]; then
+            sed -i 's/Registrar/FlutterPlugin/g' $GAL/android/src/main/java/media/suvov/gal/GalPlugin.java || true
+            echo '<manifest></manifest>' > $GAL/android/src/main/AndroidManifest.xml
+            printf "group 'media.suvov.gal'\nversion '1.0'\nbuildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:7.4.2' } }\nrootProject.allprojects { repositories { google(); mavenCentral() } }\napply plugin: 'com.android.library'\nandroid { namespace 'media.suvov.gal' compileSdk 34 defaultConfig { minSdk 21 } }\n" > $GAL/android/build.gradle
+          fi
+          find $HOME/.pub-cache -name "AndroidManifest.xml" -exec sh -c 'grep -q "package=" "$1" && echo "<manifest></manifest>" > "$1"' _ {} \; || true
+
+      - name: flutter build apk --release --split-per-abi
+        run: flutter build apk --release --split-per-abi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-release
+          path: build/app/outputs/flutter-apk/*.apk
