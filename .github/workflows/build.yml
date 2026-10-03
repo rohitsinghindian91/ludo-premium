@@ -1,4 +1,4 @@
-name: Build APK - AUTO FIX CRASH (No Manual Edit Needed)
+name: Build APK - FIX ALL FILES FINAL
 
 on:
   push:
@@ -27,30 +27,36 @@ jobs:
           flutter clean
           flutter pub get
 
-      - name: AUTO-FIX main.dart - 7 Crash Points (Tujhe manual edit nahi karna)
+      - name: FIX ALL DART FILES - prefs? crash (main.dart + voice_room.dart + all)
         run: |
-          echo "Fixing main.dart automatically..."
-          # 1. late -> nullable
+          echo "Fixing ALL dart files..."
+          
+          # Fix main.dart - late -> nullable
           sed -i 's/late SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
           
-          # 2. prefs.getString -> prefs?.getString
-          sed -i 's/prefs\.getString/prefs?.getString/g' lib/main.dart
+          # Fix ALL files in lib folder - setString, getString, clear, etc
+          # Use find to fix every dart file
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.setString/prefs?.setString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.getString/prefs?.getString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.clear/prefs?.clear/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.getInt/prefs?.getInt/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.setInt/prefs?.setInt/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.getBool/prefs?.getBool/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.setBool/prefs?.setBool/g' {} \;
           
-          # 3. prefs.setString -> prefs?.setString
-          sed -i 's/prefs\.setString/prefs?.setString/g' lib/main.dart
+          # Fix double ?? if any (prefs??.setString -> prefs?.setString)
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs?\.setString/prefs?.setString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\?\?\.setString/prefs?.setString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs?\.getString/prefs?.getString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\?\?\.getString/prefs?.getString/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs?\.clear/prefs?.clear/g' {} \;
+          find lib -name "*.dart" -type f -exec sed -i 's/prefs\?\?\.clear/prefs?.clear/g' {} \;
           
-          # 4. prefs.clear -> prefs?.clear
-          sed -i 's/prefs\.clear/prefs?.clear/g' lib/main.dart
+          # Fix substring(6) crash
+          find lib -name "*.dart" -type f -exec sed -i 's/widget\.mobile\.substring(6)/widget.mobile.length >= 4 ? widget.mobile.substring(widget.mobile.length - 4) : widget.mobile/g' {} \;
           
-          # 5. substring(6) -> safe substring (last 4 chars)
-          sed -i 's/widget\.mobile\.substring(6)/widget.mobile.length >= 4 ? widget.mobile.substring(widget.mobile.length - 4) : widget.mobile/g' lib/main.dart
-          
-          # 6. Color parse crash fix
-          sed -i 's/Color(int.parse("0xFF\${vip\["color"\]}"))/Color(int.tryParse("0xFF${vip["color"]}") ?? 0xFF000000)/g' lib/main.dart
-          
-          echo "Fixed lines:"
-          grep -n "SharedPreferences" lib/main.dart | head -5
-          grep -n "prefs?." lib/main.dart | head -10
+          echo "✅ Fixed files:"
+          grep -rn "prefs?" lib/*.dart | head -20
 
       - name: 1. DELETE duplicate MainActivity
         run: |
@@ -73,11 +79,6 @@ jobs:
           rm -f android/app/src/main/res/mipmap-*/ic_launcher.xml
           rm -f android/app/src/main/res/mipmap-*/ic_launcher_foreground.xml
           rm -f android/app/src/main/res/mipmap-*/ic_launcher_round.xml
-          for d in android/app/src/main/res/mipmap-*; do
-            if [ -d "$d" ]; then
-              cp assets/icon.png "$d/ic_launcher.png" || true
-            fi
-          done
 
       - name: 4. Fix gal 2.3.3
         run: |
@@ -121,5 +122,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: apk-FIXED-FULL-CODE
+          name: apk-FIXED-ALL-FILES
           path: build/app/outputs/flutter-apk/*.apk
