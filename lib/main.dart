@@ -17,8 +17,7 @@ import 'friends_screen.dart';
 import 'rtdb.dart';
 import 'jaruri_suchna.dart';
 
-late SharedPreferences prefs;
-
+SharedPreferences? prefs;     
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -26,7 +25,11 @@ void main() async {
   } catch (e) {
     debugPrint("Firebase init error: $e");
   }
+  try {
   prefs = await SharedPreferences.getInstance();
+} catch (e) {
+  debugPrint("Prefs error: $e");
+  }
   // getRtdb() hata diya - crash karwa sakta hai
   runApp(const MyApp());
 }
@@ -48,7 +51,7 @@ class _SplashState extends State<Splash> {
   @override void initState() { super.initState(); checkUser(); }
   Future<void> checkUser() async {
     try {
-      var m = prefs.getString("mobile");
+      var m = prefs?.getString("mobile");
       await Future.delayed(const Duration(milliseconds: 800));
       if (!mounted) return;
       if (m!= null && m.isNotEmpty) {
@@ -148,10 +151,10 @@ class _OtpPageState extends State<OtpPage> {
       return;
     }
     setState(() => load = true);
-    String? devId = prefs.getString("device_id");
+    String? devId = prefs?.setString("device_id");
     if (devId == null || devId.isEmpty) {
       devId = "dev_${DateTime.now().millisecondsSinceEpoch}_${widget.mobile.substring(6)}";
-      await prefs.setString("device_id", devId);
+      await prefs?.setString("device_id", devId);
     }
     var doc = await FirebaseFirestore.instance.collection("users").doc(widget.mobile).get();
     if (!doc.exists) {
@@ -179,8 +182,8 @@ class _OtpPageState extends State<OtpPage> {
          .set({"gameId": finalId, "voiceRoomNo": finalId}, SetOptions(merge: true));
       }
     }
-    await prefs.setString("mobile", widget.mobile);
-    await prefs.setString("name", widget.name);
+    await prefs?.setString("mobile", widget.mobile);
+    await prefs?.setString("name", widget.name);
     var ludoPrefs = await SharedPreferences.getInstance();
     await ludoPrefs.setString("mobile", widget.mobile);
     await ludoPrefs.setString("name", widget.name);
@@ -245,7 +248,7 @@ Future<bool> isUserBanned(String mobile) async {
 
 Future<bool> isDeviceBanned() async {
   try {
-    String? devId = prefs.getString("device_id");
+    String? devId = prefs?.getString("device_id");
     if (devId == null || devId.isEmpty) return false;
     var q = await FirebaseFirestore.instance.collection("banned_devices").where("deviceId", isEqualTo: devId).limit(1).get();
     return q.docs.isNotEmpty;
@@ -321,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void listenUser() {
     FirebaseFirestore.instance.collection("users").doc(widget.mobile).snapshots().listen((d) async {
       if (!d.exists) {
-        await prefs.clear();
+        await prefs?.clear();
         if (!mounted) return;
         Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false);
         return;
@@ -375,7 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) { debugPrint("dist error $e"); }
   }
   void openPremium() { Navigator.push(context, MaterialPageRoute(builder: (_) => PremiumPayScreen(mobile: widget.mobile, onPaid: (){}))); }
-  void doLogout() async { await prefs.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false); }
+  void doLogout() async { await prefs?.clear(); if (!mounted) return; Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (r) => false); }
   
   // ===== DP SYSTEM (Step 1) =====
   Widget _dpAvatar() {
