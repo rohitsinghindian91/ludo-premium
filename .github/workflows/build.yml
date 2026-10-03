@@ -1,4 +1,4 @@
-name: Build APK - Fix Original Main.dart - Keep Admin Panel
+name: Build APK - FINAL WORKING
 
 on:
   push:
@@ -11,22 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: FIX Original main.dart - Keep Full 2850 Lines - Only Crash Fix
+      - name: Fix main.dart crash - Keep Full Code
         run: |
-          # Always start from original git version to avoid double ?? bug
           git checkout lib/main.dart || true
-          
-          echo "Fixing original main.dart - keeping full code, only fixing crash..."
-          
-          # Fix 1: late -> nullable (only if still late)
           sed -i 's/late SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
-          sed -i 's/late final SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
-          
-          # Fix 2: prefs. -> prefs?.  BUT only if not already ?.  Use trick to avoid double
-          # First restore any double ?? from previous bad runs
-          sed -i 's/prefs??\./prefs?. /g; s/prefs?\?\./prefs?. /g' lib/main.dart || true
-          sed -i 's/prefs?\.\?\. /prefs?. /g' lib/main.dart || true
-          # Now fix single . to ?. only where it's still .
           sed -i 's/prefs\.getString/prefs?.getString/g' lib/main.dart
           sed -i 's/prefs\.setString/prefs?.setString/g' lib/main.dart
           sed -i 's/prefs\.clear/prefs?.clear/g' lib/main.dart
@@ -34,16 +22,7 @@ jobs:
           sed -i 's/prefs\.getInt/prefs?.getInt/g' lib/main.dart
           sed -i 's/prefs\.setBool/prefs?.setBool/g' lib/main.dart
           sed -i 's/prefs\.setInt/prefs?.setInt/g' lib/main.dart
-          
-          # Clean any accidental double ??
-          sed -i 's/prefs??\./prefs?. /g' lib/main.dart || true
-          sed -i 's/prefs?\.get/prefs?.get/g' lib/main.dart
-          sed -i 's/prefs?\.set/prefs?.set/g' lib/main.dart
-          sed -i 's/prefs?\.clear/prefs?.clear/g' lib/main.dart
-          
-          echo "Fixed! Checking..."
-          grep -n "SharedPreferences" lib/main.dart | head -5
-          echo "Lines: $(wc -l < lib/main.dart)"
+          echo "Fixed OK - lines: $(wc -l < lib/main.dart)"
 
       - name: Clean kotlin
         run: |
@@ -80,5 +59,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Ludo-Premium-FULL-FIXED-Admin-Kept
+          name: Ludo-Premium-FINAL
           path: build/app/outputs/flutter-apk/*.apk
