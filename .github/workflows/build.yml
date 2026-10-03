@@ -1,4 +1,4 @@
-name: Build APK - ULTIMATE ONE SHOT CHECK
+name: Build APK - FINAL WORKING
 
 on:
   push:
@@ -11,141 +11,58 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 1. Dart Crash Fix
-        run: |
-          git checkout lib/main.dart || true
-          sed -i 's/late SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
-          sed -i 's/late final SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
-          sed -i 's/prefs\.get/prefs?.get/g' lib/main.dart
-          sed -i 's/prefs\.set/prefs?.set/g' lib/main.dart
-          sed -i 's/prefs\.clear/prefs?.clear/g' lib/main.dart
-          sed -i 's/prefs\.remove/prefs?.remove/g' lib/main.dart
-          echo "Dart fixed"
-
-      - name: 2. Kotlin & Package Name Fix
-        run: |
-          rm -rf android/app/src/main/kotlin/com/example
-          mkdir -p android/app/src/main/kotlin/com/ludo/premium/vludo_premium
-          echo 'package com.ludo.premium.vludo_premium
-          import io.flutter.embedding.android.FlutterActivity
-          class MainActivity: FlutterActivity()' > android/app/src/main/kotlin/com/ludo/premium/vludo_premium/MainActivity.kt
-          # Fix applicationId check
-          grep -r "com.example" android/ || echo "No com.example left"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.0'
           channel: 'stable'
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+      - name: flutter clean
+        run: flutter clean
 
-      - name: 3. Clean & Get
-        run: |
-          flutter clean
-          flutter pub get
+      - name: flutter pub get
+        run: flutter pub get
 
-      - name: 4. ULTIMATE FIX - All Packages All Manifests All Gradles
+      - name: Fix icon + Fix gal COMPLETE
         run: |
-          echo "=== ULTIMATE SCAN START ==="
-          
-          # List all packages
-          ls $HOME/.pub-cache/hosted/pub.dev/ | grep -E "gal|path_provider|shared_pref|permission|firebase" || true
-          
-          # Fix gal 2.3.3 COMPLETELY
-          GAL=$(find $HOME/.pub-cache -name "gal-2.3.3" -type d | head -1)
-          if [ -n "$GAL" ]; then
-            echo "=== Fixing GAL at $GAL ==="
-            # Java fix
-            sed -i 's/Registrar/FlutterPlugin/g' $GAL/android/src/main/java/media/suvov/gal/GalPlugin.java || true
-            # Manifest fix - remove package attribute
-            MANIFEST="$GAL/android/src/main/AndroidManifest.xml"
-            if [ -f "$MANIFEST" ]; then
-              echo "Before Manifest:"
-              cat $MANIFEST
-              # Remove package="..."
-              sed -i -E 's/\s+package="[^"]+"//g' $MANIFEST
-              # Ensure manifest tag is clean
-              sed -i 's/<manifest.*>/<manifest>/' $MANIFEST || true
-              # Recreate minimal manifest if broken
-              cat > $MANIFEST <<'XML'
-          <manifest></manifest>
-          XML
-              echo "After Manifest:"
-              cat $MANIFEST
-            fi
-            # Gradle fix
-            cat > $GAL/android/build.gradle <<'GRADLE'
-          group 'media.suvov.gal'
+          echo "1. Fixing icon crash"
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          rm -f android/app/src/main/res/mipmap-*/ic_launcher.xml
+          rm -f android/app/src/main/res/mipmap-*/ic_launcher_foreground.xml
+          rm -f android/app/src/main/res/mipmap-*/ic_launcher_round.xml
+          for d in android/app/src/main/res/mipmap-*; do
+            [ -d "$d" ] && cp assets/icon.png "$d/ic_launcher.png" || true
+          done
+          echo "Icon fixed"
+          echo "2. Fixing gal - correct paths"
+          GAL_BASE=$(find $HOME -type d -name "gal-2.3.3" | head -1)
+          echo "GAL found at $GAL_BASE"
+          if [ -n "$GAL_BASE" ]; then
+            find "$GAL_BASE" -name "GalPlugin.java" -o -name "GalPlugin.kt" | while read F; do
+              sed -i 's/Registrar/FlutterPlugin/g' "$F" || true
+              echo "Fixed $F"
+            done
+            echo '<manifest></manifest>' > "$GAL_BASE/android/src/main/AndroidManifest.xml"
+            echo "group 'media.suvov.gal'
           version '1.0'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
-          }
+          buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:7.4.2' } }
           rootProject.allprojects { repositories { google(); mavenCentral() } }
           apply plugin: 'com.android.library'
-          android {
-              namespace 'media.suvov.gal'
-              compileSdk 34
-              defaultConfig { minSdk 21 }
-          }
-          GRADLE
-            echo "GAL FULLY FIXED"
+          android { namespace 'media.suvov.gal' compileSdk 34 defaultConfig { minSdk 21 } }" > "$GAL_BASE/android/build.gradle"
+            echo "Gal fully fixed"
           fi
+          echo "3. Fixing ALL other old manifests"
+          find $HOME/.pub-cache -name "AndroidManifest.xml" -exec sh -c 'grep -q "package=" "$1" && echo "<manifest></manifest>" > "$1"' _ {} \; || true
+          echo "All fixes done"
 
-          # Fix ALL other packages with old AndroidManifest having package attr
-          echo "=== Fixing ALL manifests ==="
-          find $HOME/.pub-cache/hosted/pub.dev -name "AndroidManifest.xml" | while read M; do
-            if grep -q 'package="' "$M"; then
-              echo "Fixing manifest: $M"
-              sed -i -E 's/\s+package="[^"]+"//g' "$M" || true
-              # If still has package, replace with minimal
-              if grep -q 'package="' "$M"; then
-                cat > "$M" <<'XML'
-          <manifest></manifest>
-          XML
-              fi
-            fi
-          done
+      - name: flutter build apk --release --split-per-abi
+        run: flutter build apk --release --split-per-abi
 
-          # Fix ALL gradles with missing plugin
-          echo "=== Fixing ALL gradles ==="
-          find $HOME/.pub-cache/hosted/pub.dev -path "*/android/build.gradle" | while read G; do
-            if [ -f "$G" ]; then
-              if grep -q "android {" "$G" && ! grep -q "com.android.library\|com.android.application" "$G"; then
-                DIR=$(dirname $G)
-                PKGNAME=$(basename $(dirname $DIR))
-                NS=$(echo $PKGNAME | cut -d'-' -f1 | tr '-' '.')
-                [ -z "$NS" ] && NS="fixed.pkg"
-                echo "Fixing gradle: $G -> $NS"
-                cat > "$G" <<GRADLE
-          group '$NS'
-          version '1.0'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
-          }
-          rootProject.allprojects { repositories { google(); mavenCentral() } }
-          apply plugin: 'com.android.library'
-          android {
-              namespace '$NS'
-              compileSdk 34
-              defaultConfig { minSdk 21 }
-          }
-          GRADLE
-              fi
-            fi
-          done
-
-          echo "=== ULTIMATE FIX DONE ==="
-
-      - name: 5. Build APK
-        run: flutter build apk --release --no-tree-shake-icons --verbose
-
-      - name: Upload
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: Ludo-Premium-ULTIMATE-FIXED
+          name: apk-release
           path: build/app/outputs/flutter-apk/*.apk
