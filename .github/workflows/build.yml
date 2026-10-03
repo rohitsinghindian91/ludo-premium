@@ -29,35 +29,18 @@ jobs:
 
       - name: Fix icon + Fix gal COMPLETE
         run: |
-          echo "1. Fixing icon crash"
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
           rm -f android/app/src/main/res/mipmap-*/ic_launcher.xml
           rm -f android/app/src/main/res/mipmap-*/ic_launcher_foreground.xml
           rm -f android/app/src/main/res/mipmap-*/ic_launcher_round.xml
-          for d in android/app/src/main/res/mipmap-*; do
-            [ -d "$d" ] && cp assets/icon.png "$d/ic_launcher.png" || true
-          done
-          echo "Icon fixed"
-          echo "2. Fixing gal - correct paths"
-          GAL_BASE=$(find $HOME -type d -name "gal-2.3.3" | head -1)
-          echo "GAL found at $GAL_BASE"
-          if [ -n "$GAL_BASE" ]; then
-            find "$GAL_BASE" -name "GalPlugin.java" -o -name "GalPlugin.kt" | while read F; do
-              sed -i 's/Registrar/FlutterPlugin/g' "$F" || true
-              echo "Fixed $F"
-            done
-            echo '<manifest></manifest>' > "$GAL_BASE/android/src/main/AndroidManifest.xml"
-            echo "group 'media.suvov.gal'
-          version '1.0'
-          buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:7.4.2' } }
-          rootProject.allprojects { repositories { google(); mavenCentral() } }
-          apply plugin: 'com.android.library'
-          android { namespace 'media.suvov.gal' compileSdk 34 defaultConfig { minSdk 21 } }" > "$GAL_BASE/android/build.gradle"
-            echo "Gal fully fixed"
+          for d in android/app/src/main/res/mipmap-*; do [ -d "$d" ] && cp assets/icon.png "$d/ic_launcher.png" || true; done
+          GAL=$(find $HOME -type d -name "gal-2.3.3" | head -1)
+          if [ -n "$GAL" ]; then
+            sed -i 's/Registrar/FlutterPlugin/g' $GAL/android/src/main/java/media/suvov/gal/GalPlugin.java || true
+            echo '<manifest></manifest>' > $GAL/android/src/main/AndroidManifest.xml
+            printf "group 'media.suvov.gal'\nversion '1.0'\nbuildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:7.4.2' } }\nrootProject.allprojects { repositories { google(); mavenCentral() } }\napply plugin: 'com.android.library'\nandroid { namespace 'media.suvov.gal' compileSdk 34 defaultConfig { minSdk 21 } }\n" > $GAL/android/build.gradle
           fi
-          echo "3. Fixing ALL other old manifests"
           find $HOME/.pub-cache -name "AndroidManifest.xml" -exec sh -c 'grep -q "package=" "$1" && echo "<manifest></manifest>" > "$1"' _ {} \; || true
-          echo "All fixes done"
 
       - name: flutter build apk --release --split-per-abi
         run: flutter build apk --release --split-per-abi
