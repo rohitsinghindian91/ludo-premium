@@ -35,22 +35,68 @@ jobs:
           rm -f android/app/src/main/res/mipmap-*/ic_launcher.xml
           rm -f android/app/src/main/res/mipmap-*/ic_launcher_foreground.xml
           rm -f android/app/src/main/res/mipmap-*/ic_launcher_round.xml
-          echo "Copying assets/icon.png to mipmap as ic_launcher.png"
           for d in android/app/src/main/res/mipmap-*; do
             if [ -d "$d" ]; then
               cp assets/icon.png "$d/ic_launcher.png" || true
             fi
           done
-          ls android/app/src/main/res/mipmap-hdpi/ || true
 
-      - name: Fix gal 2.3.3 - DIRECT PATH
+      - name: Fix gal 2.3.3 - COMPLETE FIX
         run: |
-          GAL_FILE="/opt/hostedtoolcache/flutter/stable-3.22.0-x64/.pub-cache/hosted/pub.dev/gal-2.3.3/android/src/main/kotlin/com/gal/GalPlugin.kt"
-          if [ -f "$GAL_FILE" ]; then
-            sed -i 's/Registrar/FlutterPlugin/g' "$GAL_FILE" || true
-            sed -i 's/Registrar/FlutterPlugin/g' "$GAL_FILE" || true
-          fi
-          echo "Gal fix done"
+          GAL_DIR="/opt/hostedtoolcache/flutter/stable-3.22.0-x64/.pub-cache/hosted/pub.dev/gal-2.3.3/android"
+          GAL_FILE="$GAL_DIR/build.gradle"
+          echo "Patching $GAL_FILE"
+          cat > "$GAL_FILE" << 'EOF'
+          group 'com.gal'
+          version '1.0'
+
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.3.0'
+              }
+          }
+
+          rootProject.allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          apply plugin: 'com.android.library'
+
+          android {
+              compileSdkVersion 34
+              namespace "com.gal"
+
+              defaultConfig {
+                  minSdkVersion 21
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          }
+
+          dependencies {
+              testImplementation 'junit:junit:4.13.2'
+              testImplementation 'org.mockito:mockito-core:5.0.0'
+              androidTestImplementation 'androidx.test:runner:1.5.2'
+              androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+          }
+          EOF
+          echo "Gal fix done - new build.gradle written"
+          cat "$GAL_FILE"
 
       - name: flutter build apk --release --split-per-abi
         run: flutter build apk --release --split-per-abi
