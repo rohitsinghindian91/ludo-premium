@@ -16,9 +16,12 @@ jobs:
           flutter-version: '3.22.0'
       - run: flutter clean
       - run: flutter pub get
-      # Icon wala step abhi band kar diya - crash isi se ho raha tha
-      # - name: Generate App Icons from assets/icon.png
-      #   run: dart run flutter_launcher_icons
+      - name: Fix icon crash - delete broken xml
+        run: |
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          rm -f android/app/src/main/res/mipmap-*/ic_launcher.xml
+          rm -f android/app/src/main/res/mipmap-*/ic_launcher_foreground.xml
+          rm -f android/app/src/main/res/mipmap-*/ic_launcher_round.xml
       - name: Fix gal 2.3.3 - DIRECT PATH
         run: |
           FILE="/home/runner/.pub-cache/hosted/pub.dev/gal-2.3.3/android/build.gradle"
