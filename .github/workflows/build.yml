@@ -41,10 +41,15 @@ jobs:
             fi
           done
 
-      - name: Fix gal 2.3.3 - COMPLETE FIX
+      - name: Fix gal 2.3.3 - COMPLETE FIX (correct path)
         run: |
-          GAL_DIR="/opt/hostedtoolcache/flutter/stable-3.22.0-x64/.pub-cache/hosted/pub.dev/gal-2.3.3/android"
-          GAL_FILE="$GAL_DIR/build.gradle"
+          GAL_FILE=$(find $HOME/.pub-cache -path "*gal-2.3.3/android/build.gradle" | head -n 1)
+          echo "Found GAL_FILE: $GAL_FILE"
+          if [ -z "$GAL_FILE" ]; then
+            echo "GAL file not found, searching..."
+            find $HOME/.pub-cache -name "build.gradle" | grep gal
+            exit 1
+          fi
           echo "Patching $GAL_FILE"
           cat > "$GAL_FILE" << 'EOF'
           group 'com.gal'
@@ -95,8 +100,7 @@ jobs:
               androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
           }
           EOF
-          echo "Gal fix done - new build.gradle written"
-          cat "$GAL_FILE"
+          echo "Gal fix done"
 
       - name: flutter build apk --release --split-per-abi
         run: flutter build apk --release --split-per-abi
