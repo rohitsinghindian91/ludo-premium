@@ -97,7 +97,7 @@ Future<String> getLockedName(String mobile, String fallback) async {
     final doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
     final n = doc.data()?["name"]?.toString().trim()?? "";
     if (n.isNotEmpty) {
-      try { await prefs.setString("name", n); } catch (_) {}
+      try { await prefs?.setString("name", n); } catch (_) {}
       return n;
     }
   } catch (_) {}
@@ -111,14 +111,14 @@ Future<String> getOrCreateRoomNo(String mobile) async {
     final doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get();
     var no = doc.data()?["voiceRoomNo"]?.toString();
     if (no != null && no.isNotEmpty) {
-      try { await prefs.setString(cacheKey, no); } catch (_) {}
+      try { await prefs?.setString(cacheKey, no); } catch (_) {}
       return no; // admin edited value ko priority
     }
   } catch (_) {}
   // ... baki same as before - yahan se continue karo, } mat lagao
 
   try {
-    final cached = prefs.getString(cacheKey);
+    final cached = prefs?.getString(cacheKey);
     if (cached != null && cached.isNotEmpty) {
       try { await FirebaseFirestore.instance.collection("users").doc(mobile).set({"voiceRoomNo": cached}, SetOptions(merge: true)); } catch (_) {}
       return cached;
@@ -135,7 +135,7 @@ Future<String> getOrCreateRoomNo(String mobile) async {
     } catch (_) { break; }
   }
   try { await FirebaseFirestore.instance.collection("users").doc(mobile).set({"voiceRoomNo": no}, SetOptions(merge: true)); } catch (_) {}
-  try { await prefs.setString(cacheKey, no); } catch (_) {}
+  try { await prefs?.setString(cacheKey, no); } catch (_) {}
   return no;
 }
 
@@ -170,7 +170,7 @@ class _VoiceLobbyScreenState extends State<VoiceLobbyScreen> {
   Future<void> openMyRoom() async {
     setState(() => creating = true);
     try {
-      final mobile = prefs.getString("mobile")?? "";
+      final mobile = prefs?.getString("mobile")?? "";
       final no = await getOrCreateRoomNo(mobile);
       if (!mounted) return;
       setState(() => creating = false);
@@ -425,8 +425,8 @@ class _VoiceRoomScreenState extends State<VoiceRoomScreen> with SingleTickerProv
   void initState() {
     super.initState();
     tabCtrl = TabController(length: 2, vsync: this);
-    myMobile = prefs.getString("mobile")?? "";
-    myName = prefs.getString("name")?? "Guest";
+    myMobile = prefs?.getString("mobile")?? "";
+    myName = prefs?.getString("name")?? "Guest";
     myUid = makeVoiceUid(myMobile);
     if (widget.rejoin) { micOn = globalMicOn; speakerOn = globalSpeakerOn; }
     _enter();
