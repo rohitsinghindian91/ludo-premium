@@ -1,4 +1,4 @@
-name: Build APK - Fix Original Main.dart - Keep Admin Panel
+name: Build APK - FINAL FIXED - Keep Full Code
 
 on:
   push:
@@ -11,36 +11,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: FIX Original main.dart - Keep Full 2850 Lines - Only Crash Fix
+      - name: Fix main.dart - Keep 1600 lines - Only 2 line crash fix
         run: |
-          echo "Fixing original main.dart - keeping full code, only fixing crash..."
-          
-          # Backup
-          cp lib/main.dart lib/main.dart.backup
-          
-          # Fix 1: late -> nullable
+          echo "Fixing crash but keeping full admin panel..."
           sed -i 's/late SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
-          sed -i 's/late final SharedPreferences prefs;/SharedPreferences? prefs;/' lib/main.dart
-          
-          # Fix 2: prefs. -> prefs?.  (but careful not to double fix)
-          # Only fix direct calls
           sed -i 's/prefs\.getString/prefs?.getString/g' lib/main.dart
           sed -i 's/prefs\.setString/prefs?.setString/g' lib/main.dart
           sed -i 's/prefs\.clear/prefs?.clear/g' lib/main.dart
-          sed -i 's/prefs\.getBool/prefs?.getBool/g' lib/main.dart
-          sed -i 's/prefs\.getInt/prefs?.getInt/g' lib/main.dart
-          sed -i 's/prefs\.setBool/prefs?.setBool/g' lib/main.dart
-          sed -i 's/prefs\.setInt/prefs?.setInt/g' lib/main.dart
-          
-          # Fix 3: Wrap main() in try-catch if not already
-          # This will be done by inserting FlutterError handler at top of main
-          # We add error handling without deleting anything
-          
-          echo "Fixed! Checking..."
-          grep -n "SharedPreferences" lib/main.dart | head -5
-          echo "Original lines: $(wc -l < lib/main.dart.backup)"
-          echo "Fixed lines: $(wc -l < lib/main.dart)"
-          echo "Both should be same - 2850 lines preserved!"
+          echo "Fixed - lines still: $(wc -l < lib/main.dart)"
 
       - name: Clean kotlin
         run: |
@@ -48,7 +26,7 @@ jobs:
           mkdir -p android/app/src/main/kotlin/com/ludo/premium/vludo_premium
           echo 'package com.ludo.premium.vludo_premium
           import io.flutter.embedding.android.FlutterActivity
-          class MainActivity: FlutterActivity()' > android/app/src/main/kotlin/com/ludo/premium/vludo_premium/MainActivity.kt
+          class MainActivity: FlutterActivity()' > [STRIPPED 71 bytes].kt
 
       - uses: subosito/flutter-action@v2
         with:
@@ -63,7 +41,7 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
-      - name: Fix gal
+      - name: Fix gal 2.3.3
         run: |
           GAL=$(find $HOME/.pub-cache -name "gal-2.3.3" -type d | head -1)
           if [ -n "$GAL" ]; then
@@ -77,5 +55,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Ludo-Premium-FULL-FIXED-Admin-Kept
+          name: Ludo-Premium-FINAL-FIXED
           path: build/app/outputs/flutter-apk/*.apk
