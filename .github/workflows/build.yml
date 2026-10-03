@@ -1,4 +1,4 @@
-concurrency: name: Build APK FINAL FINAL - GAL Dependency Fixed
+name: Build APK FINAL WORKING
 
 on:
   push:
@@ -10,56 +10,61 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: 0. AUTO FIX DART
-        run: |
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs!\?\.setString/prefs?.setString/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs!\?\.getString/prefs?.getString/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.setString/prefs?.setString/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.getString/prefs?.getString/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.getInt/prefs?.getInt/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs\.setInt/prefs?.setInt/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/prefs!/prefs?/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/late SharedPreferences prefs;/SharedPreferences? prefs;/g' {} \;
-          find lib -name "*.dart" -type f -exec sed -i 's/late SharedPreferences ludoPrefs;/SharedPreferences? ludoPrefs;/g' {} \;
 
-      - name: 1. DELETE duplicate MainActivity
-        run: rm -rf android/app/src/main/kotlin/com/example
-
-      - name: 2. Ensure MainActivity
+      - name: Fix Dart prefs
         run: |
+          find lib -name "*.dart" -exec sed -i 's/prefs\.setString/prefs?.setString/g' {} \;
+          find lib -name "*.dart" -exec sed -i 's/prefs\.getString/prefs?.getString/g' {} \;
+          find lib -name "*.dart" -exec sed -i 's/prefs\.getInt/prefs?.getInt/g' {} \;
+          find lib -name "*.dart" -exec sed -i 's/prefs\.setInt/prefs?.setInt/g' {} \;
+          find lib -name "*.dart" -exec sed -i 's/prefs!/prefs?/g' {} \;
+          echo "Dart fixed"
+
+      - name: Clean duplicate MainActivity
+        run: |
+          rm -rf android/app/src/main/kotlin/com/example
           mkdir -p android/app/src/main/kotlin/com/ludo/premium/vludo_premium
-          cat > [STRIPPED 71 bytes].kt << 'EOF'
-          package com.ludo.premium.vludo_premium
+          echo 'package com.ludo.premium.vludo_premium
           import io.flutter.embedding.android.FlutterActivity
-          class MainActivity: FlutterActivity()
-          EOF
+          class MainActivity: FlutterActivity()' > android/app/src/main/kotlin/com/ludo/premium/vludo_premium/MainActivity.kt
 
-      - name: 3. Fix icon
+      - name: Fix icon
         run: rm -rf android/app/src/main/res/mipmap-anydpi-v26
 
-      - name: 4. Create ULTIMATE GAL FIX script with dependencies
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Fix gal library completely
         run: |
-          cat > /tmp/fix_gal.sh << 'SCRIPT'
-          #!/bin/bash
-          GAL=$(find $HOME/.pub-cache -type d -name "gal-2.3.3" 2>/dev/null | head -n 1)
-          if [ -z "$GAL" ]; then GAL=$(find /opt -type d -name "gal-2.3.3" 2>/dev/null | head -n 1); fi
-          if [ ! -z "$GAL" ]; then
-            echo "Fixing GAL at $GAL"
-            sed -i 's/Registrar/FlutterPlugin/g' $GAL/android/src/main/java/media/suvov/gal/GalPlugin.java || true
-            
-            cat > $GAL/android/build.gradle << 'GRADLE'
-          group 'media.suvov.gal'
-          version '1.0'
+          GAL_DIR=$(find $HOME/.pub-cache -name "gal-2.3.3" -type d | head -1)
+          echo "GAL at $GAL_DIR"
+          if [ -n "$GAL_DIR" ]; then
+            # Fix Java
+            sed -i 's/Registrar/FlutterPlugin/g' $GAL_DIR/android/src/main/java/media/suvov/gal/GalPlugin.java || true
+            # Fix build.gradle
+            printf 'group media.suvov.gal
+          version 1.0
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
+              dependencies { classpath "com.android.tools.build:gradle:7.4.2" }
           }
           rootProject.allprojects { repositories { google(); mavenCentral() } }
-          apply plugin: 'com.android.library'
+          apply plugin: "com.android.library"
           android {
               compileSdk 34
-              namespace 'media.suvov.gal'
+              namespace "media.suvov.gal"
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
                   targetCompatibility JavaVersion.VERSION_1_8
@@ -67,37 +72,16 @@ jobs:
               defaultConfig { minSdkVersion 21 }
           }
           dependencies {
-              implementation 'androidx.annotation:annotation:1.6.0'
-              implementation 'org.apache.commons:commons-imaging:1.0-alpha3'
-              implementation 'androidx.exifinterface:exifinterface:1.3.6'
+              implementation "androidx.annotation:annotation:1.6.0"
+              implementation "org.apache.commons:commons-imaging:1.0-alpha3"
+              implementation "androidx.exifinterface:exifinterface:1.3.6"
           }
-          GRADLE
-
-            MANIFEST="$GAL/android/src/main/AndroidManifest.xml"
-            sed -i 's/package="studio.midoridesign.gal"//g' $MANIFEST
-            echo "GAL fixed with dependencies!"
-            cat $GAL/android/build.gradle
+          ' > $GAL_DIR/android/build.gradle
+            # Fix manifest
+            sed -i 's/package="studio.midoridesign.gal"//g' $GAL_DIR/android/src/main/AndroidManifest.xml
+            echo "GAL fixed"
+            cat $GAL_DIR/android/build.gradle
           fi
-          SCRIPT
-          chmod +x /tmp/fix_gal.sh
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.0'
-          channel: 'stable'
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Fix gal AFTER pub get
-        run: /tmp/fix_gal.sh
 
       - name: Build APK
         run: flutter build apk --release --split-per-abi
@@ -105,5 +89,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: apk-FINAL-SUCCESS
+          name: apk-FINAL
           path: build/app/outputs/flutter-apk/*.apk
