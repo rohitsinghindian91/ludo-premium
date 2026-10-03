@@ -17,9 +17,9 @@ import 'rtdb.dart';
 // taaki ADMIN PANEL se naam badalne par user ke phone me bhi badal jaye
 Future<String> getLockedName() async {
   await ensurePrefs();
-  String loginName = ludoPrefs.getString("name")?? "You";
-  String? cached = ludoPrefs.getString("locked_name");
-  String? mobile = ludoPrefs.getString("mobile");
+  String loginName = ludoPrefs?.getString("name")?? "You";
+  String? cached = ludoPrefs?.getString("locked_name");
+  String? mobile = ludoPrefs?.getString("mobile");
   if (cached!= null && cached.isNotEmpty) {
     if (mobile!= null && mobile.isNotEmpty) _refreshLockedName(mobile); // background sync, game nahi rukega
     return cached; // turant mil gaya, net nahi chahiye
@@ -30,7 +30,7 @@ Future<String> getLockedName() async {
     if (doc.exists) {
       String locked = doc.data()?["name"]?.toString()?? "";
       if (locked.isNotEmpty && locked!= "WAITING" && locked!= "Opponent") {
-        await ludoPrefs.setString("locked_name", locked); // agli baar ke liye save
+        await ludoPrefs?.setString("locked_name", locked); // agli baar ke liye save
         return locked;
       }
     }
@@ -44,9 +44,9 @@ Future<void> _refreshLockedName(String mobile) async {
     var doc = await FirebaseFirestore.instance.collection("users").doc(mobile).get().timeout(const Duration(seconds: 4));
     if (doc.exists) {
       String locked = doc.data()?["name"]?.toString()?? "";
-      String? cached = ludoPrefs.getString("locked_name");
+      String? cached = ludoPrefs?.getString("locked_name");
       if (locked.isNotEmpty && locked!= "WAITING" && locked!= "Opponent" && locked!= cached) {
-        await ludoPrefs.setString("locked_name", locked);
+        await ludoPrefs?.setString("locked_name", locked);
       }
     }
   } catch (_) {}
@@ -100,14 +100,14 @@ Future<String> fetchAgoraToken(String channel, int uid) async {
   throw Exception("Token server failed - Worker check karo");
 }
 
-late SharedPreferences ludoPrefs;
+SharedPreferences? ludoPrefs;
 bool isPrefsReady = false;
 Future<void> ensurePrefs() async {
   if (!isPrefsReady) {
     ludoPrefs = await SharedPreferences.getInstance();
     isPrefsReady = true;
-    if (ludoPrefs.getString("name") == null) await ludoPrefs.setString("name", "Player${Random().nextInt(9000)}");
-    if (ludoPrefs.getString("mobile") == null) await ludoPrefs.setString("mobile", "guest_${Random().nextInt(999999)}");
+    if (ludoPrefs?.getString("name") == null) await ludoPrefs?.setString("name", "Player${Random().nextInt(9000)}");
+    if (ludoPrefs?.getString("mobile") == null) await ludoPrefs?.setString("mobile", "guest_${Random().nextInt(999999)}");
   }
 }
 enum GameMode { online, offline, bot }
@@ -122,7 +122,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     await ensurePrefs(); getRtdb().goOnline();
     String c = genCode();
     try {
-      String? mobile = ludoPrefs.getString("mobile"); String? myName = await getLockedName(); // LOCKED naam
+      String? mobile = ludoPrefs?.getString("mobile"); String? myName = await getLockedName(); // LOCKED naam
       await getRtdb().ref(c).set({
         "game": {"pos": {"0": {"0": -1, "1": -1, "2": -1, "3": -1}, "1": {"0": -1, "1": -1, "2": -1, "3": -1}}, "turn": 0, "diceGreen": 1, "diceRed": 1, "canMove": false, "gameOver": false, "createdAt": ServerValue.timestamp, "roomId": c},
         "players": {"p0": {"mobile": mobile?? "guest", "name": myName?? "Player", "player": 0, "online": true, "joinedAt": ServerValue.timestamp}, "p1": {"mobile": "", "name": "WAITING", "player": 1}},
@@ -140,7 +140,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     if (code.length!= 4) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("4 digit code dalo"))); return; }
     var snap = await getRtdb().ref(code).get();
     if (!snap.exists) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Room nahi mila"))); return; }
-    String? mobile = ludoPrefs.getString("mobile"); String? myName = await getLockedName(); // LOCKED naam
+    String? mobile = ludoPrefs?.getString("mobile"); String? myName = await getLockedName(); // LOCKED naam
     await getRtdb().ref("$code/players/p1").set({"mobile": mobile?? "guest", "name": myName?? "Player", "player": 1, "online": true, "joinedAt": ServerValue.timestamp});
     if (!mounted) return;
     Navigator.push(context, MaterialPageRoute(builder: (_) => LudoGame(roomId: code, myPlayer: 1, mode: GameMode.online)));
@@ -175,7 +175,7 @@ class _QuickMatchScreenState extends State<QuickMatchScreen> {
   Future<void> startQuickMatch() async {
     await ensurePrefs();
     await [Permission.microphone].request(); // match hua to voice turant ready
-    String? mobile = ludoPrefs.getString("mobile");
+    String? mobile = ludoPrefs?.getString("mobile");
     String myName = await getLockedName();
     getRtdb().goOnline();
     _myEntry = getRtdb().ref("quick_queue").push();
@@ -296,7 +296,7 @@ class _LudoGameState extends State<LudoGame> with SingleTickerProviderStateMixin
   @override void initState() { selectedBotName = botNames[_rng.nextInt(botNames.length)]; _diceController = AnimationController(vsync: this, duration: Duration(milliseconds: 800)); initAgoraAndRoom(); if (widget.mode == GameMode.bot && turn == 1) Future.delayed(Duration(milliseconds: 800), () => botTurn()); }
 
   Future<void> initAgoraAndRoom() async {
-    await ensurePrefs(); myMobile = ludoPrefs.getString("mobile"); myName = await getLockedName(); // LOCKED permanent naam
+    await ensurePrefs(); myMobile = ludoPrefs?.getString("mobile"); myName = await getLockedName(); // LOCKED permanent naam
     // TAG + POWERS load - admin panel se set hoga
     try {
       var udoc = await FirebaseFirestore.instance.collection("users").doc(myMobile).get();
